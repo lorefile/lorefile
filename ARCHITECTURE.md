@@ -288,7 +288,7 @@ One page, three columns. Boots with `stella-ontology serve` and opens in the bro
 - **Right:** rules that apply, and where the data lives with live freshness.
 - **Bottom:** compiler status and an "Ask" box that is literally the same MCP server the agents use.
 
-Nothing is edited in the UI in v1. Edit the YAML, the UI reloads. Later: edit in UI → opens a PR.
+Editing from the UI is opt-in (`serve --allow-edit`): an Edit button on every page and a "+ New" menu write the same YAML files, after the compiler has accepted the change (errors block, warnings pass). With `--commit-edits` each save is one git commit; otherwise the footer shows the uncommitted files for review. Agents get the same path as the `propose_change` MCP tool. Next: edit in UI → opens a PR.
 
 ---
 
@@ -423,8 +423,8 @@ Tools we are deliberately not becoming: Neo4j (instance graph DB, heavy JVM), Pr
 | Phase | Weeks | Deliverable |
 |---|---|---|
 | **1 · Core** | 1–3 | File format, Rust compiler with validation, in-memory graph, CLI (`validate`, `serve`, `describe`), MCP server with `search / describe / neighbors / constraints_for / where_is / validate`. Supply-chain example. Read-only. |
-| **2 · Doors** | 4–8 | **Built:** web UI; DuckDB inside the binary (cargo feature `duckdb`, on by default) reading Parquet, CSV, `.duckdb` files, Postgres and S3/HTTP Parquet, with the ontology as SQL tables; `query(sql)` as MCP tool, CLI command, `/api/query` and a SQL box in the UI; `examples/supply-chain-parquet`. **Open:** MySQL, `init --from <db>`, Stella `marketing-measurement` ontology in production use internally. |
-| **3 · Cloud** | 9–16 | Snowflake, BigQuery, Databricks. `propose_change` (agent PRs). Semantic search. Stella Cloud multi-tenant alpha with SSO and audit. |
+| **2 · Doors** | 4–8 | **Built:** web UI; DuckDB inside the binary (cargo feature `duckdb`, on by default) reading Parquet, CSV, `.duckdb` files, Postgres and S3/HTTP Parquet, with the ontology as SQL tables; `query(sql)` as MCP tool, CLI command, `/api/query` and a SQL box in the UI; `examples/supply-chain-parquet`; edit mode in the UI (`--allow-edit`, `--commit-edits`) and `propose_change` in MCP, both validated by the compiler before a file is written. **Open:** MySQL, `init --from <db>`, Stella `marketing-measurement` ontology in production use internally. |
+| **3 · Cloud** | 9–16 | Snowflake, BigQuery, Databricks. `propose_change` opening PRs (today it validates and writes locally). Semantic search. Stella Cloud multi-tenant alpha with SSO and audit. |
 | **4 · Ecosystem** | ongoing | Starter packs, Python/TS SDKs, OWL/LinkML export, dbt/LookML import, GraphQL. Open-source launch. |
 
 ---

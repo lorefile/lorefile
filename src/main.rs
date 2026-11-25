@@ -4,6 +4,7 @@
 mod data;
 #[cfg(feature = "duckdb")]
 mod duck;
+mod edit;
 mod loader;
 mod mcp;
 mod ontology;
@@ -15,6 +16,7 @@ mod validate;
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
 use data::DataLayer;
+use edit::EditConfig;
 use indexmap::IndexMap;
 use ontology::Ontology;
 use serde_json::{json, Value as Json};
@@ -82,11 +84,24 @@ enum Cmd {
     /// List what SQL can see: ontology tables, data views, and what could not be attached.
     Tables,
     /// Run the MCP server over stdio (for Claude, Cursor, ChatGPT, agents).
-    Mcp,
+    Mcp {
+        /// Let `propose_change` write YAML files (default: it only validates).
+        #[arg(long)]
+        allow_edit: bool,
+        /// Commit each accepted change when the folder is in a git repository.
+        #[arg(long, requires = "allow_edit")]
+        commit_edits: bool,
+    },
     /// Serve the web UI and JSON API.
     Serve {
         #[arg(long, default_value_t = 7070)]
         port: u16,
+        /// Let the page create, edit and delete YAML files (default: read-only).
+        #[arg(long)]
+        allow_edit: bool,
+        /// Commit each accepted change when the folder is in a git repository.
+        #[arg(long, requires = "allow_edit")]
+        commit_edits: bool,
     },
     /// Write a small starter ontology into a folder.
     Init { path: Option<PathBuf> },
@@ -299,13 +314,13 @@ fn main() -> Result<()> {
             let data = DataLayer::new(&ont);
             print_json(&data.sql_catalog()?);
         }
-        Cmd::Mcp => {
+        Cmd::Mcp { allow_edit, commit_edits } => {
             print_report(&ont, &report);
-            mcp::run_stdio(ont)?;
+            mcp::run_stdio(ont, EditConfig { allow: allow_edit, commit: commit_edits })?;
         }
-        Cmd::Serve { port } => {
+        Cmd::Serve { port, allow_edit, commit_edits } => {
             print_report(&ont, &report);
-            serve::run(dir, port)?;
+            serve::run(dir, port, EditConfig { allow: allow_edit, commit: commit_edits })?;
         }
         Cmd::Init { .. } => unreachable!(),
     }

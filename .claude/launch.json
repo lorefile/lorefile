@@ -24,6 +24,19 @@
         "7071"
       ],
       "port": 7071
+    },
+    {
+      "name": "ontology-ui-edit",
+      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/supply-chain",
+        "--port",
+        "7072",
+        "--allow-edit"
+      ],
+      "port": 7072
     }
   ]
 }

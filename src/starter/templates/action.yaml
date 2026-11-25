@@ -1,0 +1,7 @@
+action: {{name}}
+description: What this action does and when an agent may call it.
+inputs:
+  {{input}}: {{applies_to}}
+checks: []
+requires_approval_from: ""
+side_effects: What changes in the real world when this runs.

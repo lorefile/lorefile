@@ -1,0 +1,4 @@
+connection: {{name}}
+kind: csv
+path: data
+description: Where these files come from and how fresh they are.

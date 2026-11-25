@@ -3,11 +3,14 @@
 //! protocol and is backwards compatible with 2024-11-05 clients.
 
 use crate::data::DataLayer;
+use crate::edit::{self, Change, EditConfig, Outcome};
 use crate::ontology::Ontology;
 use crate::rules;
+use crate::validate;
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde_json::{json, Value as Json};
+use std::cell::Cell;
 use std::io::{self, BufRead, Write};
 
 const PROTOCOL: &str = "2025-06-18";
@@ -92,6 +95,15 @@ pub fn tool_definitions() -> Json {
             "name": "tables",
             "description": "What `query` can see: the ontology tables, one row per data view (type or relationship → view name and where it reads from), and any binding that could not be attached and why.",
             "inputSchema": { "type": "object", "properties": {} }
+        },
+        {
+            "name": "propose_change",
+            "description": "Propose a change to ONE ontology YAML file and have the compiler check it: the whole ontology is validated with the change applied and the diagnostics come back (errors block, warnings do not). When the server runs with --allow-edit the file is written (and committed with --commit-edits); otherwise nothing is written and the result says so, which makes this a safe dry run. Send the complete new content of the file, not a patch. To add something, use a new path such as types/widget.yaml or actions/ship_order.yaml; rules live in a `constraints:` list file. Read the current text first with describe (its `file` field) and keep the author's formatting.",
+            "inputSchema": { "type": "object", "properties": {
+                "file": { "type": "string", "description": "Path relative to the ontology folder, ending in .yaml, e.g. types/supplier.yaml" },
+                "content": { "type": "string", "description": "The full new text of the file" },
+                "reason": { "type": "string", "description": "One or two sentences on why; becomes the commit message body when edits are committed" }
+            }, "required": ["file", "content"] }
         }
     ])
 }
@@ -99,16 +111,25 @@ pub fn tool_definitions() -> Json {
 pub struct Server<'a> {
     pub ont: &'a Ontology,
     pub data: DataLayer<'a>,
+    /// Whether `propose_change` may write, and whether it commits.
+    pub edit: EditConfig,
+    /// Set after a write so the owner reloads the ontology before the next request.
+    pub reload_needed: Cell<bool>,
 }
 
 impl<'a> Server<'a> {
     pub fn new(ont: &'a Ontology) -> Self {
-        Server { ont, data: DataLayer::new(ont) }
+        Server { ont, data: DataLayer::new(ont), edit: EditConfig::default(), reload_needed: Cell::new(false) }
     }
 
     /// Share a data layer (and its open DuckDB) instead of opening a fresh one.
     pub fn with_data(ont: &'a Ontology, data: DataLayer<'a>) -> Self {
-        Server { ont, data }
+        Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false) }
+    }
+
+    pub fn with_edit(mut self, edit: EditConfig) -> Self {
+        self.edit = edit;
+        self
     }
 
     fn text(v: impl ToString, is_error: bool) -> Json {
@@ -117,6 +138,35 @@ impl<'a> Server<'a> {
             j["isError"] = json!(true);
         }
         j
+    }
+
+    /// A `tools/call` result holding one text block.
+    pub fn text_result(v: impl ToString, is_error: bool) -> Json {
+        Self::text(v, is_error)
+    }
+
+    /// The `tools/call` result for `propose_change`, shared with `/api/tool`.
+    /// Diagnostics as JSON plus a `note` saying what happened to the file.
+    pub fn propose_change_result(out: &Outcome, edit: EditConfig) -> Json {
+        if let Some(why) = &out.refused {
+            return Self::text(format!("{}: {}", out.file, why), true);
+        }
+        let note = if out.written {
+            match &out.commit {
+                Some(h) => format!("written to {} and committed as {}", out.file, h),
+                None if edit.commit => format!("written to {}; commit failed: {}", out.file, out.git_error.clone().unwrap_or_default()),
+                None => format!("written to {}; the change is uncommitted, review it with git diff", out.file),
+            }
+        } else if !out.ok {
+            format!("refused: the change leaves {} error(s); nothing was written", out.errors())
+        } else if !edit.allow {
+            "edit mode is off; the change was validated but not written".to_string()
+        } else {
+            "nothing was written".to_string()
+        };
+        let mut j = out.to_json();
+        j["note"] = json!(note);
+        Self::text(Self::pretty(&j), false)
     }
 
     fn pretty(v: &Json) -> String {
@@ -230,6 +280,17 @@ impl<'a> Server<'a> {
                 Ok(j) => Self::text(Self::pretty(&j), false),
                 Err(e) => Self::text(e.to_string(), true),
             },
+            "propose_change" => {
+                let file = Self::arg_str(args, &["file", "path"]).unwrap_or_default();
+                let content = Self::arg_str(args, &["content", "text"]).unwrap_or_default();
+                let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
+                let before = validate::validate(ont);
+                let out = edit::apply(&ont.root, self.edit, &before, &file, Change::Write(content), "MCP", None, &reason);
+                if out.written {
+                    self.reload_needed.set(true);
+                }
+                Self::propose_change_result(&out, self.edit)
+            }
             other => Self::text(format!("Unknown tool '{}'", other), true),
         }
     }
@@ -289,8 +350,9 @@ impl<'a> Server<'a> {
                     "capabilities": { "tools": { "listChanged": false }, "resources": { "subscribe": false, "listChanged": false } },
                     "serverInfo": { "name": "stella-ontology", "version": env!("CARGO_PKG_VERSION") },
                     "instructions": format!(
-                        "This server holds the business ontology '{}': {} types, {} rules, {} actions. Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector.",
-                        self.ont.manifest.name, self.ont.types.len(), self.ont.constraints.len(), self.ont.actions.len()
+                        "This server holds the business ontology '{}': {} types, {} rules, {} actions. Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector. To change the ontology itself, send the full new text of one YAML file to `propose_change`; it is compiled and checked first{}.",
+                        self.ont.manifest.name, self.ont.types.len(), self.ont.constraints.len(), self.ont.actions.len(),
+                        if self.edit.allow { ", then written" } else { " (edit mode is off here, so it is a dry run)" }
                     )
                 }))
             }
@@ -320,12 +382,18 @@ impl<'a> Server<'a> {
     }
 }
 
-pub fn run_stdio(ont: Ontology) -> Result<()> {
-    let server = Server::new(&ont);
+pub fn run_stdio(ont: Ontology, edit: EditConfig) -> Result<()> {
+    let mut ont = ont;
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut out = stdout.lock();
-    eprintln!("stella-ontology MCP server ready on stdio ({} types, {} rules)", ont.types.len(), ont.constraints.len());
+    eprintln!(
+        "stella-ontology MCP server ready on stdio ({} types, {} rules{})",
+        ont.types.len(),
+        ont.constraints.len(),
+        if edit.allow { ", edit mode on" } else { "" }
+    );
+    let mut server = Server::new(&ont).with_edit(edit);
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(l) => l,
@@ -353,6 +421,16 @@ pub fn run_stdio(ont: Ontology) -> Result<()> {
                 writeln!(out, "{}", resp)?;
                 out.flush()?;
             }
+        }
+        // a write happened: re-read the folder so the next call sees it
+        if server.reload_needed.get() {
+            drop(server);
+            let root = ont.root.clone();
+            match crate::load_ontology(&root) {
+                Ok((o, _)) => ont = o,
+                Err(e) => eprintln!("warn  reload after edit failed: {:#}", e),
+            }
+            server = Server::new(&ont).with_edit(edit);
         }
     }
     Ok(())

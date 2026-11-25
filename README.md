@@ -58,7 +58,7 @@ Open the UI (the **SQL** button in the header runs the same queries):
 ./target/release/stella-ontology serve --dir examples/supply-chain
 ```
 
-Then visit http://127.0.0.1:7070.
+Then visit http://127.0.0.1:7070. Add `--allow-edit` to create and change types, rules and actions from the page (see [Editing from the page](#editing-from-the-page)).
 
 ## Connect it to Claude
 
@@ -242,6 +242,32 @@ Rules of the door: exactly one `SELECT` or `WITH` statement (anything else is re
 
 **Build notes.** DuckDB is compiled from source by the `duckdb` cargo feature, on by default. On a 12-core Apple Silicon Mac with rustc 1.87: `cargo build` 2m50s and `cargo build --release` 2m57s from a clean checkout (DuckDB's C++ is the bulk of both; incremental rebuilds of this crate take seconds). The release binary grows from about 6 MB to about 40 MB, and still starts and answers a `check` in under 50 ms. `cargo build --no-default-features` gives a small CSV-only binary in under a minute, with `query` reporting that it was built without DuckDB. The crate pins `rust-version = "1.87"` with `resolver = "3"` so cargo picks dependency versions that compile on that toolchain (`duckdb` 1.10506 = DuckDB v1.5.6; `uuid` is pinned in `Cargo.lock` for the same reason). No system DuckDB is needed; if the bundled C++ build ever fails on a platform, `libduckdb-sys` also supports linking a system library via `pkg-config`.
 
+## Editing from the page
+
+The page is read-only by default. Start the server with `--allow-edit` and every type, rule, action, relationship and source page gets an **Edit** button, and the left column a **+ New** menu (type, rule, action, relationship, source) pre-filled from the starter templates:
+
+```bash
+./target/release/stella-ontology serve --dir examples/supply-chain --allow-edit
+```
+
+Nothing changes about where the ontology lives: the page writes the same YAML files you would edit by hand, and git stays the only history. Every save goes through the compiler first. The whole folder is loaded with your text in place of the file, the validator runs, and the file is written only when there are no errors. Errors (E…) are shown above the editor and block the save; warnings (W…) are shown and allowed. Deleting a file is checked the same way, so a type that a rule or relationship still refers to cannot be removed. A new rule is appended to the `constraints:` file you pick, and the rest of that file is kept byte for byte.
+
+**Git.** When the folder is inside a repository the footer shows the branch and any uncommitted change under the ontology folder. Add `--commit-edits` to have each accepted save committed on its own as `ontology: <kind> <name> edited via UI` (just that file; nothing is ever pushed). Without it, changes stay in the working tree for you to review with `git diff` and commit like any other change.
+
+**Agents and scripts.** The same check-then-write is the `propose_change` MCP tool (`stella-ontology mcp --allow-edit`; it takes `file`, `content` and a `reason` that becomes the commit body). Without `--allow-edit` the tool still validates and returns the diagnostics plus "edit mode is off; the change was validated but not written", so an agent can dry-run a change against any server. Over HTTP:
+
+```
+POST   /api/edit     {"file": "types/supplier.yaml", "content": "<yaml>"}
+POST   /api/create   {"kind": "type|constraint|action|relationship|source", "name": "Widget", "content": "<yaml>", "file": "constraints/x.yaml"}   (file: optional, rules only)
+DELETE /api/file?file=types/widget.yaml
+→ {"ok", "written", "file", "errors", "warnings", "diagnostics": [{"level", "code", "message", "file"}], "commit"?, "git"?}
+   200 written · 422 refused by the validator · 400 bad request · 403 edit mode off
+```
+
+`GET /api/summary` reports `"editable"` so the page knows whether to show the controls. Try it in the browser with the `ontology-ui-edit` entry in `.claude/launch.json`.
+
+**Security.** Edit mode has no authentication. `serve` binds to 127.0.0.1 only, refuses paths outside the ontology folder, hidden folders, `data/` and anything that is not `.yaml`, and refuses write requests that carry another site's `Origin` header or a non-JSON body, so a web page you happen to have open cannot post edits to your local server. That is the whole protection: keep `--allow-edit` off on any server reachable from the internet, or from other people on the network, until authentication exists.
+
 ## CLI
 
 ```
@@ -257,8 +283,8 @@ stella-ontology instances <type|relationship>
 stella-ontology check <action> k=v …  exit 2 when blocked
 stella-ontology query "<sql>"         one read-only SELECT/WITH via DuckDB (--limit, max 500; `-` reads stdin)
 stella-ontology tables                what SQL can see: ontology tables, data views, bindings not attached
-stella-ontology mcp                   MCP server on stdio
-stella-ontology serve --port 7070     web UI + JSON API
+stella-ontology mcp [--allow-edit]    MCP server on stdio; --allow-edit lets propose_change write
+stella-ontology serve --port 7070 [--allow-edit [--commit-edits]]   web UI + JSON API
 stella-ontology init [path]           starter ontology
 ```
 
@@ -284,8 +310,8 @@ stella-ontology init [path]           starter ontology
 ## Roadmap
 
 1. **Core** (done) — format, compiler, graph, CLI, MCP, UI, CSV data door.
-2. **Doors** (this) — DuckDB inside the binary: Parquet, `.duckdb`, Postgres, S3/HTTP; `query(sql)` and the ontology as SQL tables; SQL box in the UI. Still open: MySQL, `init --from <db>` to draft types from an existing schema, UI edits that open PRs.
-3. **Cloud** — Snowflake, BigQuery, Databricks connectors; `propose_change` (agents open PRs); semantic search; Stella Cloud hosted version with SSO and audit log.
+2. **Doors** (this) — DuckDB inside the binary: Parquet, `.duckdb`, Postgres, S3/HTTP; `query(sql)` and the ontology as SQL tables; SQL box in the UI. Editing from the page and `propose_change` for agents, both compiler-checked. Still open: MySQL, `init --from <db>` to draft types from an existing schema, opening a PR from an edit.
+3. **Cloud** — Snowflake, BigQuery, Databricks connectors; `propose_change` opening PRs instead of local commits; semantic search; Stella Cloud hosted version with SSO and audit log.
 4. **Ecosystem** — starter packs, Python/TS SDKs, OWL/LinkML export, dbt/LookML import.
 
 ## License

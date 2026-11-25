@@ -5,6 +5,7 @@
 use crate::schema::*;
 use anyhow::{Context, Result};
 use serde_yaml::Value as Yaml;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -23,7 +24,17 @@ pub struct Raw {
     pub problems: Vec<String>,
 }
 
+/// Changes laid over the folder without touching the disk: relative path →
+/// `Some(text)` for a new or replaced file, `None` for a deleted one. The edit
+/// flow checks a proposed change by loading the folder with it applied.
+pub type Overrides = HashMap<String, Option<String>>;
+
 pub fn load(root: &Path) -> Result<Raw> {
+    load_with(root, &Overrides::new())
+}
+
+/// Load the folder as it would look with `overrides` applied.
+pub fn load_with(root: &Path, overrides: &Overrides) -> Result<Raw> {
     let root = root
         .canonicalize()
         .with_context(|| format!("ontology folder not found: {}", root.display()))?;
@@ -31,6 +42,7 @@ pub fn load(root: &Path) -> Result<Raw> {
         root: root.clone(),
         ..Default::default()
     };
+    let mut seen: HashSet<String> = HashSet::new();
 
     for entry in WalkDir::new(&root)
         .sort_by_file_name()
@@ -51,24 +63,45 @@ pub fn load(root: &Path) -> Result<Raw> {
             .unwrap_or(path)
             .to_string_lossy()
             .to_string();
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", rel))?;
-        if text.trim().is_empty() {
-            continue;
-        }
-        let value: Yaml = match serde_yaml::from_str(&text) {
-            Ok(v) => v,
-            Err(e) => {
-                raw.problems.push(format!("{}: invalid YAML: {}", rel, e));
-                continue;
-            }
+        seen.insert(rel.clone());
+        let text = match overrides.get(&rel) {
+            // deleted in this proposal
+            Some(None) => continue,
+            Some(Some(text)) => text.clone(),
+            None => std::fs::read_to_string(path).with_context(|| format!("reading {}", rel))?,
         };
-        raw.files.push(rel.clone());
-        if let Err(e) = classify(&mut raw, &rel, value) {
-            raw.problems.push(format!("{}: {}", rel, e));
-        }
+        ingest(&mut raw, &rel, &text);
+    }
+
+    // files the proposal adds
+    let mut added: Vec<(&String, &String)> = overrides
+        .iter()
+        .filter_map(|(rel, text)| text.as_ref().map(|t| (rel, t)))
+        .filter(|(rel, _)| !seen.contains(*rel))
+        .collect();
+    added.sort();
+    for (rel, text) in added {
+        ingest(&mut raw, rel, text);
     }
     Ok(raw)
+}
+
+/// Parse one file's text and file it under the right list.
+fn ingest(raw: &mut Raw, rel: &str, text: &str) {
+    if text.trim().is_empty() {
+        return;
+    }
+    let value: Yaml = match serde_yaml::from_str(text) {
+        Ok(v) => v,
+        Err(e) => {
+            raw.problems.push(format!("{}: invalid YAML: {}", rel, e));
+            return;
+        }
+    };
+    raw.files.push(rel.to_string());
+    if let Err(e) = classify(raw, rel, value) {
+        raw.problems.push(format!("{}: {}", rel, e));
+    }
 }
 
 fn has(value: &Yaml, key: &str) -> bool {
@@ -92,13 +125,17 @@ fn classify(raw: &mut Raw, rel: &str, value: Yaml) -> Result<()> {
             raw.types.push(t);
         }
     } else if has(&value, "relationship") {
-        let r: RelationshipStandalone =
+        let mut r: RelationshipStandalone =
             serde_yaml::from_value(value).context("parsing relationship")?;
+        r.file = rel.to_string();
         raw.relationships.push(r);
     } else if has(&value, "relationships") {
         let f: RelationshipsFile =
             serde_yaml::from_value(value).context("parsing relationships list")?;
-        raw.relationships.extend(f.relationships);
+        for mut r in f.relationships {
+            r.file = rel.to_string();
+            raw.relationships.push(r);
+        }
     } else if has(&value, "constraints") {
         let f: ConstraintsFile =
             serde_yaml::from_value(value).context("parsing constraints")?;

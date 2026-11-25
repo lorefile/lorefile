@@ -1,0 +1,11 @@
+type: {{name}}
+description: >
+  What this is, in one or two sentences. Agents read this before they touch
+  the data, so say what makes one {{name}} different from another.
+properties:
+  {{snake}}_id: { type: string, key: true, description: "Stable identifier" }
+  name: string
+  status: { type: enum, values: [active, inactive], description: "Lifecycle state" }
+relationships: {}
+owner: team@example.com
+tags: []

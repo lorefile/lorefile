@@ -100,6 +100,9 @@ pub struct RelationshipStandalone {
     pub properties: IndexMap<String, PropertySpec>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<EdgeSource>,
+    /// Set by the loader: which file this came from.
+    #[serde(skip)]
+    pub file: String,
 }
 
 /// Where the rows for a type live. Phase 1 reads `csv` connections; every
