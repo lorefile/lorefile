@@ -1,0 +1,13 @@
+connection: shopify
+kind: mcp
+server: shopify
+description: >
+  The Shopify MCP server the agent already has configured, talking to the Admin
+  API of one store. It returns orders, line items, products, variants, customers,
+  fulfillments, refunds and discounts. This ontology never calls it. where_is(type)
+  names the tool and parameters, and carries an equivalent Admin GraphQL query in
+  `graphql` for servers that expose a raw query tool. Tool names here are the
+  common get_<things> shape; if your server differs, change `tool:` on each
+  binding and keep the query.
+tool_note: "TODO verify: tool names on your Shopify MCP server"
+amounts: Money comes back as strings in the shop currency ("12.50"); cast before arithmetic. *_set fields carry both shop_money and presentment_money. Timestamps are ISO 8601 with offset; reports use the shop's iana_timezone.

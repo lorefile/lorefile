@@ -1,0 +1,33 @@
+type: Creative
+description: >
+  The content: image, video or carousel plus primary text, headline, call to
+  action and destination. One creative can be reused by many ads, so a
+  creative's performance is the sum over those ads. url_tags holds the UTM
+  template Meta stamps on landing-page URLs; that is what web analytics and the
+  shop see as "the campaign", the ad name is not. Dynamic creative and
+  Advantage+ creative let Meta alter or recombine the asset per person, so what
+  was delivered may differ from what was uploaded.
+domain: Account structure
+properties:
+  creative_id:               { type: string, key: true }
+  account_id:                string
+  name:                      string
+  title:                     { type: string, description: "Headline" }
+  body:                      { type: string, description: "Primary text" }
+  call_to_action_type:       { type: string, description: "SHOP_NOW, LEARN_MORE, SIGN_UP, ..." }
+  object_type:               { type: enum, values: [SHARE, PHOTO, VIDEO, STATUS, PAGE, APPLICATION, DOMAIN, EVENT, OFFER, STORE_ITEM, INVALID], description: "What kind of post the creative is" }
+  image_hash:                string
+  video_id:                  string
+  thumbnail_url:             string
+  link_url:                  { type: string, description: "Destination before url_tags are appended" }
+  url_tags:                  { type: string, description: "UTM template appended to every link, e.g. utm_source=facebook&utm_campaign={{campaign.name}}" }
+  instagram_actor_id:        string
+  effective_object_story_id: { type: string, description: "The underlying page post; shared across ads that boost the same post" }
+  dynamic_creative:          { type: boolean, description: "asset_feed_spec present: Meta assembles variants from a pool of assets" }
+  advantage_creative:        { type: boolean, description: "degrees_of_freedom_spec allows Meta's automatic enhancements" }
+source:
+  connection: meta_ads
+  tool: get_ad_creatives
+  params: { ad_id: "<Ad.ad_id>" }
+owner: creative@stella.example
+tags: [meta, structure]

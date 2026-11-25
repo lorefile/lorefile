@@ -1,0 +1,83 @@
+types:
+  - type: ConversionAction
+    description: >
+      The definition of what counts as a conversion (GAQL resource
+      conversion_action). Each action has a category (PURCHASE, SUBMIT_LEAD_FORM,
+      SIGNUP, ADD_TO_CART, PHONE_CALL_LEAD...), a counting_type (ONE_PER_CLICK
+      counts at most one conversion per ad click, right for leads and sign-ups;
+      MANY_PER_CLICK counts every one, right for purchases), an attribution_model
+      (data-driven by default since 2023; last click is the only other choice,
+      the rule-based models were removed) and lookback windows (click-through 1
+      to 90 days, default 30; engaged-view and view-through shorter). Primary
+      actions (include_in_conversions_metric true) are the ones metrics.conversions
+      counts and Smart Bidding optimises toward; secondary actions appear only in
+      all_conversions. Because the model and the counting rule live here, two
+      accounts' "conversions" are comparable only if their actions are.
+    domain: Measurement
+    properties:
+      conversion_action_id:              { type: string, key: true }
+      customer_id:                       { type: string, description: "owner_customer; may be a manager under cross-account tracking" }
+      name:                              string
+      category:                          { type: enum, values: [DEFAULT, PAGE_VIEW, PURCHASE, SIGNUP, DOWNLOAD, ADD_TO_CART, BEGIN_CHECKOUT, SUBSCRIBE_PAID, PHONE_CALL_LEAD, IMPORTED_LEAD, SUBMIT_LEAD_FORM, BOOK_APPOINTMENT, REQUEST_QUOTE, GET_DIRECTIONS, OUTBOUND_CLICK, CONTACT, ENGAGEMENT, STORE_VISIT, STORE_SALE, QUALIFIED_LEAD, CONVERTED_LEAD], description: "What kind of event; drives default goal grouping" }
+      type:                              { type: string, description: "How it is measured: WEBPAGE, UPLOAD_CLICKS, GOOGLE_ANALYTICS_4_PURCHASE, STORE_SALES, WEBSITE_CALL, ..." }
+      origin:                            { type: enum, values: [WEBSITE, GOOGLE_HOSTED, APP, CALL_FROM_ADS, STORE, YOUTUBE_HOSTED] }
+      status:                            { type: enum, values: [ENABLED, REMOVED, HIDDEN] }
+      counting_type:                     { type: enum, values: [ONE_PER_CLICK, MANY_PER_CLICK], description: "One per click for leads; every conversion for purchases" }
+      attribution_model:                 { type: enum, values: [GOOGLE_SEARCH_ATTRIBUTION_DATA_DRIVEN, GOOGLE_ADS_LAST_CLICK, EXTERNAL, GOOGLE_SEARCH_ATTRIBUTION_FIRST_CLICK, GOOGLE_SEARCH_ATTRIBUTION_LINEAR, GOOGLE_SEARCH_ATTRIBUTION_TIME_DECAY, GOOGLE_SEARCH_ATTRIBUTION_POSITION_BASED], description: "Data-driven is the default and makes counts fractional. The four rule-based models are no longer selectable" }
+      click_through_lookback_window_days: { type: integer, description: "1 to 90; default 30. Conversions this long after a click still attach to it" }
+      view_through_lookback_window_days:  { type: integer, description: "Impression-based window for view-through conversions, reported separately" }
+      include_in_conversions_metric:     { type: boolean, description: "True = primary: counted in conversions and used for bidding. False = secondary: all_conversions only" }
+      primary_for_goal:                  { type: boolean, description: "Primary within its conversion goal" }
+      default_value:                     { type: number, description: "value_settings.default_value when the tag sends none" }
+      always_use_default_value:          boolean
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.type, conversion_action.origin, conversion_action.status, conversion_action.counting_type, conversion_action.attribution_model_settings.attribution_model, conversion_action.click_through_lookback_window_days, conversion_action.view_through_lookback_window_days, conversion_action.include_in_conversions_metric, conversion_action.primary_for_goal, conversion_action.value_settings.default_value, conversion_action.value_settings.always_use_default_value, conversion_action.owner_customer FROM conversion_action WHERE conversion_action.status = 'ENABLED'"
+    owner: measurement@stella.example
+    tags: [google, measurement]
+
+  - type: Readout
+    description: >
+      One metric value for one object, one date range and optionally one segment,
+      as a GAQL row returns it. metrics.conversions counts primary conversion
+      actions, each under its own attribution model and counting rule, is
+      fractional under data-driven attribution, and is booked on the click date:
+      a conversion 20 days after the click lands on the click's day, so recent
+      days keep rising for up to the lookback window. metrics.all_conversions adds
+      secondary actions. metrics.conversions_by_conversion_date books on the
+      conversion date and is the settled number. metrics.view_through_conversions
+      are impression-based and never inside conversions. cost_micros is spend in
+      micros of the account currency. Segments split the row; the geo ones
+      (segments.geo_target_region, geo_target_metro, geo_target_city) are the
+      targeted location that matched, which under presence-or-interest includes
+      people elsewhere; geographic_view.location_type or user_location_view give
+      physical location. No segment shows what would have happened without ads.
+    domain: Measurement
+    properties:
+      readout_id:            { type: string, key: true, description: "Made by the agent: resource:object_id:metric:segment_value:date_start:date_stop" }
+      resource:              { type: enum, values: [customer, campaign, ad_group, ad_group_ad, ad_group_criterion, keyword_view, search_term_view, geographic_view, user_location_view, asset_group, conversion_action], description: "The GAQL FROM resource" }
+      object_id:             string
+      metric:                { type: enum, values: [conversions, all_conversions, conversions_value, all_conversions_value, conversions_by_conversion_date, conversions_value_by_conversion_date, view_through_conversions, cost_micros, clicks, impressions, interactions, cost_per_conversion, conversions_from_interactions_rate, average_cpc, ctr, search_impression_share, video_views], description: "Which metrics.* field" }
+      value:                 { type: number, description: "The metric value; micros for cost fields" }
+      segment:               { type: enum, values: [none, date, week, month, device, conversion_action, conversion_action_category, conversion_lag_bucket, geo_target_region, geo_target_metro, geo_target_city, geo_target_most_specific_location, click_type, ad_network_type, slot], description: "segments.* applied to the row" }
+      segment_value:         string
+      location_type:         { type: enum, values: [LOCATION_OF_PRESENCE, AREA_OF_INTEREST, unknown], description: "geographic_view.location_type: only meaningful on geographic_view rows" }
+      conversion_action_id:  { type: string, description: "When segmented by conversion_action" }
+      date_start:            date
+      date_stop:             date
+      hours_since_date_stop: { type: integer, description: "Filled in by the agent: hours between the end of date_stop (account time zone) and when the row was fetched" }
+    relationships:
+      for_campaign: { to: Campaign, cardinality: many-to-one }
+      counts:       { to: ConversionAction, cardinality: many-to-one, description: "When segmented by conversion action" }
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT campaign.id, segments.date, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions, metrics.conversions_value, metrics.all_conversions, metrics.view_through_conversions, metrics.conversions_by_conversion_date FROM campaign WHERE segments.date BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD' AND campaign.id = <Campaign.campaign_id>"
+        geo_example: "SELECT geographic_view.country_criterion_id, geographic_view.location_type, segments.geo_target_region, metrics.conversions, metrics.cost_micros FROM geographic_view WHERE segments.date DURING LAST_30_DAYS"
+    owner: measurement@stella.example
+    tags: [google, measurement]

@@ -1,0 +1,11 @@
+action: create_discount_code
+description: >
+  Create a code discount: percentage, fixed amount or free shipping, with dates
+  and usage limits. Codes meant to measure a creator or channel need limits or
+  they stop measuring anything within days.
+inputs:
+  code: DiscountCode
+checks: []
+requires_approval_from: Marketing lead; Finance for fixed_amount above the usual promo budget
+side_effects: Calls discountCodeBasicCreate or discountCodeFreeShippingCreate on the shopify MCP server; the code works at checkout as soon as starts_at passes.
+tags: [write, promotions]

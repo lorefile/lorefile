@@ -1,0 +1,12 @@
+action: refund_order
+description: >
+  Refund money and optionally restock items on an order. The agent describes the
+  refund as a Refund record: amount in the shop currency, which lines and whether
+  they restock. Pass money as decimals.
+inputs:
+  order: Order
+  refund: Refund
+checks: [SH-001, SH-002]
+requires_approval_from: Store manager up to the order value; Finance above it or for refund_discrepancy adjustments
+side_effects: Calls refundCreate on the shopify MCP server; money returns through the original gateway in 5 to 10 days; the refund counts as a return at its own processed_at; inventory changes if restock is true.
+tags: [write, money]

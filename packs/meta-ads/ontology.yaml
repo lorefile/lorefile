@@ -1,0 +1,23 @@
+name: meta-ads
+version: 0.1.0
+description: >
+  What Meta (Facebook and Instagram) advertising data means. The Meta Ads MCP
+  server returns rows: campaigns, ad sets, insights, conversions. This pack says
+  what those rows are: which objective buys which result, that a "conversion" is
+  an attributed event under one attribution window and not a caused sale, that
+  iOS conversions are modelled and late, that a geo breakdown shows where ads
+  were delivered and nothing about incrementality. Load it next to the data MCP
+  so an agent reads Meta numbers the way a measurement analyst would.
+domains:
+  - name: Account structure
+    description: The delivery tree. Objective at the top, creative at the bottom.
+    types: [Account, Campaign, AdSet, Ad, Creative]
+  - name: Targeting and delivery
+    description: Who could see the ads and where they appeared.
+    types: [Audience, Placement]
+  - name: Measurement
+    description: What Meta reports, under which rules, and what it cannot tell you.
+    types: [Insight, Conversion, AttributionWindow, LiftStudy]
+  - name: Changes
+    description: Proposed edits an agent writes down before asking validate.
+    types: [BudgetChange]

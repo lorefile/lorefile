@@ -1,0 +1,134 @@
+constraints:
+  - id: GA-001
+    name: Compare the same metric
+    applies_to: compare_readouts
+    rule: a.metric == b.metric
+    severity: block
+    rationale: >
+      conversions (primary actions, click-date) and all_conversions (plus
+      secondary actions) are different populations; conversions_by_conversion_date
+      books on a different day. Comparing one to another compares definitions, not
+      campaigns. Read both under the same metric.
+    owner: measurement@stella.example
+    tags: [attribution]
+
+  - id: GA-002
+    name: Conversion metrics are provisional for the last three days
+    applies_to: Readout
+    rule: metric in ["conversions", "all_conversions", "conversions_value", "all_conversions_value", "view_through_conversions", "cost_per_conversion", "conversions_from_interactions_rate"] implies hours_since_date_stop >= 72
+    severity: warn
+    rationale: >
+      Google books a conversion on the day of the click and keeps adding them for
+      the whole click-through lookback window (30 days by default), and imported,
+      cross-device and modelled conversions arrive late. Three days is our working
+      cut-off for quoting a number as provisional (a policy, not a Google figure);
+      conversions_by_conversion_date is the settled alternative.
+    owner: measurement@stella.example
+    tags: [attribution, lag]
+
+  - id: GA-003
+    name: Geo segments are the targeted location that matched, not where people were
+    applies_to: Readout
+    rule: "!(segment in [\"geo_target_region\", \"geo_target_metro\", \"geo_target_city\", \"geo_target_most_specific_location\"])"
+    severity: info
+    rationale: >
+      segments.geo_target_* report the location criterion the impression matched.
+      Under the default presence-or-interest setting that includes people outside
+      the location who searched for it, so a state's conversions are not the
+      state's residents. For physical location read geographic_view with
+      location_type LOCATION_OF_PRESENCE, or user_location_view. Either way a geo
+      split shows attributed conversions by place, not what the ads caused there;
+      incrementality by geo needs a holdout experiment.
+    owner: measurement@stella.example
+    tags: [geo, incrementality]
+
+  - id: GA-004
+    name: Impression, view and share bid strategies are not judged on CPA or ROAS
+    applies_to: read_performance
+    rule: "!(campaign.bidding_strategy_type in [\"MANUAL_CPM\", \"TARGET_CPM\", \"MANUAL_CPV\", \"TARGET_IMPRESSION_SHARE\"])"
+    severity: warn
+    rationale: >
+      These strategies make Google buy impressions, video views or a share of the
+      top of the page, from whoever is cheapest to show to. Their conversions are
+      incidental, so CPA or ROAS measures the audience, not the campaign. Judge
+      them on CPM, CPV, impression share, and a lift or geo test.
+    owner: measurement@stella.example
+    tags: [kpi]
+
+  - id: GA-005
+    name: Smart Bidding is still learning
+    applies_to: Campaign
+    rule: "!(bidding_strategy_system_status in [\"LEARNING_NEW\", \"LEARNING_SETTING_CHANGE\", \"LEARNING_BUDGET_CHANGE\", \"LEARNING_COMPOSITION_CHANGE\", \"LEARNING_CONVERSION_TYPE_CHANGE\", \"LEARNING_CONVERSION_SETTING_CHANGE\", \"MULTIPLE_LEARNING\"])"
+    severity: warn
+    rationale: >
+      After a new strategy, a target or budget change, or a conversion-setting
+      change, Smart Bidding re-learns for about one to two weeks. CPA and ROAS in
+      that window are not the strategy's steady state, and another change extends
+      it.
+    owner: measurement@stella.example
+    tags: [bidding]
+
+  - id: GA-006
+    name: Enabled but not serving
+    applies_to: Campaign
+    rule: status == "ENABLED" implies serving_status == "SERVING"
+    severity: warn
+    rationale: >
+      status is what was set; serving_status is whether ads run. ENDED (end_date
+      passed), PENDING (start_date ahead) or SUSPENDED explain zero spend before
+      any performance story does.
+    owner: measurement@stella.example
+    tags: [delivery]
+
+  - id: GA-007
+    name: Targets presence or interest, not presence
+    applies_to: Campaign
+    rule: positive_geo_target_type == "PRESENCE"
+    severity: info
+    rationale: >
+      With PRESENCE_OR_INTEREST (Google's default) people outside the targeted
+      locations are served when they search for or show interest in them. Fine for
+      most campaigns; fatal for a geo experiment, where a holdout region's residents
+      must not see ads and a test region's conversions must come from its
+      residents. Geo-test cells need PRESENCE, and read-outs by physical location.
+    owner: measurement@stella.example
+    tags: [geo, experiment]
+
+  - id: GA-008
+    name: Secondary conversion action
+    applies_to: ConversionAction
+    rule: include_in_conversions_metric == true
+    severity: info
+    rationale: >
+      This action is counted in all_conversions only. It is not in conversions,
+      not in cost_per_conversion, and Smart Bidding never optimised for it. Quote
+      it as a secondary count.
+    owner: measurement@stella.example
+    tags: [attribution]
+
+  - id: GA-009
+    name: Counting rule should match the event
+    applies_to: ConversionAction
+    rule: (!(category in ["PURCHASE", "ADD_TO_CART", "BEGIN_CHECKOUT", "SUBSCRIBE_PAID"]) || counting_type == "MANY_PER_CLICK") && (!(category in ["SUBMIT_LEAD_FORM", "SIGNUP", "CONTACT", "BOOK_APPOINTMENT", "REQUEST_QUOTE", "PHONE_CALL_LEAD", "IMPORTED_LEAD", "QUALIFIED_LEAD", "CONVERTED_LEAD"]) || counting_type == "ONE_PER_CLICK")
+    severity: warn
+    rationale: >
+      Purchases should count every conversion (two orders after one click are two
+      sales); leads and sign-ups should count one per click (one person submitting
+      a form twice is one lead). A purchase action set to ONE_PER_CLICK under-
+      counts; a lead action set to MANY_PER_CLICK inflates and mis-trains bidding.
+    owner: measurement@stella.example
+    tags: [attribution]
+
+  - id: GA-010
+    name: Last-click action in a data-driven account
+    applies_to: ConversionAction
+    rule: attribution_model == "GOOGLE_SEARCH_ATTRIBUTION_DATA_DRIVEN"
+    severity: info
+    rationale: >
+      Data-driven attribution has been Google's default since 2023 and the
+      rule-based models (first click, linear, time decay, position-based) were
+      removed. A last-click action's counts are whole numbers and will not
+      reconcile with data-driven actions in the same account; say which model a
+      quoted number uses.
+    owner: measurement@stella.example
+    tags: [attribution]

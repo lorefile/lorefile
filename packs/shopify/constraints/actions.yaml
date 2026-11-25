@@ -1,0 +1,87 @@
+constraints:
+  - id: SH-008
+    name: Only unfulfilled orders can be cancelled
+    applies_to: cancel_order
+    rule: order.fulfillment_status == null || order.fulfillment_status == "restocked"
+    severity: block
+    rationale: >
+      Shopify refuses to cancel an order with open fulfillments. Once goods have
+      shipped the customer gets a refund (refund_order), and the fulfillment is
+      cancelled first if the carrier still has the parcel.
+    owner: ecommerce@stella.example
+
+  - id: SH-009
+    name: Only captured money can be refunded
+    applies_to: refund_order
+    rule: order.financial_status in ["paid", "partially_paid", "partially_refunded"]
+    severity: block
+    rationale: >
+      pending has no payment to return, authorized is released by voiding (cancel
+      the order), refunded has nothing left, voided and expired never captured.
+    owner: ecommerce@stella.example
+
+  - id: SH-010
+    name: Refund within what is left on the order
+    applies_to: refund_order
+    rule: double(refund.amount) <= double(order.current_total_price)
+    severity: block
+    rationale: >
+      current_total_price is what remains after earlier refunds and edits; the
+      gateway rejects a refund above it. Shipping refunds go through
+      order_adjustments and count toward the same ceiling.
+    owner: ecommerce@stella.example
+
+  - id: SH-011
+    name: Percentage discounts are between 0 and 100
+    applies_to: create_discount_code
+    rule: code.value_type == "percentage" implies double(code.value) > 0.0 && double(code.value) <= 100.0
+    severity: block
+    rationale: Shopify stores percentages as a negative string; pass the positive magnitude here. 0 does nothing and more than 100 is rejected.
+    owner: ecommerce@stella.example
+
+  - id: SH-012
+    name: End after start
+    applies_to: create_discount_code
+    rule: code.ends_at == null || code.ends_at > code.starts_at
+    severity: block
+    rationale: ISO 8601 timestamps compare as strings when both are UTC; an end before the start creates a code that can never be used.
+    owner: ecommerce@stella.example
+
+  - id: SH-013
+    name: Unlimited codes leak and stop measuring
+    applies_to: create_discount_code
+    rule: code.usage_limit != null
+    severity: info
+    rationale: >
+      A code without a usage limit reaches coupon sites and browser extensions
+      within days; after that its orders say nothing about the creator or channel
+      it was made for. Limit uses, set once_per_customer, or issue unique codes.
+    owner: ecommerce@stella.example
+    tags: [attribution]
+
+  - id: SH-014
+    name: Not an online-store order
+    applies_to: attribute_order
+    rule: order.source_name == "web"
+    severity: info
+    rationale: >
+      source_name is the sales channel that created the order. pos orders were
+      sold in a shop, shopify_draft_order by staff, and app channels (Shop,
+      Facebook and Instagram, Google, TikTok) have their own checkout; none of
+      them carries an online-store customer journey, so attribute them to the
+      channel itself, not to a campaign.
+    owner: ecommerce@stella.example
+    tags: [attribution]
+
+  - id: SH-015
+    name: A discount code is proof of use, not of channel
+    applies_to: attribute_order
+    rule: size(order.discount_codes) == 0
+    severity: info
+    rationale: >
+      This order used a code. The code shows the customer had it, not where they
+      came from: codes travel through coupon sites and friends. Attribute from the
+      customer journey (first and last visit, UTM parameters, referrer) and treat
+      the code as a secondary signal.
+    owner: ecommerce@stella.example
+    tags: [attribution]

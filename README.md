@@ -116,7 +116,7 @@ Resources: `ontology://summary`, `ontology://glossary`, `ontology://types/{Name}
 ontology/
 ├── ontology.yaml          # name, version, domains
 ├── glossary.yaml          # "vendor" means Supplier
-├── sources/*.yaml         # connections: csv, parquet, duckdb, postgres, s3 read here; snowflake/… declared for agents
+├── sources/*.yaml         # connections: csv, parquet, duckdb, postgres, s3 read here; snowflake/… declared; mcp points at another MCP server
 ├── types/*.yaml           # one type per file, or a `types:` list
 ├── relationships/*.yaml   # relationships with their own properties / edge tables
 ├── constraints/**/*.yaml  # rules, grouped however you like
@@ -193,6 +193,7 @@ The ontology is small and lives in git; the rows are big and live elsewhere. A `
 | `duckdb` | `path: data/erp.duckdb` (file) | `ATTACH … (READ_ONLY)`; table is `name` or `schema.name` |
 | `postgres` | `env: ORDERS_PG_URL`, `schema: public` | Loads the `postgres` extension and attaches read-only using the libpq connection string in that env var |
 | `s3` / `httpfs` | `path: s3://bucket/prefix` or an `https://…` base | Loads `httpfs`; `read_parquet('<path>/<table>.parquet')` |
+| `mcp` | `server: meta-ads` | Nothing is read here. `where_is` tells the agent which tool to call on that MCP server, with which params |
 
 ```yaml
 # sources/parquet_files.yaml
@@ -219,7 +220,25 @@ region: eu-west-1       # optional; endpoint / url_style for MinIO or R2
 # or `credential_chain: true` to use the AWS SDK chain (profiles, SSO, instance roles).
 ```
 
+```yaml
+# sources/meta-ads.yaml — the rows live behind another MCP server the agent already has
+connection: meta_ads
+kind: mcp
+server: meta-ads         # the server name as the agent has it configured
+```
+
 A type binds to a source with `source: { connection, table, key, columns }`. `columns` maps property names to column names when they differ; the view renames them so rules and SQL see property names. Relationships bind edge tables the same way with `from_key` / `to_key`.
+
+A type on an `mcp` source binds with `tool` and an optional `params` map instead of a table:
+
+```yaml
+source:
+  connection: meta_ads
+  tool: get_campaigns
+  params: { account_id: "act_<Account.account_id>", limit: 100 }
+```
+
+`where_is("Campaign")` then answers `readable_here: false` with `server`, `tool`, `params` and a `hint` that spells out the call: "Call tool `get_campaigns` on the `meta-ads` MCP server with params {…}". The agent fetches the row there and passes it inline to `validate`. The validator requires `server` on every `kind: mcp` source (E011) and a `tool` on every type bound to one (E012). This is how the [packs](#packs) work.
 
 **What SQL sees.** `query` runs DuckDB SQL over:
 
@@ -275,18 +294,40 @@ stella-ontology init [path]           starter ontology
 | E005–E007 | Action input type, check id, or effect relationship unknown |
 | E008 | Unknown connection |
 | E009 | Rule does not parse |
+| E011 | `kind: mcp` source has no `server` |
+| E012 | Type binding has no `table` (or no `tool`, for an `mcp` source) |
 | W101 | Missing description |
 | W102 | Blocking rule without a rationale |
 | W103 | Type bound to data but no `key: true` property |
 | W104 | Rule references a name not available on its `applies_to` |
 | W106 | CSV / Parquet / DuckDB file not found |
 
+## Packs
+
+An ontology pack is a ready-made folder for one data source an agent already has an MCP server for. The data MCP returns rows; the pack says what they mean, which rules apply, and what the rows cannot tell you. Load both in the same agent. Each pack has a `README.md` with the Claude Desktop config and three worked questions, a `sources/<server>.yaml` of `kind: mcp`, and validates with zero errors and zero warnings.
+
+| Pack | Types | Rules | Actions | What it fixes |
+|---|---|---|---|---|
+| [`packs/meta-ads`](packs/meta-ads) | Account, Campaign, AdSet, Ad, Creative, Audience, Placement, Insight, Conversion, AttributionWindow, LiftStudy, BudgetChange | 16 | pause_campaign, change_budget, create_lookalike, read_performance, compare_conversions | Conversions are attributed counts under one window (7-day click, 1-day view by default), booked on the click day, modelled and late on iOS; awareness campaigns are not judged on CPA; CBO ad-set budgets are advisory; geo breakdowns stop at region/DMA and are not incrementality; test cells are frozen |
+| [`packs/google-ads`](packs/google-ads) | Account, Campaign, AdGroup, Keyword, Ad, ConversionAction, BiddingStrategy, Audience, GeoTarget, Readout, BudgetChange, TargetChange | 16 | pause_campaign, change_budget, change_bid_target, read_performance, compare_readouts, audit_conversion_action | `conversions` counts primary actions under each action's model (data-driven by default), by click date; counting rules per category; CPM/CPV strategies are not judged on CPA; geo segments are matched location, not presence; shared budgets and experiment arms |
+| [`packs/shopify`](packs/shopify) | Shop, Order, LineItem, Product, Variant, Customer, Fulfillment, Refund, DiscountCode | 15 | cancel_order, refund_order, create_discount_code, attribute_order | Test and cancelled orders are not revenue; `processed_at` and the shop currency are the reporting basis; financial versus fulfillment status; `source_name` is the sales channel, not attribution; codes are proof of use |
+
+```bash
+./target/release/stella-ontology validate --dir packs/meta-ads
+```
+
+```bash
+./target/release/stella-ontology mcp --dir packs/meta-ads
+```
+
+The three read-out guards (`read_performance`, `compare_conversions`, `attribute_order` and their siblings) are actions with no side effects: an agent calls `validate` on them before quoting a number, and gets the same block / warn / info verdict it would get before a write. Where a platform detail was uncertain the YAML says `# TODO verify` rather than guessing. Tool names in the bindings follow the common open-source MCP servers for each platform; change `tool:` in a type file if yours differ.
+
 ## Roadmap
 
 1. **Core** (done) — format, compiler, graph, CLI, MCP, UI, CSV data door.
 2. **Doors** (this) — DuckDB inside the binary: Parquet, `.duckdb`, Postgres, S3/HTTP; `query(sql)` and the ontology as SQL tables; SQL box in the UI. Still open: MySQL, `init --from <db>` to draft types from an existing schema, UI edits that open PRs.
 3. **Cloud** — Snowflake, BigQuery, Databricks connectors; `propose_change` (agents open PRs); semantic search; Stella Cloud hosted version with SSO and audit log.
-4. **Ecosystem** — starter packs, Python/TS SDKs, OWL/LinkML export, dbt/LookML import.
+4. **Ecosystem** — more packs (TikTok Ads, GA4, Klaviyo), Python/TS SDKs, OWL/LinkML export, dbt/LookML import.
 
 ## License
 

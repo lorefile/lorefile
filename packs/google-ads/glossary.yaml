@@ -1,0 +1,78 @@
+terms:
+  - term: CPA
+    means: Readout
+    description: cost_per_conversion = cost_micros / conversions, primary actions only, click-date booked.
+  - term: ROAS
+    means: Readout
+    description: conversions_value / cost. Attributed, not incremental.
+  - term: CPC
+    means: Readout
+    description: average_cpc, in micros.
+  - term: cost
+    means: Readout
+    description: cost_micros; divide by 1,000,000 for currency units.
+  - term: conversions
+    means: Readout
+    description: metrics.conversions, the primary-action count. Not the same as all_conversions.
+  - term: all conversions
+    means: Readout
+    description: metrics.all_conversions, primary plus secondary actions.
+  - term: conversion lag
+    means: Readout
+    description: The gap between click and conversion that makes recent days keep rising; see conversions_by_conversion_date.
+  - term: GAQL
+    means: Readout
+    description: Google Ads Query Language, what the data MCP runs; every binding in this pack is a GAQL query.
+  - term: tCPA
+    means: BiddingStrategy
+    description: Target CPA, a Smart Bidding goal; see target_cpa_micros.
+  - term: tROAS
+    means: BiddingStrategy
+    description: Target ROAS, a Smart Bidding goal expressed as a ratio.
+  - term: Smart Bidding
+    means: BiddingStrategy
+    description: TARGET_CPA, TARGET_ROAS, MAXIMIZE_CONVERSIONS, MAXIMIZE_CONVERSION_VALUE.
+  - term: PMax
+    means: Campaign
+    description: Performance Max, advertising_channel_type PERFORMANCE_MAX; asset groups instead of ad groups, little reporting below the campaign.
+  - term: Demand Gen
+    means: Campaign
+    description: advertising_channel_type DEMAND_GEN, formerly DISCOVERY.
+  - term: asset group
+    means: AdGroup
+    description: What Performance Max and Demand Gen have instead of ad groups.
+  - term: customer ID
+    means: Account
+  - term: CID
+    means: Account
+  - term: MCC
+    means: Account
+    description: A manager account; holds no campaigns of its own.
+  - term: DMA
+    means: GeoTarget
+    description: US designated market area, target_type DMA Region; the usual geo-experiment unit.
+  - term: location of interest
+    means: GeoTarget
+    description: The "interest" half of PRESENCE_OR_INTEREST targeting; see Campaign.positive_geo_target_type.
+  - term: search term
+    means: Keyword
+    description: The actual query that matched a keyword; search_term_view.
+  - term: negative keyword
+    means: Keyword
+  - term: RSA
+    means: Ad
+    description: Responsive search ad.
+  - term: gclid
+    means: ConversionAction
+    description: The click id auto-tagging adds to URLs; what ties a conversion back to a click.
+  - term: DDA
+    means: ConversionAction
+    description: Data-driven attribution, the default attribution_model.
+  - term: primary conversion
+    means: ConversionAction
+    description: include_in_conversions_metric true; counted in conversions and used for bidding.
+  - term: remarketing list
+    means: Audience
+  - term: customer match
+    means: Audience
+    description: A CRM_BASED user list built from uploaded customer records.

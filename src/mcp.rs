@@ -61,7 +61,7 @@ pub fn tool_definitions() -> Json {
         },
         {
             "name": "where_is",
-            "description": "Where a type's rows live: connection, kind (csv, parquet, duckdb, postgres, s3, snowflake…), table, key column, column mapping, and whether it is readable here. Readable kinds can be read with `instances` or joined in SQL with `query`; for the rest, use your own connector.",
+            "description": "Where a type's rows live: connection, kind (csv, parquet, duckdb, postgres, s3, snowflake, mcp…), table, key column, column mapping, and whether it is readable here. Readable kinds can be read with `instances` or joined in SQL with `query`. For `kind: mcp` the answer names the server, tool and params to call on another MCP server; for the rest, use your own connector.",
             "inputSchema": { "type": "object", "properties": {
                 "type": { "type": "string" }
             }, "required": ["type"] }

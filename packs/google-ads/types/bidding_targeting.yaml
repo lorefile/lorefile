@@ -1,0 +1,106 @@
+types:
+  - type: BiddingStrategy
+    description: >
+      A portfolio bid strategy (GAQL resource bidding_strategy) shared by several
+      campaigns, as opposed to the standard strategy set on one campaign. Both
+      are Smart Bidding when the type is TARGET_CPA, TARGET_ROAS,
+      MAXIMIZE_CONVERSIONS or MAXIMIZE_CONVERSION_VALUE: Google sets bids per
+      auction from its conversion prediction, needs roughly 30 conversions in 30
+      days to be stable (50 for tROAS), and re-learns for one to two weeks after a
+      target, budget or conversion-setting change. The target is a goal, not a
+      promise: actual CPA drifts around tCPA, and the strategy only sees the
+      primary conversion actions.
+    domain: Bidding and targeting
+    properties:
+      bidding_strategy_id:     { type: string, key: true }
+      customer_id:             string
+      name:                    string
+      type:                    { type: enum, values: [TARGET_CPA, TARGET_ROAS, MAXIMIZE_CONVERSIONS, MAXIMIZE_CONVERSION_VALUE, TARGET_IMPRESSION_SHARE, TARGET_SPEND, ENHANCED_CPC] }
+      status:                  { type: enum, values: [ENABLED, REMOVED] }
+      target_cpa_micros:       { type: integer, description: "For TARGET_CPA or MAXIMIZE_CONVERSIONS with a target" }
+      target_roas:             { type: number, description: "For TARGET_ROAS or MAXIMIZE_CONVERSION_VALUE with a target; 3.5 means 350%" }
+      campaign_count:          { type: integer, description: "Campaigns sharing it; a target change hits all of them" }
+      effective_currency_code: string
+    relationships:
+      used_by: { to: Campaign, cardinality: one-to-many }
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT bidding_strategy.id, bidding_strategy.name, bidding_strategy.type, bidding_strategy.status, bidding_strategy.target_cpa.target_cpa_micros, bidding_strategy.target_roas.target_roas, bidding_strategy.maximize_conversion_value.target_roas, bidding_strategy.campaign_count, bidding_strategy.effective_currency_code FROM bidding_strategy WHERE bidding_strategy.status = 'ENABLED'"
+    owner: measurement@stella.example
+    tags: [google, bidding]
+
+  - type: Audience
+    description: >
+      A user list (GAQL resource user_list): remarketing visitors, customer match
+      uploads, rule-based or combined lists. Attached to a campaign or ad group it
+      runs in one of two modes: Targeting restricts delivery to the list,
+      Observation only reports on it; an audience-segment report under Observation
+      shows which converters happened to be on a list, not who was targeted.
+      Lists need about 1,000 active members to serve on Search and YouTube.
+      Similar Audiences were retired in 2023; optimised targeting and audience
+      expansion replaced them and are campaign settings, not lists. Customer match
+      match_rate_percentage is the share of uploaded records Google could match.
+    domain: Bidding and targeting
+    properties:
+      user_list_id:              { type: string, key: true }
+      customer_id:               string
+      name:                      string
+      type:                      { type: enum, values: [REMARKETING, LOGICAL, EXTERNAL_REMARKETING, RULE_BASED, SIMILAR, CRM_BASED], description: "CRM_BASED is customer match; SIMILAR lists are retired" }
+      membership_status:         { type: enum, values: [OPEN, CLOSED], description: "CLOSED lists stop collecting but still serve" }
+      membership_life_span:      { type: integer, description: "Days a visitor stays in the list, up to 540" }
+      size_for_search:           { type: integer, description: "Members eligible on Search; Google rounds and hides small sizes" }
+      size_for_display:          integer
+      size_range_for_search:     { type: string, description: "e.g. LESS_THAN_ONE_THOUSAND, ONE_THOUSAND_TO_TEN_THOUSAND" }
+      eligible_for_search:       boolean
+      eligible_for_display:      boolean
+      match_rate_percentage:     { type: integer, description: "Customer match only: share of uploaded records matched" }
+      closing_reason:            string
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT user_list.id, user_list.name, user_list.type, user_list.membership_status, user_list.membership_life_span, user_list.size_for_search, user_list.size_for_display, user_list.size_range_for_search, user_list.eligible_for_search, user_list.eligible_for_display, user_list.match_rate_percentage, user_list.closing_reason FROM user_list"
+    owner: measurement@stella.example
+    tags: [google, targeting]
+
+  - type: GeoTarget
+    description: >
+      A location criterion on a campaign (campaign_criterion of type LOCATION,
+      pointing at a geo_target_constant). target_type is the granularity: Country,
+      State, City, Postal Code, County, Municipality, or DMA Region (US media
+      markets, the unit most geo experiments use). Whether a person counts as "in"
+      the location depends on the campaign's positive_geo_target_type: with
+      PRESENCE_OR_INTEREST (default) someone anywhere who searches for or shows
+      interest in the location is served and reported under it; with PRESENCE
+      only people located there are. Reports by targeted location
+      (segments.geo_target_*) follow that matching; geographic_view with
+      location_type LOCATION_OF_PRESENCE and user_location_view report where
+      people physically were. A geo experiment needs PRESENCE targeting and
+      physical-location read-outs, or the holdout leaks.
+    domain: Bidding and targeting
+    properties:
+      criterion_id:        { type: string, key: true }
+      campaign_id:         string
+      geo_target_constant: { type: string, description: "Resource name, e.g. geoTargetConstants/200501 (DMA 501 New York)" }
+      name:                { type: string, description: "geo_target_constant.name" }
+      canonical_name:      { type: string, description: "Full path, e.g. New York,New York,United States" }
+      target_type:         { type: enum, values: [Country, State, Region, Province, City, Postal Code, County, Municipality, DMA Region, Airport, University, Neighborhood, Borough, Territory, Autonomous Community, Union Territory, National Park, Congressional District], description: "geo_target_constant.target_type" }
+      country_code:        string
+      negative:            { type: boolean, description: "True excludes the location" }
+      bid_modifier:        { type: number, description: "Manual bid adjustment; ignored under most Smart Bidding" }
+      status:              { type: enum, values: [ENABLED, REMOVAL_PLANNED, REMOVED], description: "geo_target_constant.status; REMOVAL_PLANNED constants stop matching soon" }
+    relationships:
+      on: { to: Campaign, cardinality: many-to-one }
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT campaign_criterion.criterion_id, campaign_criterion.campaign, campaign_criterion.location.geo_target_constant, campaign_criterion.negative, campaign_criterion.bid_modifier FROM campaign_criterion WHERE campaign_criterion.type = 'LOCATION' AND campaign.id = <Campaign.campaign_id>"
+        then: "SELECT geo_target_constant.id, geo_target_constant.name, geo_target_constant.canonical_name, geo_target_constant.target_type, geo_target_constant.country_code, geo_target_constant.status FROM geo_target_constant WHERE geo_target_constant.id IN (<ids>)"
+    owner: measurement@stella.example
+    tags: [google, targeting, geo]

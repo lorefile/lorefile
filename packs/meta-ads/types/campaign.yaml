@@ -1,0 +1,43 @@
+type: Campaign
+description: >
+  The top of the delivery tree and where the objective lives. The objective fixes
+  which result Meta optimises for and therefore which KPI the campaign may be
+  judged on: OUTCOME_SALES and OUTCOME_LEADS buy conversions (judge on CPA and
+  ROAS), OUTCOME_TRAFFIC buys link clicks or landing-page views (judge on CPC),
+  OUTCOME_ENGAGEMENT buys engagement or ThruPlays, OUTCOME_AWARENESS buys reach
+  and ad recall (judge on CPM, reach and frequency; a CPA on it is an accident,
+  not a result). The budget lives here only when Advantage campaign budget
+  (formerly CBO) is on; then Meta moves money between ad sets and the ad sets'
+  own amounts are spend floors and caps, not budgets. status is what someone
+  set; effective_status is what is happening (ACTIVE can still mean no delivery:
+  WITH_ISSUES, IN_PROCESS, or disapproved ads below it).
+domain: Account structure
+properties:
+  campaign_id:            { type: string, key: true }
+  account_id:             string
+  name:                   string
+  objective:              { type: enum, values: [OUTCOME_AWARENESS, OUTCOME_TRAFFIC, OUTCOME_ENGAGEMENT, OUTCOME_LEADS, OUTCOME_APP_PROMOTION, OUTCOME_SALES, BRAND_AWARENESS, REACH, LINK_CLICKS, POST_ENGAGEMENT, VIDEO_VIEWS, LEAD_GENERATION, MESSAGES, CONVERSIONS, PRODUCT_CATALOG_SALES, APP_INSTALLS, STORE_VISITS], description: "OUTCOME_* are the current (ODAX) objectives; the rest are legacy objectives still carried by old campaigns" }
+  status:                 { type: enum, values: [ACTIVE, PAUSED, DELETED, ARCHIVED], description: "Configured status" }
+  effective_status:       { type: enum, values: [ACTIVE, PAUSED, DELETED, ARCHIVED, IN_PROCESS, WITH_ISSUES], description: "Actual delivery state, including problems" }
+  buying_type:            { type: enum, values: [AUCTION, RESERVED], description: "RESERVED is reach-and-frequency buying at a fixed CPM" }
+  bid_strategy:           { type: enum, values: [LOWEST_COST_WITHOUT_CAP, LOWEST_COST_WITH_BID_CAP, COST_CAP, LOWEST_COST_WITH_MIN_ROAS], description: "Lives here under Advantage campaign budget, otherwise on the ad set" }
+  daily_budget:           { type: integer, description: "Minor units (cents). Present only under Advantage campaign budget. The API returns a string; cast it" }
+  lifetime_budget:        { type: integer, description: "Minor units. Alternative to daily_budget" }
+  budget_optimization:    { type: boolean, description: "True when Advantage campaign budget (CBO) is on. Derive it as 'the campaign carries a daily_budget or lifetime_budget'" }   # TODO verify: a direct Marketing API field for this flag
+  spend_cap:              { type: integer, description: "Campaign lifetime spend cap in minor units; 0 means none" }
+  special_ad_categories:  { type: json, description: "List: HOUSING, EMPLOYMENT, CREDIT, ISSUES_ELECTIONS_POLITICS, FINANCIAL_PRODUCTS_SERVICES. Non-empty restricts targeting (no age, gender, zip, lookalike) and limits reporting breakdowns" }
+  is_advantage_plus:      { type: boolean, description: "Advantage+ shopping or app campaign: targeting and placements are automated and mostly locked; judge it as a whole, not by ad set" }   # TODO verify: maps to smart_promotion_type
+  in_active_experiment:   { type: boolean, description: "Set by the measurement team, not by Meta: true while this campaign is a cell in a running conversion lift study or geo experiment" }
+  start_time:             datetime
+  stop_time:              datetime
+  created_time:           datetime
+relationships:
+  belongs_to:  { to: Account, cardinality: many-to-one }
+  contains:    { to: AdSet, cardinality: one-to-many }
+  measured_by: { to: LiftStudy, cardinality: many-to-many, description: "Lift studies this campaign is a test cell of" }
+source:
+  connection: meta_ads
+  tool: get_campaigns
+  params: { account_id: "act_<Account.account_id>", limit: 100, status_filter: "" }
+owner: measurement@stella.example
+tags: [meta, structure]

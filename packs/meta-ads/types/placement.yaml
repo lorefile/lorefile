@@ -1,0 +1,36 @@
+type: Placement
+description: >
+  Where an impression appeared: publisher_platform (facebook, instagram,
+  audience_network, messenger, threads) by platform_position (feed, story, reels,
+  right column) by device_platform. Insights can be broken down by these, which
+  shows where delivery went, not which placement caused the sale. Under
+  Advantage+ placements Meta picks the mix and shifts spend to the cheapest
+  result, so a placement's CPA is a selection effect as much as a property of the
+  placement. Reference data lives inline below.
+domain: Targeting and delivery
+properties:
+  placement_id:       { type: string, key: true, description: "publisher_platform/platform_position" }
+  publisher_platform: { type: enum, values: [facebook, instagram, audience_network, messenger, threads] }
+  platform_position:  { type: enum, values: [feed, video_feeds, marketplace, story, facebook_reels, right_hand_column, search, instream_video, instagram_stream, instagram_stories, instagram_reels, instagram_explore, instagram_explore_home, instagram_profile_feed, instagram_search, an_classic, rewarded_video, messenger_inbox, messenger_stories], description: "Values as the platform_position breakdown returns them" }
+  device_platform:    { type: enum, values: [mobile, desktop, any] }
+  note:               string
+# TODO verify: platform_position values against the current insights breakdown reference
+instances:
+  - { placement_id: facebook/feed,              publisher_platform: facebook,         platform_position: feed,                 device_platform: any,     note: "Facebook News Feed" }
+  - { placement_id: facebook/video_feeds,       publisher_platform: facebook,         platform_position: video_feeds,          device_platform: any,     note: "Facebook Watch and video feeds" }
+  - { placement_id: facebook/marketplace,       publisher_platform: facebook,         platform_position: marketplace,          device_platform: any,     note: "Facebook Marketplace" }
+  - { placement_id: facebook/story,             publisher_platform: facebook,         platform_position: story,                device_platform: mobile,  note: "Facebook Stories, full screen vertical" }
+  - { placement_id: facebook/facebook_reels,    publisher_platform: facebook,         platform_position: facebook_reels,       device_platform: mobile,  note: "Facebook Reels" }
+  - { placement_id: facebook/right_hand_column, publisher_platform: facebook,         platform_position: right_hand_column,    device_platform: desktop, note: "Desktop right column, small image, cheap impressions" }
+  - { placement_id: facebook/search,            publisher_platform: facebook,         platform_position: search,               device_platform: any,     note: "Facebook search results" }
+  - { placement_id: facebook/instream_video,    publisher_platform: facebook,         platform_position: instream_video,       device_platform: any,     note: "Mid-roll in Facebook videos" }
+  - { placement_id: instagram/instagram_stream, publisher_platform: instagram,        platform_position: instagram_stream,     device_platform: mobile,  note: "Instagram Feed" }
+  - { placement_id: instagram/instagram_stories, publisher_platform: instagram,       platform_position: instagram_stories,    device_platform: mobile,  note: "Instagram Stories" }
+  - { placement_id: instagram/instagram_reels,  publisher_platform: instagram,        platform_position: instagram_reels,      device_platform: mobile,  note: "Instagram Reels" }
+  - { placement_id: instagram/instagram_explore, publisher_platform: instagram,       platform_position: instagram_explore,    device_platform: mobile,  note: "Instagram Explore" }
+  - { placement_id: audience_network/an_classic, publisher_platform: audience_network, platform_position: an_classic,          device_platform: mobile,  note: "Third-party apps and sites; cheapest CPM, weakest attribution" }
+  - { placement_id: audience_network/rewarded_video, publisher_platform: audience_network, platform_position: rewarded_video,  device_platform: mobile,  note: "Rewarded video in games" }
+  - { placement_id: messenger/messenger_inbox,  publisher_platform: messenger,        platform_position: messenger_inbox,      device_platform: mobile,  note: "Messenger inbox" }
+  - { placement_id: messenger/messenger_stories, publisher_platform: messenger,       platform_position: messenger_stories,    device_platform: mobile,  note: "Messenger Stories" }
+owner: measurement@stella.example
+tags: [meta, delivery, reference]

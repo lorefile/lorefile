@@ -1,0 +1,95 @@
+types:
+  - type: Shop
+    description: >
+      The store itself: one Shopify account, one myshopify domain. currency is the
+      shop currency, the one every report and every total_price is in, even when a
+      customer paid in another (presentment) currency. iana_timezone decides which
+      day an order belongs to. taxes_included says whether product prices already
+      contain tax, which changes what "revenue" means by country. plan_name tells
+      you which features (multi-currency, markets, B2B) can exist.
+    domain: Store
+    properties:
+      shop_id:                        { type: string, key: true }
+      name:                           string
+      myshopify_domain:               { type: string, description: "<store>.myshopify.com, the stable identifier" }
+      domain:                         { type: string, description: "Primary custom domain" }
+      currency:                       { type: string, description: "Shop currency, ISO 4217; all totals and reports are in it" }
+      iana_timezone:                  { type: string, description: "Report time zone; a sales 'day' is this zone's day" }
+      country_code:                   string
+      plan_name:                      { type: string, description: "basic, shopify, advanced, plus, ..." }
+      taxes_included:                 { type: boolean, description: "True when product prices include tax (common outside the US)" }
+      enabled_presentment_currencies: { type: json, description: "Currencies customers may pay in; orders carry presentment_currency" }
+      multi_location_enabled:         boolean
+      primary_locale:                 string
+    source:
+      connection: shopify
+      tool: get_shop
+      params:
+        graphql: "{ shop { id name myshopifyDomain primaryDomain { host } currencyCode ianaTimezone billingAddress { countryCodeV2 } plan { displayName } taxesIncluded enabledPresentmentCurrencies } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, store]
+
+  - type: Product
+    description: >
+      A catalogue entry with one or more variants. product_type, vendor and tags
+      are free text set by the merchant and are the only category system Shopify
+      has, so "category" analysis is only as clean as the merchant's tagging.
+      Products change over time: a LineItem snapshots the title and price at order
+      time, and product_exists false on a line item means the product was deleted.
+      status draft or archived means not sellable.
+    domain: Store
+    properties:
+      product_id:   { type: string, key: true, description: "Numeric id; GraphQL gid://shopify/Product/<id>" }
+      title:        string
+      handle:       { type: string, description: "URL slug" }
+      product_type: { type: string, description: "Free text category" }
+      vendor:       { type: string, description: "Free text brand or supplier" }
+      status:       { type: enum, values: [active, archived, draft] }
+      tags:         { type: json, description: "Comma-separated in REST, list in GraphQL" }
+      published_at: datetime
+      created_at:   datetime
+      updated_at:   datetime
+    relationships:
+      has: { to: Variant, cardinality: one-to-many }
+    source:
+      connection: shopify
+      tool: get_products
+      params:
+        limit: 50
+        graphql: "{ products(first: 50) { nodes { id title handle productType vendor status tags publishedAt createdAt updatedAt } } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, catalogue]
+
+  - type: Variant
+    description: >
+      The sellable unit: size, colour, pack. variant_id is the stable key; sku is
+      the merchant's label and is not guaranteed unique. price is today's price,
+      not what any order paid (that is LineItem.price). compare_at_price is the
+      struck-through "was" price. inventory_quantity sums all locations;
+      inventory_policy continue means it can oversell.
+    domain: Store
+    properties:
+      variant_id:           { type: string, key: true }
+      product_id:           string
+      sku:                  { type: string, description: "Merchant's stock code; may repeat" }
+      title:                { type: string, description: "Option values joined, e.g. 'Blue / M'" }
+      price:                { type: number, description: "Current price in the shop currency; API returns a string" }
+      compare_at_price:     { type: number, description: "'Was' price, null when none" }
+      inventory_quantity:   { type: integer, description: "Sum across locations" }
+      inventory_policy:     { type: enum, values: [deny, continue], description: "continue allows overselling" }
+      inventory_management: { type: string, description: "shopify, an app handle, or null for untracked" }
+      inventory_item_id:    string
+      barcode:              string
+      requires_shipping:    boolean
+      taxable:              boolean
+      position:             integer
+    relationships:
+      of: { to: Product, cardinality: many-to-one }
+    source:
+      connection: shopify
+      tool: get_product
+      params:
+        product_id: "<Product.product_id>"
+        graphql: "{ product(id: \"gid://shopify/Product/<Product.product_id>\") { variants(first: 100) { nodes { id sku title price compareAtPrice inventoryQuantity inventoryPolicy inventoryItem { id tracked } barcode position } } } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, catalogue]

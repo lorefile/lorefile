@@ -1,0 +1,13 @@
+action: attribute_order
+description: >
+  A read-out guard, not a write. Call it before counting an order as revenue or
+  crediting it to a channel or campaign. It blocks test and cancelled orders and
+  explains pending payments, other currencies, back-dating, refunds, non-web sales
+  channels and discount codes, so the number you quote is the one Shopify's own
+  reports would give.
+inputs:
+  order: Order
+checks: [SH-001, SH-002, SH-003, SH-004, SH-005, SH-006]
+requires_approval_from: none
+side_effects: None. Read-only.
+tags: [read, analysis, attribution]

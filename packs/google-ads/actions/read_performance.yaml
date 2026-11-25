@@ -1,0 +1,15 @@
+action: read_performance
+description: >
+  A read-out guard, not a write. Call it before quoting a conversion, cost or
+  ROAS number for a campaign: pass the account, the campaign and the Readout
+  row. It checks that the account is live, that the bid strategy can be judged on
+  that metric, that the number has settled, and that a geo segment is not being
+  read as residents or as incrementality.
+inputs:
+  account: Account
+  campaign: Campaign
+  readout: Readout
+checks: [GA-002, GA-003, GA-005, GA-006, GA-007, GA-011]
+requires_approval_from: none
+side_effects: None. Read-only.
+tags: [read, analysis]

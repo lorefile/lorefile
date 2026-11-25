@@ -1,0 +1,182 @@
+types:
+  - type: LineItem
+    description: >
+      One product variant on one order, as it was at order time: title and price
+      are snapshots, not the current catalogue. price is the unit price before
+      line discounts; price times quantity is gross sales; total_discount is what
+      came off this line (order-level discounts are allocated down to lines in
+      discount_allocations). gift_card true means the customer bought a gift card:
+      that is a liability, not a sale, and Shopify excludes it from total sales
+      until it is redeemed. fulfillable_quantity is what is still to ship.
+    domain: Orders
+    properties:
+      line_item_id:         { type: string, key: true }
+      order_id:             string
+      product_id:           { type: string, description: "null when the product was deleted" }
+      variant_id:           string
+      sku:                  string
+      title:                { type: string, description: "Product title at order time" }
+      variant_title:        string
+      vendor:               string
+      quantity:             integer
+      price:                { type: number, description: "Unit price before line discounts, shop currency" }
+      total_discount:       { type: number, description: "Discount applied to this line" }
+      discount_allocations: { type: json, description: "How order-level discounts were spread onto this line" }
+      fulfillable_quantity: integer
+      fulfillment_status:   { type: string, description: "null, partial, fulfilled or not_eligible" }
+      gift_card:            { type: boolean, description: "A gift card purchase: a liability, excluded from sales" }
+      requires_shipping:    boolean
+      taxable:              boolean
+      product_exists:       { type: boolean, description: "False when the product has since been deleted" }
+    relationships:
+      on: { to: Order, cardinality: many-to-one }
+      of: { to: Variant, cardinality: many-to-one }
+    source:
+      connection: shopify
+      tool: get_order
+      params:
+        order_id: "<Order.order_id>"
+        graphql: "{ order(id: \"gid://shopify/Order/<Order.order_id>\") { lineItems(first: 100) { nodes { id sku title variantTitle vendor quantity originalUnitPriceSet { shopMoney { amount } } totalDiscountSet { shopMoney { amount } } discountAllocations { allocatedAmountSet { shopMoney { amount } } } unfulfilledQuantity isGiftCard requiresShipping taxable product { id } variant { id } } } } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, orders]
+
+  - type: Customer
+    description: >
+      A person record. Every order creates or reuses one, including guest
+      checkouts (state disabled), so a customer is not the same as an account
+      holder. orders_count and total_spent are lifetime values as of now; they
+      cannot tell you whether a given order was a first purchase (use
+      Order.customer_order_index) or what a cohort spent in a period. Marketing
+      consent lives in email_marketing_consent_state and sms_marketing_consent_state
+      and is the only lawful basis for messaging. Names, email and addresses are
+      personal data: aggregate, do not copy.
+    domain: Orders
+    properties:
+      customer_id:                   { type: string, key: true }
+      email:                         { type: string, description: "Personal data" }
+      state:                         { type: enum, values: [disabled, invited, enabled, declined], description: "Account state; disabled is a guest" }
+      verified_email:                boolean
+      orders_count:                  { type: integer, description: "Lifetime, as of now" }
+      total_spent:                   { type: number, description: "Lifetime, shop currency, as of now" }
+      email_marketing_consent_state: { type: enum, values: [subscribed, not_subscribed, pending, unsubscribed, redacted, invalid] }
+      sms_marketing_consent_state:   { type: enum, values: [subscribed, not_subscribed, pending, unsubscribed, redacted] }
+      tags:                          json
+      tax_exempt:                    boolean
+      created_at:                    datetime
+      last_order_id:                 string
+      default_country_code:          { type: string, description: "default_address.country_code; the usual geo for customer-level analysis" }
+      default_province_code:         { type: string, description: "default_address.province_code" }
+    relationships:
+      placed: { to: Order, cardinality: one-to-many }
+    source:
+      connection: shopify
+      tool: get_customers
+      params:
+        limit: 250
+        graphql: "{ customers(first: 250) { nodes { id email state verifiedEmail numberOfOrders amountSpent { amount currencyCode } emailMarketingConsent { marketingState } smsMarketingConsent { marketingState } tags taxExempt createdAt lastOrder { id } defaultAddress { countryCodeV2 provinceCode } } } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, customers, pii]
+
+  - type: Fulfillment
+    description: >
+      One shipment (or pickup) of some or all line items of an order, from one
+      location. status success means Shopify created the fulfillment and the goods
+      left (or were marked as such); shipment_status is the carrier's state and is
+      the only thing that says delivered. Fulfillment has no effect on when revenue
+      is counted: Shopify books sales at Order.processed_at, not at shipping.
+    domain: Orders
+    properties:
+      fulfillment_id:   { type: string, key: true }
+      order_id:         string
+      status:           { type: enum, values: [pending, open, success, cancelled, error, failure] }
+      shipment_status:  { type: enum, values: [label_printed, label_purchased, attempted_delivery, ready_for_pickup, confirmed, in_transit, out_for_delivery, delivered, failure], description: "Carrier state, null when no tracking" }
+      tracking_company: string
+      tracking_number:  string
+      tracking_url:     string
+      location_id:      { type: string, description: "Which location shipped it" }
+      service:          { type: string, description: "manual, or the fulfillment service handle" }
+      created_at:       datetime
+      updated_at:       datetime
+      line_items:       { type: json, description: "Line items and quantities in this shipment" }
+    relationships:
+      for: { to: Order, cardinality: many-to-one }
+    source:
+      connection: shopify
+      tool: get_order
+      params:
+        order_id: "<Order.order_id>"
+        graphql: "{ order(id: \"gid://shopify/Order/<Order.order_id>\") { fulfillments { id status displayStatus trackingInfo { company number url } location { id } service { handle } createdAt updatedAt fulfillmentLineItems(first: 50) { nodes { quantity lineItem { id } } } } } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, orders]
+
+  - type: Refund
+    description: >
+      Money or goods returned on an order after it was placed. A refund has its
+      own processed_at and that, not the order's, is the day it counts as a return
+      in reports. amount is the sum of its refund transactions in the shop
+      currency; refund_line_items carry a restock_type (no_restock, cancel, return,
+      legacy) that says whether inventory came back; order_adjustments hold
+      shipping refunds and rounding discrepancies. After a partial refund the
+      order's financial_status is partially_refunded and current_total_price
+      drops; count either the refund or the drop, never both.
+    domain: Orders
+    properties:
+      refund_id:         { type: string, key: true }
+      order_id:          string
+      created_at:        datetime
+      processed_at:      { type: datetime, description: "The date the return counts in reports" }
+      note:              string
+      user_id:           { type: string, description: "Staff member who issued it" }
+      amount:            { type: number, description: "Sum of refund transactions, shop currency" }
+      currency:          string
+      restock:           { type: boolean, description: "True if any line was restocked" }
+      refund_line_items: { type: json, description: "[{line_item_id, quantity, restock_type, subtotal}]" }
+      transactions:      { type: json, description: "[{kind: refund, gateway, amount, status}]" }
+      order_adjustments: { type: json, description: "[{kind: shipping_refund | refund_discrepancy, amount}]" }
+    relationships:
+      on: { to: Order, cardinality: many-to-one }
+    source:
+      connection: shopify
+      tool: get_order
+      params:
+        order_id: "<Order.order_id>"
+        graphql: "{ order(id: \"gid://shopify/Order/<Order.order_id>\") { refunds { id createdAt note totalRefundedSet { shopMoney { amount } } refundLineItems(first: 50) { nodes { quantity restockType lineItem { id } subtotalSet { shopMoney { amount } } } } transactions { kind gateway status amountSet { shopMoney { amount } } } orderAdjustments(first: 10) { nodes { reason amountSet { shopMoney { amount } } } } } } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, orders]
+
+  - type: DiscountCode
+    description: >
+      A code customers type at checkout, with its rule: percentage or fixed
+      amount off line items, or free shipping; limits on uses, per-customer use
+      and dates. For attribution a code on an order proves the code was used, not
+      where the customer came from: codes leak to coupon sites and browser
+      extensions within days unless they are limited, so a creator's code
+      overstates the creator. Measure a code by orders carrying it (after
+      excluding test and cancelled orders) and cross-check the customer journey;
+      usage_count on the discount counts every application, including on orders
+      later cancelled.
+    domain: Promotions
+    properties:
+      discount_code_id:   { type: string, key: true }
+      code:               { type: string, description: "What the customer types; matched case-insensitively" }
+      title:              { type: string, description: "Internal name of the discount" }
+      value_type:         { type: enum, values: [percentage, fixed_amount, free_shipping] }
+      value:              { type: number, description: "Positive magnitude: 10 for 10% or 10.00 off; REST returns it negative, as a string" }
+      target_type:        { type: enum, values: [line_item, shipping_line] }
+      allocation_method:  { type: enum, values: [across, each] }
+      customer_selection: { type: enum, values: [all, prerequisite], description: "prerequisite restricts to customers or segments" }
+      once_per_customer:  boolean
+      usage_limit:        { type: integer, description: "Total uses allowed; null is unlimited" }
+      usage_count:        { type: integer, description: "Uses so far, including on orders later cancelled" }
+      starts_at:          datetime
+      ends_at:            { type: datetime, description: "null means no end" }
+      status:             { type: enum, values: [ACTIVE, EXPIRED, SCHEDULED] }
+      combines_with:      { type: json, description: "Which other discount classes it stacks with" }
+    source:
+      connection: shopify
+      tool: get_discount_codes   # TODO verify: tool name
+      params:
+        limit: 50
+        graphql: "{ codeDiscountNodes(first: 50) { nodes { id codeDiscount { ... on DiscountCodeBasic { title status startsAt endsAt usageLimit asyncUsageCount appliesOncePerCustomer codes(first: 5) { nodes { code } } customerGets { value { ... on DiscountPercentage { percentage } ... on DiscountAmount { amount { amount } } } } combinesWith { orderDiscounts productDiscounts shippingDiscounts } } ... on DiscountCodeFreeShipping { title status startsAt endsAt usageLimit asyncUsageCount codes(first: 5) { nodes { code } } } } } } }"
+    owner: ecommerce@stella.example
+    tags: [shopify, promotions]

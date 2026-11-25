@@ -1,0 +1,144 @@
+types:
+  - type: Insight
+    description: >
+      One row from the insights endpoint: delivery and cost for one object
+      (account, campaign, ad set or ad), one date range and optionally one
+      breakdown value. impressions, reach, frequency, spend, clicks, CPM, CPC and
+      CTR are facts about delivery. reach and frequency are de-duplicated people
+      for exactly the date range asked, so they do not add across days or across
+      objects (frequency = impressions / reach over that range only). clicks is
+      every click including likes and "see more"; inline_link_clicks or
+      outbound_clicks measure traffic. spend is in the account currency, days are
+      the account time zone's days. The conversion columns on the row obey the
+      attribution window it was requested with (default 7d_click_1d_view), so the
+      row is not final for recent dates: conversions attach to the day of the
+      click or view as they arrive.
+    domain: Measurement
+    properties:
+      insight_id:            { type: string, key: true, description: "Made by the agent: object_id:date_start:date_stop:breakdown_value" }
+      object_id:             { type: string, description: "act_<id>, campaign, ad set or ad id" }
+      level:                 { type: enum, values: [account, campaign, adset, ad] }
+      date_start:            date
+      date_stop:             date
+      breakdown:             { type: enum, values: [none, age, gender, country, region, dma, publisher_platform, platform_position, device_platform, impression_device, product_id, hourly_stats_aggregated_by_advertiser_time_zone], description: "Geo is country, region (state/province) and dma (US) only; there is no city or postal breakdown. Age/gender are unavailable on modelled conversions" }
+      breakdown_value:       string
+      spend:                 { type: number, description: "Account currency, major units as the API returns it for insights" }
+      impressions:           integer
+      reach:                 { type: integer, description: "Unique people in this exact date range; not additive" }
+      frequency:             { type: number, description: "impressions / reach for this exact date range" }
+      clicks:                { type: integer, description: "All clicks, including reactions and expands" }
+      inline_link_clicks:    { type: integer, description: "Clicks on links inside the ad" }
+      outbound_clicks:       { type: integer, description: "Clicks that left Meta" }
+      cpm:                   { type: number, description: "spend per 1,000 impressions" }
+      cpc:                   { type: number, description: "spend per click (all clicks)" }
+      ctr:                   { type: number, description: "clicks / impressions, in percent" }
+      attribution_window:    { type: enum, values: [1d_click, 7d_click, 1d_view, 7d_click_1d_view, 1d_ev, dda, 28d_click, 28d_view, 7d_view], description: "The action_attribution_windows the conversion columns on this row use" }
+      hours_since_date_stop: { type: integer, description: "Filled in by the agent: hours between the end of date_stop (account time zone) and when the row was fetched" }
+    relationships:
+      for_campaign: { to: Campaign, cardinality: many-to-one, description: "The campaign the object belongs to" }
+      in_window:    { to: AttributionWindow, cardinality: many-to-one }
+    source:
+      connection: meta_ads
+      tool: get_insights
+      params: { object_id: "<Account.id or Campaign.campaign_id or AdSet.adset_id or Ad.ad_id>", time_range: { since: "YYYY-MM-DD", until: "YYYY-MM-DD" }, level: campaign, breakdown: "", action_attribution_windows: [7d_click, 1d_view] }
+    owner: measurement@stella.example
+    tags: [meta, measurement]
+
+  - type: Conversion
+    description: >
+      One conversion count as Meta reports it: one action_type (purchase, lead,
+      add_to_cart) for one object and date range under ONE attribution window.
+      Meta credits a conversion to an ad someone clicked within the click window
+      or saw within the view window (default 7-day click plus 1-day view) and books
+      it on the day of that click or view, not the day of the purchase. So the last
+      seven days keep rising, a 7-day-click number is only final a week after
+      date_stop, and counts under different windows are different populations
+      that must never be compared or added. Since iOS 14.5, conversions from
+      opted-out iOS users are modelled (statistically estimated) and arrive up to
+      72 hours late, and age/gender/region breakdowns are not available for them.
+      "purchase" (omni_purchase) sums pixel, app and offline purchases;
+      offsite_conversion.fb_pixel_purchase is the pixel alone. None of this is
+      incrementality: an attributed conversion is one Meta could connect to an
+      ad, not one the ad caused. Only a LiftStudy measures that.
+    domain: Measurement
+    properties:
+      conversion_id:         { type: string, key: true, description: "Made by the agent: object_id:action_type:attribution_window:date_start:date_stop" }
+      object_id:             string
+      level:                 { type: enum, values: [account, campaign, adset, ad] }
+      action_type:           { type: enum, values: [purchase, omni_purchase, offsite_conversion.fb_pixel_purchase, lead, onsite_conversion.lead_grouped, complete_registration, add_to_cart, initiate_checkout, app_install, mobile_app_install, landing_page_view, link_click, video_view, post_engagement, onsite_conversion.messaging_conversation_started_7d], description: "Which event was counted. purchase and omni_purchase are the cross-channel totals" }
+      attribution_window:    { type: enum, values: [1d_click, 7d_click, 1d_view, 7d_click_1d_view, 1d_ev, dda, 28d_click, 28d_view, 7d_view], description: "The window this count was read under. 7d_click_1d_view is the account default; 28d_click, 28d_view and 7d_view were retired in January 2021" }
+      count:                 { type: number, description: "The action value. Fractional under dda" }
+      value:                 { type: number, description: "action_values: conversion value in the account currency; what ROAS divides by spend" }
+      date_start:            date
+      date_stop:             date
+      breakdown:             { type: enum, values: [none, age, gender, country, region, dma, publisher_platform, platform_position, device_platform, impression_device, product_id], description: "Geo is country, region and dma only, and shows where the ad was delivered" }
+      breakdown_value:       string
+      includes_modeled:      { type: boolean, description: "True unless the read-out excluded Aggregated Event Measurement (iOS) events. Assume true" }
+      hours_since_date_stop: { type: integer, description: "Filled in by the agent: hours between the end of date_stop (account time zone) and when the row was fetched" }
+    relationships:
+      for_campaign: { to: Campaign, cardinality: many-to-one }
+      in_window:    { to: AttributionWindow, cardinality: many-to-one, description: "The window the count was read under" }
+    source:
+      connection: meta_ads
+      tool: get_insights
+      params: { object_id: "<Campaign.campaign_id or AdSet.adset_id or Ad.ad_id>", time_range: { since: "YYYY-MM-DD", until: "YYYY-MM-DD" }, level: campaign, fields: [actions, action_values], action_attribution_windows: [7d_click, 1d_view], breakdown: "" }
+    owner: measurement@stella.example
+    tags: [meta, measurement]
+
+  - type: AttributionWindow
+    description: >
+      How long after an ad interaction Meta still credits a conversion to it.
+      Click windows start at a click, view windows at an impression. The account
+      default since January 2021 is 7-day click plus 1-day view; 28-day click,
+      28-day view and 7-day view were retired then and only appear in old exports.
+      dda is Meta's data-driven attribution; 1d_ev is 1-day engaged view (a video
+      played for 10 seconds or to completion). Changing the window changes the
+      number, not the business. Reference data lives inline below.
+    domain: Measurement
+    properties:
+      window_id: { type: string, key: true, description: "As used in action_attribution_windows" }
+      label:     string
+      event:     { type: enum, values: [click, view, engaged_view, mixed, modelled], description: "What starts the clock" }
+      days:      { type: integer, description: "Length of the window in days" }
+      status:    { type: enum, values: [default, current, retired] }
+      note:      string
+    instances:
+      - { window_id: 7d_click_1d_view, label: "7-day click, 1-day view", event: mixed,        days: 7,  status: default, note: "Account default since January 2021. What Ads Manager shows unless changed" }
+      - { window_id: 7d_click,         label: "7-day click",             event: click,        days: 7,  status: current, note: "Click part of the default" }
+      - { window_id: 1d_click,         label: "1-day click",             event: click,        days: 1,  status: current, note: "Strictest click window; closest to a last-click web analytics number" }
+      - { window_id: 1d_view,          label: "1-day view",              event: view,         days: 1,  status: current, note: "Impression-based. Most of the gap between Meta and a last-click tool is this" }
+      - { window_id: 1d_ev,            label: "1-day engaged view",      event: engaged_view, days: 1,  status: current, note: "Video played 10 seconds or to completion, then converted within a day" }
+      - { window_id: dda,              label: "Data-driven",             event: modelled,     days: 7,  status: current, note: "Meta's model splits credit across touchpoints; counts are fractional" }
+      - { window_id: 28d_click,        label: "28-day click",            event: click,        days: 28, status: retired, note: "Retired January 2021 with the iOS 14 changes" }
+      - { window_id: 28d_view,         label: "28-day view",             event: view,         days: 28, status: retired, note: "Retired January 2021" }
+      - { window_id: 7d_view,          label: "7-day view",              event: view,         days: 7,  status: retired, note: "Retired January 2021" }
+    owner: measurement@stella.example
+    tags: [meta, measurement, reference]
+
+  - type: LiftStudy
+    description: >
+      Meta's randomised experiment. Conversion Lift holds out a random control
+      group that never sees the ads and reports incremental conversions as test
+      minus control; Brand Lift does the same with a survey. It is the only Meta
+      number that measures incrementality; attributed conversions and ROAS do not.
+      A study needs enough budget and conversions to read, and Meta flags
+      under-powered cells. While a study runs, its campaigns must not be paused or
+      re-budgeted or the result is void. Studies are set up in Experiments in Ads
+      Manager and read from the business's ad_studies edge; this pack holds the
+      concept and the frozen-campaign rule, not a binding.
+    domain: Measurement
+    properties:
+      study_id:        { type: string, key: true }
+      name:            string
+      type:            { type: enum, values: [conversion_lift, brand_lift] }
+      status:          { type: enum, values: [SCHEDULED, RUNNING, COMPLETED, CANCELLED] }
+      start_time:      datetime
+      end_time:        datetime
+      holdout_pct:     { type: number, description: "Share of the eligible audience held out as control, e.g. 10.0" }
+      objective_event: { type: string, description: "The conversion event the study reads, e.g. purchase" }
+      cells:           { type: json, description: "Test cells and the campaigns in each" }
+      powered:         { type: boolean, description: "Meta's own power estimate: can this study detect the expected lift" }
+    relationships:
+      measures: { to: Campaign, cardinality: many-to-many, description: "Campaigns in the test cells" }
+    owner: measurement@stella.example
+    tags: [meta, measurement, incrementality]

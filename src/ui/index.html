@@ -150,7 +150,7 @@ async function renderType(d){
   $('main').innerHTML = `<h1>${esc(d.name)}<small>type${d.domain?' · '+esc(d.domain):''}</small></h1><div class="desc">${esc(d.description)}</div>${d.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}<div class="tabs">${tabs}</div>${body}`;
   let side = rulesHtml(d.constraints, 'Rules on ' + d.name);
   side += '<h4>Data</h4>';
-  side += d.source ? `<div><b>${esc(d.source.connection)}</b> <span class="chip">${esc(d.source.kind)}</span></div><div class="mono">${esc(d.source.table)}</div><div style="color:var(--muted)">key ${esc(d.source.key||d.key||'')}</div>` : `<div style="color:var(--muted)">${d.inline_instances?`${d.inline_instances} inline rows`:'No data binding (concept only)'}</div>`;
+  side += d.source ? `<div><b>${esc(d.source.connection)}</b> <span class="chip">${esc(d.source.kind)}</span></div><div class="mono">${esc(d.source.tool ? 'tool ' + d.source.tool : d.source.table)}</div><div style="color:var(--muted)">key ${esc(d.source.key||d.key||'')}</div>` : `<div style="color:var(--muted)">${d.inline_instances?`${d.inline_instances} inline rows`:'No data binding (concept only)'}</div>`;
   if (d.owner) side += `<h4>Owner</h4><div>${esc(d.owner)}</div>`;
   side += `<h4>File</h4><div class="mono">${esc(d.file)}</div>`;
   $('aside').innerHTML = side;

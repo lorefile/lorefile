@@ -1,0 +1,51 @@
+type: AdSet
+description: >
+  Where targeting, placements, schedule, optimisation goal and (without Advantage
+  campaign budget) the budget live. optimization_goal is what the auction buys
+  (OFFSITE_CONVERSIONS, VALUE, LINK_CLICKS, REACH); billing_event is what you pay
+  for (usually IMPRESSIONS). An ad set in the learning phase (fewer than about 50
+  optimisation events in the 7 days since its last significant edit) has an
+  unstable CPA; "learning limited" (status FAIL) means it never got out, and a
+  budget or targeting edit restarts the clock. attribution_spec is the window the
+  ad set optimises toward; insights are reported in the account window unless you
+  ask for another one. Under Advantage campaign budget the ad set has no budget of
+  its own: daily_min_spend_target and daily_spend_cap are advisory bounds.
+domain: Account structure
+properties:
+  adset_id:                     { type: string, key: true }
+  campaign_id:                  string
+  account_id:                   string
+  name:                         string
+  status:                       { type: enum, values: [ACTIVE, PAUSED, DELETED, ARCHIVED] }
+  effective_status:             { type: enum, values: [ACTIVE, PAUSED, DELETED, ARCHIVED, IN_PROCESS, WITH_ISSUES, CAMPAIGN_PAUSED], description: "CAMPAIGN_PAUSED means the parent is paused and this ad set is not delivering whatever its own status says" }
+  optimization_goal:            { type: enum, values: [REACH, IMPRESSIONS, LINK_CLICKS, LANDING_PAGE_VIEWS, OFFSITE_CONVERSIONS, VALUE, LEAD_GENERATION, QUALITY_LEAD, APP_INSTALLS, THRUPLAY, POST_ENGAGEMENT, PAGE_LIKES, CONVERSATIONS, AD_RECALL_LIFT, ENGAGED_USERS], description: "What the auction buys. OFFSITE_CONVERSIONS and VALUE are the only goals that make CPA and ROAS fair KPIs" }
+  billing_event:                { type: enum, values: [IMPRESSIONS, LINK_CLICKS, THRUPLAY, APP_INSTALLS, POST_ENGAGEMENT, PAGE_LIKES], description: "What you pay for" }
+  bid_strategy:                 { type: enum, values: [LOWEST_COST_WITHOUT_CAP, LOWEST_COST_WITH_BID_CAP, COST_CAP, LOWEST_COST_WITH_MIN_ROAS] }
+  bid_amount:                   { type: integer, description: "Bid cap or cost cap in minor units; absent for lowest cost without cap" }
+  daily_budget:                 { type: integer, description: "Minor units. Absent under Advantage campaign budget" }
+  lifetime_budget:              { type: integer, description: "Minor units" }
+  daily_min_spend_target:       { type: integer, description: "Under Advantage campaign budget: the floor Meta tries to spend here, advisory" }
+  daily_spend_cap:              { type: integer, description: "Under Advantage campaign budget: the ceiling, advisory" }
+  campaign_budget_optimization: { type: boolean, description: "Copied from the parent campaign: true means this ad set's budget fields are advisory and the campaign budget decides spend" }
+  learning_stage_status:        { type: enum, values: [LEARNING, SUCCESS, FAIL], description: "learning_stage_info.status. SUCCESS is out of learning; FAIL is shown as 'Learning limited' in Ads Manager" }
+  attribution_window:           { type: string, description: "attribution_spec flattened, e.g. 7d_click_1d_view: the window the ad set optimises toward" }
+  pixel_id:                     { type: string, description: "promoted_object.pixel_id: which Meta Pixel defines the conversion" }
+  custom_event_type:            { type: string, description: "promoted_object.custom_event_type, e.g. PURCHASE, LEAD, COMPLETE_REGISTRATION" }
+  targeting_countries:          { type: json, description: "targeting.geo_locations.countries" }
+  targeting_regions:            { type: json, description: "targeting.geo_locations.regions: states and provinces, by Meta region key" }
+  targeting_dmas:               { type: json, description: "targeting.geo_locations.geo_markets: US DMAs, keys like DMA:501" }
+  advantage_audience:           { type: boolean, description: "Advantage+ audience: Meta may deliver beyond the stated targeting when it expects better results" }
+  advantage_placements:         { type: boolean, description: "Advantage+ placements (automatic placements): Meta picks the placement mix" }
+  start_time:                   datetime
+  end_time:                     datetime
+relationships:
+  part_of:     { to: Campaign, cardinality: many-to-one }
+  contains:    { to: Ad, cardinality: one-to-many }
+  targets:     { to: Audience, cardinality: many-to-many, description: "Custom and lookalike audiences included or excluded in targeting" }
+  delivers_on: { to: Placement, cardinality: many-to-many, description: "Placements the ad set may deliver on" }
+source:
+  connection: meta_ads
+  tool: get_adsets
+  params: { account_id: "act_<Account.account_id>", campaign_id: "<Campaign.campaign_id>", limit: 100 }
+owner: measurement@stella.example
+tags: [meta, structure]

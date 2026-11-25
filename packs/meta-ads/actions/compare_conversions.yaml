@@ -1,0 +1,13 @@
+action: compare_conversions
+description: >
+  A read-out guard, not a write. Call it before saying "A did better than B" about
+  two conversion counts (two campaigns, two periods, two ad sets). It blocks the
+  comparison when the two counts are under different attribution windows or
+  different action types, and warns when either count is still open.
+inputs:
+  a: Conversion
+  b: Conversion
+checks: [MA-002, MA-003, MA-004]
+requires_approval_from: none
+side_effects: None. Read-only.
+tags: [read, analysis]

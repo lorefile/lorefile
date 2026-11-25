@@ -1,0 +1,21 @@
+name: shopify
+version: 0.1.0
+description: >
+  What Shopify store data means to someone measuring marketing. The Shopify MCP
+  server returns rows: orders, line items, products, customers, refunds. This
+  pack says what those rows are: which orders are revenue (not test, not
+  cancelled, counted at processed_at in the shop currency), what the financial
+  and fulfillment statuses mean, that source_name is the sales channel that took
+  the order and not the marketing channel that earned it, where the customer
+  journey and UTMs actually live, and why a discount code is proof of use, not
+  of attribution. Load it next to the data MCP.
+domains:
+  - name: Store
+    description: The shop and its catalogue.
+    types: [Shop, Product, Variant]
+  - name: Orders
+    description: What was bought, by whom, and what happened to it afterwards.
+    types: [Order, LineItem, Customer, Fulfillment, Refund]
+  - name: Promotions
+    description: Codes and what they can and cannot tell you.
+    types: [DiscountCode]

@@ -1,0 +1,19 @@
+type: BudgetChange
+description: >
+  A proposed budget edit, written by the agent before calling validate: which
+  object, at which level, from what to what. Amounts are in the account
+  currency's minor units (cents), as the API stores them. The level must match
+  where the budget actually lives: on the campaign under Advantage campaign
+  budget, on the ad set otherwise.
+domain: Changes
+properties:
+  change_id:      { type: string, key: true, description: "Made by the agent, e.g. 2025-11-25-adset-123-daily" }
+  object_id:      { type: string, description: "The campaign or ad set id being changed" }
+  level:          { type: enum, values: [campaign, adset], description: "Where the budget lives" }
+  budget_type:    { type: enum, values: [daily, lifetime] }
+  current_amount: { type: integer, description: "Minor units, as read from the object" }
+  new_amount:     { type: integer, description: "Minor units" }
+  currency:       { type: string, description: "Must equal the account currency" }
+  reason:         string
+owner: measurement@stella.example
+tags: [meta, change]
