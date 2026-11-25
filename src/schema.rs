@@ -101,7 +101,7 @@ pub struct RelationshipStandalone {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<EdgeSource>,
     /// Set by the loader: which file this came from.
-    #[serde(skip)]
+    #[serde(skip_deserializing)]
     pub file: String,
 }
 
@@ -159,7 +159,7 @@ pub struct TypeDef {
     #[serde(default)]
     pub instances: Vec<IndexMap<String, Yaml>>,
     /// Set by the loader: which file this came from.
-    #[serde(skip)]
+    #[serde(skip_deserializing)]
     pub file: String,
 }
 
@@ -213,7 +213,7 @@ pub struct Constraint {
     pub owner: String,
     #[serde(default)]
     pub tags: Vec<String>,
-    #[serde(skip)]
+    #[serde(skip_deserializing)]
     pub file: String,
 }
 
@@ -256,7 +256,7 @@ pub struct ActionDef {
     pub side_effects: String,
     #[serde(default)]
     pub tags: Vec<String>,
-    #[serde(skip)]
+    #[serde(skip_deserializing)]
     pub file: String,
 }
 
@@ -277,7 +277,7 @@ pub struct SourceDef {
     /// Everything else (account, database, host…). Secrets stay in env vars.
     #[serde(flatten)]
     pub config: IndexMap<String, Yaml>,
-    #[serde(skip)]
+    #[serde(skip_deserializing)]
     pub file: String,
 }
 

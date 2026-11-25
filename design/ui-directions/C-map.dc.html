@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Map of the business</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1D4ED8}a:hover{color:#1E40AF}
+button,input{font-family:inherit}
+input::placeholder{color:#8A8A94}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F6F6F4; color: #17171C; font-family: 'DM Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; gap: 14px; padding: 14px 24px; background: #FFFFFF; border-bottom: 1px solid #E6E6E2; flex-wrap: wrap">
+    <div style="font-weight: 700; font-size: 17px">Meta Ads, as a map</div>
+    <div style="color: #6E6E78; font-size: 14px">Click anything to see what it means and what you can do with it</div>
+    <div style="flex: 1 1 auto"></div>
+    <label for="map-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Find a word</label>
+    <input id="map-search" value="{{ query }}" onChange="{{ setQuery }}" placeholder="Find: budget, lookalike, window…" style="width: 260px; max-width: 100%; padding: 9px 12px; border: 1px solid #D9D9D4; border-radius: 10px; background: #FFFFFF; font-size: 14px; color: #17171C">
+    <button onClick="{{ toggleBlocking }}" style="padding: 9px 14px; border-radius: 10px; border: 1px solid {{ toggleBorder }}; background: {{ toggleBg }}; color: {{ toggleFg }}; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 40px; display: flex; align-items: center; gap: 8px">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg>
+      Only things with hard limits
+    </button>
+  </header>
+
+  <div style="flex: 1 1 auto; display: flex; min-height: 0">
+    <div style="flex: 1 1 auto; min-width: 0; overflow: auto; position: relative; background-image: radial-gradient(#D6D6D0 1px, transparent 1px); background-size: 22px 22px">
+      <div style="position: relative; width: 1240px; height: 640px; margin: 0 auto">
+
+        <sc-for list="{{ edges }}" as="e" hint-placeholder-count="6">
+          <div style="{{ e.lineStyle }}"></div>
+          <div style="{{ e.labelStyle }}">{{ e.label }}</div>
+        </sc-for>
+
+        <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="7">
+          <button onClick="{{ n.pick }}" style="{{ n.style }}">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <span style="width: 12px; height: 12px; border-radius: 50%; background: {{ n.color }}; flex: 0 0 auto"></span>
+              <span style="font-weight: 700; font-size: 16px">{{ n.name }}</span>
+            </div>
+            <div style="font-size: 13px; color: #6E6E78; text-align: left">{{ n.tagline }}</div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap">
+              <sc-if value="{{ n.hasBlock }}" hint-placeholder-val="{{ true }}"><span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #FDE8E8; color: #B91C1C">{{ n.blockText }}</span></sc-if>
+              <sc-if value="{{ n.hasWarn }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #FEF3E2; color: #B45309">{{ n.warnText }}</span></sc-if>
+              <sc-if value="{{ n.hasActions }}" hint-placeholder-val="{{ true }}"><span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #E7EEFF; color: #1D4ED8">{{ n.actionText }}</span></sc-if>
+            </div>
+          </button>
+        </sc-for>
+
+      </div>
+      <div style="position: absolute; left: 24px; bottom: 16px; display: flex; gap: 14px; font-size: 12.5px; color: #6E6E78; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 999px; padding: 6px 14px">
+        <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #B91C1C; margin-right: 6px"></span>hard limit</span>
+        <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #B45309; margin-right: 6px"></span>take care</span>
+        <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #1D4ED8; margin-right: 6px"></span>something you can do</span>
+      </div>
+    </div>
+
+    <sc-if value="{{ hasSelected }}" hint-placeholder-val="{{ true }}">
+      <aside style="flex: 0 0 400px; max-width: 100%; background: #FFFFFF; border-left: 1px solid #E6E6E2; padding: 22px 22px 28px; box-sizing: border-box; overflow: auto; display: flex; flex-direction: column; gap: 20px">
+        <div style="display: flex; align-items: flex-start; gap: 12px">
+          <span style="margin-top: 8px; width: 12px; height: 12px; border-radius: 50%; background: {{ selColor }}; flex: 0 0 auto"></span>
+          <div style="flex: 1 1 auto">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 700; line-height: 1.2">{{ selName }}</h2>
+            <div style="font-size: 13px; color: #6E6E78">{{ selKind }}</div>
+          </div>
+          <button onClick="{{ close }}" aria-label="Close" style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid #E6E6E2; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #6E6E78">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">In plain words</div>
+          <p style="margin: 0; font-size: 15px">{{ selDesc }}</p>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Guardrails</div>
+          <sc-if value="{{ selNoRules }}" hint-placeholder-val="{{ false }}"><div style="font-size: 14px; color: #6E6E78">No rules apply directly here.</div></sc-if>
+          <sc-for list="{{ selRules }}" as="r" hint-placeholder-count="3">
+            <div style="border: 1px solid #E6E6E2; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 5px">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; background: {{ r.bg }}; color: {{ r.fg }}">{{ r.sev }}</span>
+                <span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #8A8A94">{{ r.id }}</span>
+              </div>
+              <div style="font-size: 14.5px; font-weight: 600">{{ r.name }}</div>
+              <div style="font-size: 13.5px; color: #6E6E78">{{ r.plain }}</div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">What you can do here</div>
+          <sc-if value="{{ selNoActions }}" hint-placeholder-val="{{ false }}"><div style="font-size: 14px; color: #6E6E78">Nothing to act on here; it is looked at, not changed.</div></sc-if>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap">
+            <sc-for list="{{ selActions }}" as="a" hint-placeholder-count="2">
+              <button onClick="{{ a.pick }}" style="padding: 9px 14px; border-radius: 10px; border: 1px solid {{ a.border }}; background: {{ a.bg }}; color: {{ a.fg }}; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 40px">{{ a.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ hasAction }}" hint-placeholder-val="{{ false }}">
+            <div style="background: #F6F6F4; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+              <div style="font-weight: 600; font-size: 14.5px">{{ actionTitle }}</div>
+              <div style="font-size: 13.5px; color: #6E6E78">Before anything happens, these are checked:</div>
+              <sc-for list="{{ actionChecks }}" as="c" hint-placeholder-count="3">
+                <div style="display: flex; gap: 8px; font-size: 13.5px"><span style="color: {{ c.color }}; font-weight: 700">•</span><span>{{ c.text }}</span></div>
+              </sc-for>
+              <div style="font-size: 13.5px; margin-top: 4px"><span style="color: #6E6E78">Sign-off:</span> {{ actionApprover }}</div>
+              <div style="font-size: 13px; color: #1D4ED8; margin-top: 2px">Example right now: {{ actionExample }}</div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Where the numbers come from</div>
+          <div style="font-size: 14px; display: flex; align-items: center; gap: 8px">
+            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E6E78" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"></ellipse><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path></svg>
+            <span>{{ selSource }}</span>
+          </div>
+        </div>
+      </aside>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1D4ED8"},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { selected: 'Campaign', action: null, query: '', onlyBlocking: false };
+  }
+
+  nodes() {
+    const B = (id, name, plain) => ({ id, name, plain, sev: 'block', bg: '#FDE8E8', fg: '#B91C1C' });
+    const W = (id, name, plain) => ({ id, name, plain, sev: 'warn', bg: '#FEF3E2', fg: '#B45309' });
+    const I = (id, name, plain) => ({ id, name, plain, sev: 'info', bg: '#E7EEFF', fg: '#1D4ED8' });
+    return [
+      { key: 'Account', name: 'Ad account', kind: 'Account', x: 40, y: 60, color: '#6E6E78', tagline: 'Holds the campaigns, the spend, and who may touch them', desc: 'The container for everything else. Spend limits and people with access live here.', rules: [], actions: [], source: 'Meta Ads connector · get_account' },
+      { key: 'Campaign', name: 'Campaign', kind: 'Campaign', x: 380, y: 60, color: '#1D4ED8', tagline: 'A goal and a budget', desc: 'One objective, such as sales or awareness, and usually one budget. Everything under it works towards that goal. The objective decides which numbers it is fair to judge it on.', rules: [B('MA-010', 'Frozen while a lift test runs', 'Pausing or changing budget mid-test breaks the measurement for everyone.'), B('MA-011', 'Only an active campaign can be paused', 'A paused one is already paused.'), W('MA-006', 'Awareness campaigns are not judged on CPA or ROAS', 'They were never optimising for purchases.'), W('MA-007', 'Active but not delivering', 'Shows as on, but has not spent in 3 days. Look before you act.'), I('MA-009', 'With a campaign budget, ad-set budgets are only advisory', 'Meta spreads the money as it sees fit.')], actions: ['pause', 'budget', 'read'], source: 'Meta Ads connector · get_campaigns' },
+      { key: 'AdSet', name: 'Ad set', kind: 'AdSet', x: 720, y: 60, color: '#7C3AED', tagline: 'Who sees the ads, where, and on what budget', desc: 'The targeting layer: the audience, the placements, the schedule, and often the budget. After any big change Meta spends a few days learning who to show the ads to.', rules: [B('MA-012', 'Change the budget where it lives', 'If the campaign holds the budget, the ad set does not, and the other way round.'), W('MA-008', 'Still learning', 'Results are noisy until learning finishes; changes now make it take longer.'), W('MA-013', 'Changes over 20% restart learning', 'Keep daily changes under 20% if this week matters.')], actions: ['budget'], source: 'Meta Ads connector · get_adsets' },
+      { key: 'Ad', name: 'Ad', kind: 'Ad', x: 1030, y: 60, color: '#0F766E', tagline: 'One creative in one ad set', desc: 'The thing people actually see: image or video, text, link. Performance is judged on the ad set and campaign above it.', rules: [], actions: [], source: 'Meta Ads connector · get_ads' },
+      { key: 'Conversion', name: 'Conversion', kind: 'Conversion', x: 380, y: 300, color: '#B45309', tagline: 'A purchase or sign-up credited to an ad', desc: 'A result Meta claims for an ad. Which results get claimed depends on the attribution window, so two reports with different windows will not agree.', rules: [B('MA-001', 'Compare like with like', 'Two numbers under different attribution windows are answers to different questions.'), W('MA-002', 'iOS numbers arrive up to 72 hours late', 'They are modelled, not observed. Wait before reading out.'), W('MA-003', 'A 7-day window keeps filling for a week after the end date', 'Last week is not final yet.')], actions: ['compare', 'read'], source: 'Meta Ads connector · get_insights' },
+      { key: 'Audience', name: 'Audience', kind: 'Audience', x: 720, y: 300, color: '#DB2777', tagline: 'Who you are trying to reach', desc: 'A list you uploaded, people your pixel saw, or a lookalike Meta built from one of those. Lookalikes have three hard rules about what they can be built from.', rules: [B('MA-014', 'A lookalike cannot be seeded from a lookalike', 'Use the original list or pixel audience.'), B('MA-015', 'The seed needs at least 100 people from one country', 'Smaller seeds are refused.'), B('MA-016', 'Ratio is between 1% and 20%', '1% is closest to the seed, 20% is widest.')], actions: ['lookalike'], source: 'Meta Ads connector · get_custom_audiences' },
+      { key: 'AttributionWindow', name: 'Attribution window', kind: 'AttributionWindow', x: 380, y: 520, color: '#8A8A94', tagline: 'How long a purchase still counts after a click or a view', desc: 'The default is 7 days after a click and 1 day after a view. Change it and every conversion number changes with it, which is why reports must share one.', rules: [W('MA-004', 'Retired windows mean a stale export', 'If a report uses a window Meta no longer offers, it was pulled a long time ago.')], actions: [], source: 'Set on each report' }
+    ];
+  }
+
+  actions() {
+    return {
+      pause: { label: 'Pause it', title: 'Pause a campaign', checks: [{ text: 'Only an active campaign can be paused (MA-011)', color: '#B91C1C' }, { text: 'Not frozen in a lift test (MA-010)', color: '#B91C1C' }, { text: 'Is it actually delivering? (MA-007)', color: '#B45309' }], approver: 'paid social lead; the measurement team if it is in a test', example: 'Spring Sale – Prospecting is in the Q4 lift test, so the answer today is "not right now".' },
+      budget: { label: 'Change the budget', title: 'Change a budget', checks: [{ text: 'Change it where it lives, campaign or ad set (MA-012)', color: '#B91C1C' }, { text: 'Not frozen in a lift test (MA-010)', color: '#B91C1C' }, { text: 'Over 20% restarts learning (MA-013)', color: '#B45309' }], approver: 'paid social lead for changes above 20%', example: 'Retargeting holds its budget on the ad sets, so the campaign-level change would be refused.' },
+      read: { label: 'Read performance', title: 'Read performance', checks: [{ text: 'Judge on the metric that fits the objective (MA-006)', color: '#B45309' }, { text: 'iOS conversions may still be arriving (MA-002)', color: '#B45309' }, { text: 'Geo breakdowns are delivery location, not incrementality (MA-005)', color: '#1D4ED8' }], approver: 'none, this is a read', example: 'Brand Awareness – Video gets reach and frequency, never CPA.' },
+      compare: { label: 'Compare two reports', title: 'Compare two reports', checks: [{ text: 'Same attribution window on both (MA-001)', color: '#B91C1C' }, { text: 'A 7-day window keeps filling for a week (MA-003)', color: '#B45309' }, { text: 'No retired windows (MA-004)', color: '#B45309' }], approver: 'none, this is a read', example: 'Your two October reports use different windows, so they would be refused.' },
+      lookalike: { label: 'Build a lookalike', title: 'Build a lookalike audience', checks: [{ text: 'The seed is not itself a lookalike (MA-014)', color: '#B91C1C' }, { text: 'At least 100 people from one country (MA-015)', color: '#B91C1C' }, { text: 'Ratio between 1% and 20% (MA-016)', color: '#B91C1C' }], approver: 'paid social lead', example: '"Purchasers, last 180 days" (48,200 people, US) is a valid seed.' }
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const all = this.nodes();
+    const q = s.query.trim().toLowerCase();
+    const W = 210, H = 92;
+    const matches = (n) => !q || (n.name + ' ' + n.tagline + ' ' + n.desc + ' ' + n.rules.map(r => r.name + ' ' + r.plain).join(' ')).toLowerCase().includes(q);
+    const nodes = all.map(n => {
+      const blocks = n.rules.filter(r => r.sev === 'block').length;
+      const warns = n.rules.filter(r => r.sev === 'warn').length;
+      const dim = (q && !matches(n)) || (s.onlyBlocking && blocks === 0);
+      const sel = s.selected === n.key;
+      const ring = sel ? '0 0 0 3px ' + n.color + ', 0 8px 20px rgba(23,23,28,0.10)' : '0 1px 2px rgba(23,23,28,0.06)';
+      return {
+        ...n,
+        style: 'position: absolute; left: ' + n.x + 'px; top: ' + n.y + 'px; width: ' + W + 'px; height: ' + H + 'px; box-sizing: border-box; padding: 12px 14px; border-radius: 16px; border: 1px solid #E6E6E2; background: #FFFFFF; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 5px; justify-content: center; opacity: ' + (dim ? 0.3 : 1) + '; box-shadow: ' + ring + '; z-index: 1; font-family: inherit; color: inherit',
+        hasBlock: blocks > 0, blockText: blocks + (blocks === 1 ? ' hard limit' : ' hard limits'),
+        hasWarn: warns > 0, warnText: warns + ' to watch',
+        hasActions: n.actions.length > 0, actionText: n.actions.length + (n.actions.length === 1 ? ' thing to do' : ' things to do'),
+        pick: () => this.setState({ selected: n.key, action: null })
+      };
+    });
+    const center = (k) => { const n = all.find(x => x.key === k); return { x: n.x + W / 2, y: n.y + H / 2 }; };
+    const edges = [
+      ['Account', 'Campaign', 'owns'], ['Campaign', 'AdSet', 'contains'], ['AdSet', 'Ad', 'contains'],
+      ['AdSet', 'Audience', 'targets'], ['Campaign', 'Conversion', 'measured by'], ['Conversion', 'AttributionWindow', 'counted under']
+    ].map(([a, b, label]) => {
+      const p = center(a), r = center(b);
+      const dx = r.x - p.x, dy = r.y - p.y, len = Math.sqrt(dx * dx + dy * dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+      const involved = s.selected === a || s.selected === b;
+      return {
+        label,
+        lineStyle: 'position: absolute; left: ' + p.x + 'px; top: ' + p.y + 'px; width: ' + len + 'px; height: 2px; background: ' + (involved ? '#17171C' : '#C9C9C3') + '; transform: rotate(' + ang + 'deg); transform-origin: 0 50%; z-index: 0',
+        labelStyle: 'position: absolute; left: ' + ((p.x + r.x) / 2 - 44) + 'px; top: ' + ((p.y + r.y) / 2 - 11) + 'px; width: 88px; text-align: center; font-size: 11.5px; color: ' + (involved ? '#17171C' : '#8A8A94') + '; background: #F6F6F4; border-radius: 999px; padding: 2px 0; z-index: 0'
+      };
+    });
+    const sel = all.find(n => n.key === s.selected);
+    const A = this.actions();
+    const selActions = sel ? sel.actions.map(k => ({ label: A[k].label, pick: () => this.setState({ action: s.action === k ? null : k }), border: s.action === k ? '#1D4ED8' : '#D9D9D4', bg: s.action === k ? '#1D4ED8' : '#FFFFFF', fg: s.action === k ? '#FFFFFF' : '#17171C' })) : [];
+    const act = s.action ? A[s.action] : null;
+    return {
+      query: s.query,
+      setQuery: (e) => this.setState({ query: e && e.target ? e.target.value : '' }),
+      toggleBlocking: () => this.setState({ onlyBlocking: !s.onlyBlocking }),
+      toggleBg: s.onlyBlocking ? '#17171C' : '#FFFFFF', toggleFg: s.onlyBlocking ? '#FFFFFF' : '#17171C', toggleBorder: s.onlyBlocking ? '#17171C' : '#D9D9D4',
+      nodes, edges,
+      hasSelected: !!sel,
+      selName: sel ? sel.name : '', selKind: sel ? 'In the ontology: ' + sel.kind : '', selColor: sel ? sel.color : '#000', selDesc: sel ? sel.desc : '',
+      selRules: sel ? sel.rules : [], selNoRules: !!sel && sel.rules.length === 0,
+      selActions, selNoActions: !!sel && sel.actions.length === 0,
+      hasAction: !!act, actionTitle: act ? act.title : '', actionChecks: act ? act.checks : [], actionApprover: act ? act.approver : '', actionExample: act ? act.example : '',
+      selSource: sel ? sel.source : '',
+      close: () => this.setState({ selected: null, action: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

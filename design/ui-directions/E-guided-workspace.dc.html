@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Guided workspace</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#2B5CFF}a:hover{color:#1E45CC}
+button,input,textarea,select{font-family:inherit}
+input::placeholder,textarea::placeholder{color:#8E8E96}
+table{border-collapse:collapse}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F7F7F5; color: #1A1A1F; font-family: 'Inter', system-ui, sans-serif; font-size: 14px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; gap: 14px; padding: 10px 20px; background: #FFFFFF; border-bottom: 1px solid #E6E6E2; flex-wrap: wrap">
+    <div style="width: 28px; height: 28px; border-radius: 8px; background: #2B5CFF; display: flex; align-items: center; justify-content: center">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="12" cy="20" r="2"></circle><path d="M7 7l3 3M17 7l-3 3M12 15v3"></path></svg>
+    </div>
+    <div style="font-weight: 700; font-size: 15px">lumen-ecommerce</div>
+    <div style="color: #6E6E78; font-size: 13px">{{ counts }}</div>
+    <div style="display: flex; align-items: center; gap: 8px; margin-left: 6px">
+      <div style="width: 120px; height: 6px; border-radius: 999px; background: #E6E6E2; overflow: hidden"><div style="height: 6px; border-radius: 999px; background: #2B5CFF; width: {{ readyPct }}"></div></div>
+      <span style="font-size: 12.5px; color: #6E6E78">{{ readyText }}</span>
+    </div>
+    <div style="flex: 1 1 auto"></div>
+    <span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #E8F5EC; color: #15803D">Saved · YAML on the ontology server</span>
+    <button style="padding: 7px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">Reload</button>
+    <div style="width: 30px; height: 30px; border-radius: 50%; background: #FDE7D4; color: #9A4A12; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px">PR</div>
+  </header>
+
+  <div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; min-height: 0">
+
+    <nav style="flex: 0 1 240px; min-width: 200px; background: #FFFFFF; border-right: 1px solid #E6E6E2; padding: 14px 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+      <label for="find" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Find anything</label>
+      <input id="find" value="{{ search }}" onChange="{{ setSearch }}" placeholder="Find anything…" style="padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; color: #1A1A1F; background: #F7F7F5; margin-bottom: 8px">
+      <sc-if value="{{ searching }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; padding: 4px 8px">Results</div>
+        <sc-for list="{{ results }}" as="r" hint-placeholder-count="4">
+          <button onClick="{{ r.go }}" style="display: flex; gap: 8px; align-items: center; text-align: left; background: transparent; border: none; border-radius: 8px; padding: 7px 8px; cursor: pointer; min-height: 36px; font-size: 13px">
+            <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: #6E6E78; width: 54px; flex: 0 0 auto">{{ r.kind }}</span>
+            <span style="color: #1A1A1F">{{ r.name }}</span>
+          </button>
+        </sc-for>
+      </sc-if>
+      <sc-if value="{{ notSearching }}" hint-placeholder-val="{{ true }}">
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; padding: 4px 8px">Build</div>
+        <sc-for list="{{ buildNav }}" as="n" hint-placeholder-count="5">
+          <button onClick="{{ n.go }}" style="display: flex; gap: 10px; align-items: center; text-align: left; background: {{ n.bg }}; border: none; border-radius: 9px; padding: 8px 10px; cursor: pointer; min-height: 42px">
+            <span style="flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: {{ n.dotBg }}; color: {{ n.dotFg }}">{{ n.num }}</span>
+            <span style="display: flex; flex-direction: column; min-width: 0">
+              <span style="font-weight: 600; font-size: 13.5px; color: #1A1A1F">{{ n.title }}</span>
+              <span style="font-size: 12px; color: {{ n.statusFg }}">{{ n.status }}</span>
+            </span>
+          </button>
+        </sc-for>
+        <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; padding: 12px 8px 4px">Use</div>
+        <sc-for list="{{ useNav }}" as="n" hint-placeholder-count="3">
+          <button onClick="{{ n.go }}" style="display: flex; gap: 10px; align-items: center; text-align: left; background: {{ n.bg }}; border: none; border-radius: 9px; padding: 8px 10px; cursor: pointer; min-height: 42px">
+            <span style="display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto">
+              <span style="font-weight: 600; font-size: 13.5px; color: #1A1A1F">{{ n.title }}</span>
+              <span style="font-size: 12px; color: #6E6E78">{{ n.status }}</span>
+            </span>
+            <sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #FEF3E2; color: #B45309">{{ n.badge }}</span></sc-if>
+          </button>
+        </sc-for>
+        <div style="margin-top: auto; font-size: 12px; color: #8E8E96; padding: 8px; line-height: 1.5">Everything here is YAML files. Agents read the same files over MCP.</div>
+      </sc-if>
+    </nav>
+
+    <main style="flex: 999 1 560px; min-width: 0; display: flex; min-height: 0">
+
+      <sc-if value="{{ isMap }}" hint-placeholder-val="{{ true }}">
+        <div style="flex: 1 1 auto; min-width: 0; display: flex; min-height: 0">
+          <div style="flex: 1 1 auto; min-width: 0; overflow: auto; position: relative; background-image: radial-gradient(#DCDCD6 1px, transparent 1px); background-size: 22px 22px">
+            <div style="position: relative; width: 1040px; height: 560px; margin: 0 auto">
+              <sc-for list="{{ edges }}" as="e" hint-placeholder-count="13">
+                <div style="{{ e.lineStyle }}"></div>
+                <div style="{{ e.labelStyle }}">{{ e.label }}</div>
+              </sc-for>
+              <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="12">
+                <button onClick="{{ n.pick }}" style="{{ n.style }}">
+                  <div style="display: flex; align-items: center; gap: 8px">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background: {{ n.color }}; flex: 0 0 auto"></span>
+                    <span style="font-weight: 700; font-size: 14.5px">{{ n.name }}</span>
+                  </div>
+                  <div style="display: flex; gap: 5px; flex-wrap: wrap">
+                    <sc-if value="{{ n.hasBlock }}" hint-placeholder-val="{{ true }}"><span style="font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #FDE8E8; color: #B91C1C">{{ n.blockText }}</span></sc-if>
+                    <sc-if value="{{ n.hasGap }}" hint-placeholder-val="{{ false }}"><span style="font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #FEF3E2; color: #B45309">{{ n.gapText }}</span></sc-if>
+                    <sc-if value="{{ n.noSource }}" hint-placeholder-val="{{ false }}"><span style="font-size: 10.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: #F0F0ED; color: #6E6E78">no data yet</span></sc-if>
+                  </div>
+                </button>
+              </sc-for>
+            </div>
+            <div style="position: absolute; left: 18px; bottom: 12px; display: flex; gap: 12px; font-size: 12px; color: #6E6E78; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 999px; padding: 5px 12px">
+              <sc-for list="{{ legend }}" as="l" hint-placeholder-count="4"><span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: {{ l.color }}; margin-right: 5px"></span>{{ l.name }}</span></sc-for>
+            </div>
+          </div>
+          <aside style="flex: 0 0 340px; max-width: 100%; background: #FFFFFF; border-left: 1px solid #E6E6E2; padding: 18px; box-sizing: border-box; overflow: auto; display: flex; flex-direction: column; gap: 14px">
+            <sc-if value="{{ mapHasSel }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid #E6E6E2">
+                <div style="display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 50%; background: {{ mapSelColor }}"></span><span style="font-weight: 700; font-size: 18px">{{ mapSelName }}</span></div>
+                <div style="font-size: 13.5px; color: #3F3F46">{{ mapSelDesc }}</div>
+                <div style="font-size: 12.5px; color: #6E6E78">{{ mapSelFacts }}</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                  <button onClick="{{ mapOpen }}" style="padding: 7px 12px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">Open</button>
+                  <button onClick="{{ mapOpenRules }}" style="padding: 7px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">Its guardrails</button>
+                </div>
+              </div>
+            </sc-if>
+            <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">What to do next</div>
+            <sc-for list="{{ nudges }}" as="g" hint-placeholder-count="4">
+              <div style="border: 1px solid #E6E6E2; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px">
+                <div style="font-weight: 600; font-size: 13.5px">{{ g.title }}</div>
+                <div style="font-size: 12.5px; color: #6E6E78">{{ g.detail }}</div>
+                <button onClick="{{ g.go }}" style="align-self: flex-start; padding: 6px 10px; border-radius: 8px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 12.5px; cursor: pointer; min-height: 32px">{{ g.cta }}</button>
+              </div>
+            </sc-for>
+          </aside>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSources }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; padding: 26px 28px; display: flex; flex-direction: column; gap: 18px; max-width: 900px; overflow: auto">
+          <div><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 1</div><h1 style="margin: 2px 0 4px; font-size: 24px; font-weight: 700">Where the data lives</h1><p style="margin: 0; color: #6E6E78">Rows stay in these systems. The ontology only knows what they are and where to look.</p></div>
+          <sc-for list="{{ sourceCards }}" as="s" hint-placeholder-count="3">
+            <div style="background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 12px; padding: 14px 16px; display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap">
+              <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                <div style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 700; font-size: 15px; font-family: ui-monospace, Menlo, monospace">{{ s.connection }}</span><span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: {{ s.kindBg }}; color: {{ s.kindFg }}">{{ s.kind }}</span></div>
+                <div style="font-size: 13px; color: #3F3F46">{{ s.description }}</div>
+                <div style="font-size: 12.5px; color: #6E6E78">{{ s.usedBy }}</div>
+              </div>
+              <div style="font-size: 12.5px; font-weight: 600; color: {{ s.stateFg }}; flex: 0 0 auto">{{ s.state }}</div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ hasUnbound }}" hint-placeholder-val="{{ true }}">
+            <div style="background: #FFFBF3; border: 1px solid #F5D9A8; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+              <div style="font-weight: 600">{{ unboundTitle }}</div>
+              <div style="font-size: 13px; color: #6E6E78">They are described but no table is bound, so agents can read the rules and not the rows.</div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <sc-for list="{{ unbound }}" as="u" hint-placeholder-count="2">
+                  <button onClick="{{ u.bind }}" style="padding: 7px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">Bind {{ u.name }} to shop_files</button>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <div><div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; margin-bottom: 8px">Add a source</div>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+              <sc-for list="{{ addSources }}" as="a" hint-placeholder-count="6">
+                <button onClick="{{ a.add }}" style="text-align: left; background: #FFFFFF; border: 1px solid {{ a.border }}; border-radius: 12px; padding: 12px 14px; cursor: pointer; min-height: 60px; display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-weight: 600; font-size: 13.5px">{{ a.name }}</span>
+                  <span style="font-size: 12px; color: #6E6E78">{{ a.sub }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isThings }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 0 1 230px; min-width: 190px; border-right: 1px solid #E6E6E2; background: #FFFFFF; padding: 14px 10px; box-sizing: border-box; overflow: auto; display: flex; flex-direction: column; gap: 2px">
+          <button onClick="{{ startNewType }}" style="margin: 0 4px 10px; padding: 8px 12px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">+ New thing</button>
+          <sc-for list="{{ typeList }}" as="t" hint-placeholder-count="12">
+            <sc-if value="{{ t.isHeader }}" hint-placeholder-val="{{ false }}"><div style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; padding: 10px 8px 3px">{{ t.name }}</div></sc-if>
+            <sc-if value="{{ t.isItem }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ t.go }}" style="display: flex; align-items: center; gap: 8px; text-align: left; background: {{ t.bg }}; border: none; border-radius: 8px; padding: 7px 8px; cursor: pointer; min-height: 34px; font-size: 13.5px; color: {{ t.fg }}">
+                <span style="flex: 1 1 auto">{{ t.name }}</span>
+                <sc-if value="{{ t.hasGap }}" hint-placeholder-val="{{ false }}"><span style="font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #FEF3E2; color: #B45309">{{ t.gap }}</span></sc-if>
+              </button>
+            </sc-if>
+          </sc-for>
+        </div>
+        <div style="flex: 1 1 auto; min-width: 0; padding: 24px 28px; overflow: auto; display: flex; flex-direction: column; gap: 14px">
+          <sc-if value="{{ creating }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width: 640px; display: flex; flex-direction: column; gap: 14px">
+              <h1 style="margin: 0; font-size: 22px; font-weight: 700">A new thing</h1>
+              <div style="display: flex; flex-direction: column; gap: 5px"><label for="nt-name" style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">Call it</label><input id="nt-name" value="{{ ntName }}" onChange="{{ setNtName }}" placeholder="e.g. GiftCard" style="padding: 9px 12px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 15px; font-weight: 600; color: #1A1A1F; background: #FFFFFF"></div>
+              <div style="display: flex; flex-direction: column; gap: 5px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">Which area</div><div style="display: flex; gap: 6px; flex-wrap: wrap"><sc-for list="{{ ntDomains }}" as="d" hint-placeholder-count="4"><button onClick="{{ d.pick }}" style="padding: 6px 11px; border-radius: 999px; border: 1px solid {{ d.border }}; background: {{ d.bg }}; color: {{ d.fg }}; font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 32px">{{ d.name }}</button></sc-for></div></div>
+              <div style="display: flex; flex-direction: column; gap: 5px"><label for="nt-desc" style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">In plain words</label><textarea id="nt-desc" value="{{ ntDesc }}" onChange="{{ setNtDesc }}" rows="3" placeholder="What is it, who owns it, what matters about it" style="padding: 9px 12px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 14px; color: #1A1A1F; background: #FFFFFF; resize: vertical"></textarea></div>
+              <div style="display: flex; gap: 8px"><button onClick="{{ saveNewType }}" style="padding: 9px 14px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 40px">Create it</button><button onClick="{{ cancelNewType }}" style="padding: 9px 14px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 40px">Cancel</button></div>
+              <div style="font-size: 12.5px; color: #6E6E78">Fields, links and guardrails come next, on the thing's own page.</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ notCreating }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap"><h1 style="margin: 0; font-size: 24px; font-weight: 700">{{ tName }}</h1><span style="font-size: 13px; color: #6E6E78">{{ tDomain }}</span><span style="font-size: 12px; color: #8E8E96; font-family: ui-monospace, Menlo, monospace; margin-left: auto">{{ tFile }}</span></div>
+            <label for="t-desc" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">In plain words</label>
+            <textarea id="t-desc" value="{{ tDesc }}" onChange="{{ setTDesc }}" rows="2" style="padding: 9px 12px; border: 1px solid #E6E6E2; border-radius: 9px; font-size: 14px; color: #1A1A1F; background: #FFFFFF; resize: vertical; max-width: 820px"></textarea>
+            <div style="display: flex; gap: 2px; border-bottom: 1px solid #E6E6E2">
+              <sc-for list="{{ tTabs }}" as="tb" hint-placeholder-count="5"><button onClick="{{ tb.pick }}" style="padding: 8px 12px; border: none; border-bottom: 2px solid {{ tb.line }}; background: transparent; color: {{ tb.fg }}; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">{{ tb.label }}</button></sc-for>
+            </div>
+            <sc-if value="{{ tabFields }}" hint-placeholder-val="{{ true }}">
+              <div style="font-size: 12.5px; color: #6E6E78">Every field needs plain words. That sentence is what an agent reads when it decides what the field means.</div>
+              <table style="width: 100%; max-width: 900px">
+                <tr><th style="text-align: left; padding: 6px 8px; font-size: 11.5px; color: #6E6E78; font-weight: 600; border-bottom: 1px solid #E6E6E2">field</th><th style="text-align: left; padding: 6px 8px; font-size: 11.5px; color: #6E6E78; font-weight: 600; border-bottom: 1px solid #E6E6E2">kind</th><th style="text-align: left; padding: 6px 8px; font-size: 11.5px; color: #6E6E78; font-weight: 600; border-bottom: 1px solid #E6E6E2">in plain words</th></tr>
+                <sc-for list="{{ tFields }}" as="f" hint-placeholder-count="6">
+                  <tr>
+                    <td style="padding: 6px 8px; border-bottom: 1px solid #F0F0ED; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; white-space: nowrap; vertical-align: top">{{ f.name }}<sc-if value="{{ f.key }}" hint-placeholder-val="{{ false }}"> <span style="font-family: Inter, sans-serif; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: #E7EEFF; color: #2B5CFF">id</span></sc-if></td>
+                    <td style="padding: 6px 8px; border-bottom: 1px solid #F0F0ED; font-size: 12.5px; color: #6E6E78; vertical-align: top; white-space: nowrap">{{ f.kind }}</td>
+                    <td style="padding: 4px 8px; border-bottom: 1px solid #F0F0ED; vertical-align: top"><input value="{{ f.desc }}" onChange="{{ f.set }}" placeholder="{{ f.placeholder }}" style="width: 100%; box-sizing: border-box; padding: 6px 9px; border: 1px solid {{ f.border }}; border-radius: 8px; font-size: 13px; color: #1A1A1F; background: {{ f.bg }}"></td>
+                  </tr>
+                </sc-for>
+              </table>
+              <button style="align-self: flex-start; padding: 7px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">+ Add a field</button>
+            </sc-if>
+            <sc-if value="{{ tabLinks }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ tLinks }}" as="l" hint-placeholder-count="4">
+                <div style="display: flex; gap: 12px; align-items: center; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 10px; padding: 10px 12px; flex-wrap: wrap">
+                  <span style="font-size: 14px"><span style="font-weight: 600">{{ l.a }}</span> <span style="font-family: ui-monospace, Menlo, monospace; color: #6E6E78">{{ l.verb }}</span> <span style="font-weight: 600">{{ l.b }}</span></span>
+                  <span style="font-size: 12px; color: #6E6E78; font-family: ui-monospace, Menlo, monospace">{{ l.card }}</span>
+                  <span style="font-size: 12.5px; color: {{ l.descFg }}; flex: 1 1 200px">{{ l.desc }}</span>
+                </div>
+              </sc-for>
+              <button onClick="{{ goLinksForType }}" style="align-self: flex-start; padding: 7px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">+ Add a link from {{ tName }}</button>
+            </sc-if>
+            <sc-if value="{{ tabRules }}" hint-placeholder-val="{{ false }}">
+              <sc-for list="{{ tRules }}" as="r" hint-placeholder-count="3">
+                <div style="background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px">
+                  <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: {{ r.sevBg }}; color: {{ r.sevFg }}">{{ r.sevLabel }}</span><span style="font-weight: 600; font-size: 14px">{{ r.name }}</span><span style="font-size: 12px; color: #8E8E96; font-family: ui-monospace, Menlo, monospace">{{ r.id }}</span></div>
+                  <div style="font-size: 12.5px; color: #6E6E78">{{ r.rationale }}</div>
+                </div>
+              </sc-for>
+              <button onClick="{{ goRulesForType }}" style="align-self: flex-start; padding: 7px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">+ Add a guardrail for {{ tName }}</button>
+            </sc-if>
+            <sc-if value="{{ tabData }}" hint-placeholder-val="{{ false }}">
+              <div style="background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; max-width: 720px">
+                <div style="font-weight: 600">{{ tDataTitle }}</div>
+                <div style="font-size: 13px; color: #3F3F46">{{ tDataBody }}</div>
+                <div style="font-size: 12px; color: #6E6E78; font-family: ui-monospace, Menlo, monospace">{{ tDataHint }}</div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ tabYaml }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size: 12.5px; color: #6E6E78">This is the file an agent reads. Everything on the other tabs is a friendlier view of it.</div>
+              <pre style="margin: 0; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 10px; padding: 14px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.5; overflow: auto; max-width: 820px; white-space: pre">{{ tYaml }}</pre>
+            </sc-if>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLinks }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; min-width: 0; padding: 24px 28px; overflow: auto; display: flex; flex-direction: column; gap: 14px">
+          <div><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 3</div><h1 style="margin: 2px 0 4px; font-size: 24px; font-weight: 700">How things connect</h1><p style="margin: 0; color: #6E6E78">{{ linksIntro }}</p></div>
+          <div style="background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; max-width: 900px">
+            <div style="font-weight: 600">Add a link</div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+              <label for="lf-from" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">From</label>
+              <select id="lf-from" value="{{ lfFrom }}" onChange="{{ setLfFrom }}" style="padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13.5px; background: #FFFFFF; color: #1A1A1F"><sc-for list="{{ typeNames }}" as="tn" hint-placeholder-count="12"><option value="{{ tn.name }}">{{ tn.name }}</option></sc-for></select>
+              <label for="lf-verb" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Called</label>
+              <input id="lf-verb" value="{{ lfVerb }}" onChange="{{ setLfVerb }}" placeholder="is_sold_by" style="width: 150px; padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13.5px; font-family: ui-monospace, Menlo, monospace; color: #1A1A1F; background: #FFFFFF">
+              <label for="lf-to" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">To</label>
+              <select id="lf-to" value="{{ lfTo }}" onChange="{{ setLfTo }}" style="padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13.5px; background: #FFFFFF; color: #1A1A1F"><sc-for list="{{ typeNames }}" as="tn" hint-placeholder-count="12"><option value="{{ tn.name }}">{{ tn.name }}</option></sc-for></select>
+              <sc-for list="{{ lfCards }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.pick }}" style="padding: 7px 11px; border-radius: 999px; border: 1px solid {{ c.border }}; background: {{ c.bg }}; color: {{ c.fg }}; font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 34px">{{ c.label }}</button></sc-for>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+              <label for="lf-desc" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">In plain words</label>
+              <input id="lf-desc" value="{{ lfDesc }}" onChange="{{ setLfDesc }}" placeholder="In plain words: what does this link mean?" style="flex: 1 1 320px; padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13.5px; color: #1A1A1F; background: #FFFFFF">
+              <button onClick="{{ addLink }}" style="padding: 8px 14px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">Add link</button>
+            </div>
+            <div style="font-size: 12px; color: #6E6E78">{{ lfPreview }}</div>
+          </div>
+          <sc-for list="{{ linkGroups }}" as="g" hint-placeholder-count="6">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; margin-top: 6px">{{ g.from }}</div>
+              <sc-for list="{{ g.items }}" as="l" hint-placeholder-count="3">
+                <div style="display: flex; gap: 12px; align-items: center; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 10px; padding: 9px 12px; flex-wrap: wrap">
+                  <span style="font-size: 14px; flex: 0 0 auto"><span style="font-weight: 600">{{ l.from }}</span> <span style="font-family: ui-monospace, Menlo, monospace; color: #6E6E78">{{ l.name }}</span> <span style="font-weight: 600">{{ l.to }}</span></span>
+                  <span style="font-size: 12px; color: #6E6E78; font-family: ui-monospace, Menlo, monospace; flex: 0 0 auto">{{ l.cardinality }}</span>
+                  <input value="{{ l.desc }}" onChange="{{ l.set }}" placeholder="Add one sentence: what does this mean?" style="flex: 1 1 260px; padding: 6px 9px; border: 1px solid {{ l.border }}; border-radius: 8px; font-size: 12.5px; color: #1A1A1F; background: {{ l.bg }}">
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRules }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; min-width: 0; padding: 24px 28px; overflow: auto; display: flex; flex-direction: column; gap: 12px">
+          <div><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 4</div><h1 style="margin: 2px 0 4px; font-size: 24px; font-weight: 700">Guardrails</h1><p style="margin: 0; color: #6E6E78">What agents check before they act. Each one is a sentence first and an expression second.</p></div>
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+            <sc-for list="{{ ruleFilters }}" as="f" hint-placeholder-count="4"><button onClick="{{ f.pick }}" style="padding: 6px 11px; border-radius: 999px; border: 1px solid {{ f.border }}; background: {{ f.bg }}; color: {{ f.fg }}; font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 32px">{{ f.label }}</button></sc-for>
+            <label for="rq" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Filter guardrails</label>
+            <input id="rq" value="{{ ruleQuery }}" onChange="{{ setRuleQuery }}" placeholder="Filter by thing or words…" style="margin-left: auto; width: 240px; padding: 7px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; color: #1A1A1F; background: #FFFFFF">
+          </div>
+          <sc-for list="{{ ruleGroups }}" as="g" hint-placeholder-count="5">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; margin-top: 6px">{{ g.title }}</div>
+              <sc-for list="{{ g.items }}" as="r" hint-placeholder-count="3">
+                <button onClick="{{ r.pick }}" style="text-align: left; background: #FFFFFF; border: 1px solid {{ r.border }}; border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; width: 100%; box-sizing: border-box">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap"><span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: {{ r.sevBg }}; color: {{ r.sevFg }}">{{ r.sevLabel }}</span><span style="font-weight: 600; font-size: 14px">{{ r.name }}</span><span style="font-size: 12px; color: #8E8E96; font-family: ui-monospace, Menlo, monospace">{{ r.id }}</span></div>
+                  <div style="font-size: 12.5px; color: #6E6E78">{{ r.when }}</div>
+                </button>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <aside style="flex: 0 0 380px; max-width: 100%; background: #FFFFFF; border-left: 1px solid #E6E6E2; padding: 18px; box-sizing: border-box; overflow: auto; display: flex; flex-direction: column; gap: 14px">
+          <sc-if value="{{ ruleSelected }}" hint-placeholder-val="{{ true }}">
+            <div style="display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid #E6E6E2">
+              <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: {{ srSevBg }}; color: {{ srSevFg }}">{{ srSevLabel }}</span><span style="font-size: 12px; color: #8E8E96; font-family: ui-monospace, Menlo, monospace">{{ srId }}</span></div>
+              <div style="font-weight: 700; font-size: 17px; line-height: 1.3">{{ srName }}</div>
+              <div style="font-size: 13px; color: #3F3F46">{{ srRationale }}</div>
+              <div style="font-size: 12.5px; color: #6E6E78">Checked {{ srWhen }} · sign-off: {{ srOwner }}</div>
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; margin-top: 4px">How it is written</div>
+              <code style="display: block; font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #F7F7F5; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap; word-break: break-word">{{ srRule }}</code>
+            </div>
+          </sc-if>
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Add a guardrail</div>
+          <div style="display: flex; flex-direction: column; gap: 5px"><label for="rf-sentence" style="font-size: 12px; color: #6E6E78">Say it in one sentence</label><input id="rf-sentence" value="{{ rfSentence }}" onChange="{{ setRfSentence }}" placeholder="e.g. Gift cards cannot be refunded to a card" style="padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13.5px; color: #1A1A1F; background: #FFFFFF"></div>
+          <div style="display: flex; flex-direction: column; gap: 5px"><label for="rf-applies" style="font-size: 12px; color: #6E6E78">About which thing</label><select id="rf-applies" value="{{ rfApplies }}" onChange="{{ setRfApplies }}" style="padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13.5px; background: #FFFFFF; color: #1A1A1F"><sc-for list="{{ typeNames }}" as="tn" hint-placeholder-count="12"><option value="{{ tn.name }}">{{ tn.name }}</option></sc-for></select></div>
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap">
+            <label for="rf-field" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Field</label>
+            <select id="rf-field" value="{{ rfField }}" onChange="{{ setRfField }}" style="padding: 7px 9px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; background: #FFFFFF; color: #1A1A1F; font-family: ui-monospace, Menlo, monospace"><sc-for list="{{ rfFields }}" as="ff" hint-placeholder-count="6"><option value="{{ ff.name }}">{{ ff.name }}</option></sc-for></select>
+            <label for="rf-op" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Condition</label>
+            <select id="rf-op" value="{{ rfOp }}" onChange="{{ setRfOp }}" style="padding: 7px 9px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; background: #FFFFFF; color: #1A1A1F"><option value="is">must be</option><option value="isnot">must not be</option><option value="atleast">must be at least</option><option value="atmost">must be at most</option></select>
+            <label for="rf-value" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Value</label>
+            <input id="rf-value" value="{{ rfValue }}" onChange="{{ setRfValue }}" placeholder="value" style="width: 110px; padding: 7px 9px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; color: #1A1A1F; background: #FFFFFF; font-family: ui-monospace, Menlo, monospace">
+          </div>
+          <div style="display: flex; gap: 6px"><sc-for list="{{ rfSevs }}" as="sv" hint-placeholder-count="3"><button onClick="{{ sv.pick }}" style="padding: 6px 11px; border-radius: 999px; border: 1px solid {{ sv.border }}; background: {{ sv.bg }}; color: {{ sv.fg }}; font-size: 12.5px; font-weight: 600; cursor: pointer; min-height: 32px">{{ sv.label }}</button></sc-for></div>
+          <div style="display: flex; flex-direction: column; gap: 5px"><label for="rf-why" style="font-size: 12px; color: #6E6E78">Why it exists</label><input id="rf-why" value="{{ rfWhy }}" onChange="{{ setRfWhy }}" placeholder="The policy or the incident behind it" style="padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; color: #1A1A1F; background: #FFFFFF"></div>
+          <div style="display: flex; flex-direction: column; gap: 5px"><label for="rf-who" style="font-size: 12px; color: #6E6E78">Who signs off</label><input id="rf-who" value="{{ rfWho }}" onChange="{{ setRfWho }}" placeholder="e.g. Payments team" style="padding: 8px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; color: #1A1A1F; background: #FFFFFF"></div>
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Will be written as</div>
+          <code style="display: block; font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #F7F7F5; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap">{{ rfPreview }}</code>
+          <button onClick="{{ addRule }}" style="align-self: flex-start; padding: 8px 14px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">Add guardrail</button>
+        </aside>
+      </sc-if>
+
+      <sc-if value="{{ isActions }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 0 1 300px; min-width: 240px; border-right: 1px solid #E6E6E2; background: #FFFFFF; padding: 18px 12px; box-sizing: border-box; overflow: auto; display: flex; flex-direction: column; gap: 6px">
+          <div style="padding: 0 6px 6px"><div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 5</div><div style="font-weight: 700; font-size: 18px">What agents may do</div></div>
+          <sc-for list="{{ actionList }}" as="a" hint-placeholder-count="5">
+            <button onClick="{{ a.pick }}" style="text-align: left; background: {{ a.bg }}; border: 1px solid {{ a.border }}; border-radius: 10px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 3px">
+              <span style="font-weight: 600; font-size: 14px">{{ a.label }}</span>
+              <span style="font-size: 12px; color: #6E6E78">{{ a.meta }}</span>
+            </button>
+          </sc-for>
+          <button style="margin-top: 6px; padding: 8px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">+ New action</button>
+        </div>
+        <div style="flex: 1 1 auto; min-width: 0; padding: 24px 28px; overflow: auto; display: flex; flex-direction: column; gap: 14px">
+          <h1 style="margin: 0; font-size: 24px; font-weight: 700">{{ saLabel }}</h1>
+          <p style="margin: 0; color: #3F3F46; max-width: 760px">{{ saDesc }}</p>
+          <div style="display: flex; gap: 20px; flex-wrap: wrap">
+            <div style="flex: 1 1 320px; display: flex; flex-direction: column; gap: 10px">
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Checks before it happens</div>
+              <sc-for list="{{ saChecks }}" as="c" hint-placeholder-count="4">
+                <div style="display: flex; gap: 8px; align-items: center; font-size: 13.5px"><span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: {{ c.sevBg }}; color: {{ c.sevFg }}">{{ c.sevLabel }}</span><span>{{ c.name }}</span><span style="font-size: 12px; color: #8E8E96; font-family: ui-monospace, Menlo, monospace">{{ c.id }}</span></div>
+              </sc-for>
+              <div style="font-size: 13px; margin-top: 6px"><span style="color: #6E6E78">Sign-off:</span> {{ saApprover }}</div>
+              <div style="font-size: 13px"><span style="color: #6E6E78">Then:</span> {{ saSide }}</div>
+            </div>
+            <div style="flex: 1 1 320px; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+              <div style="font-weight: 600">Try it, exactly as an agent would</div>
+              <sc-for list="{{ saInputs }}" as="i" hint-placeholder-count="2">
+                <div style="display: flex; flex-direction: column; gap: 3px"><label for="{{ i.id }}" style="font-size: 12px; color: #6E6E78"><span style="font-family: ui-monospace, Menlo, monospace">{{ i.name }}</span> · {{ i.type }}</label><input id="{{ i.id }}" value="{{ i.value }}" onChange="{{ i.set }}" style="padding: 7px 10px; border: 1px solid #D9D9D4; border-radius: 9px; font-size: 13px; color: #1A1A1F; background: #FFFFFF; font-family: ui-monospace, Menlo, monospace"></div>
+              </sc-for>
+              <button onClick="{{ runTry }}" style="align-self: flex-start; padding: 8px 14px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">Run the checks</button>
+              <sc-if value="{{ hasTry }}" hint-placeholder-val="{{ false }}">
+                <div style="border-radius: 10px; padding: 10px 12px; background: {{ tryBg }}; color: {{ tryFg }}; font-weight: 600; font-size: 13.5px">{{ trySummary }}</div>
+                <sc-for list="{{ tryRows }}" as="tr" hint-placeholder-count="3">
+                  <div style="display: flex; gap: 8px; font-size: 13px; align-items: flex-start"><span style="font-weight: 700; color: {{ tr.color }}; width: 14px; flex: 0 0 auto">{{ tr.mark }}</span><span><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #6E6E78">{{ tr.id }}</span> {{ tr.text }}</span></div>
+                </sc-for>
+                <sc-if value="{{ hasTryNote }}" hint-placeholder-val="{{ false }}"><div style="font-size: 12.5px; color: #6E6E78">{{ tryNote }}</div></sc-if>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAgents }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; min-width: 0; padding: 24px 28px; overflow: auto; display: flex; flex-direction: column; gap: 16px; max-width: 980px">
+          <div><h1 style="margin: 0 0 4px; font-size: 24px; font-weight: 700">Agents</h1><p style="margin: 0; color: #6E6E78">Claude, ChatGPT and your own agents read this ontology over MCP. The chat happens there; what they learn and propose shows up here.</p></div>
+          <sc-if value="{{ hasProposals }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Waiting for your review</div>
+            <sc-for list="{{ proposals }}" as="p" hint-placeholder-count="2">
+              <div style="background: #FFFFFF; border: 1px solid #F5D9A8; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+                <div style="font-weight: 600">{{ p.title }}</div>
+                <div style="font-size: 13px; color: #3F3F46">{{ p.body }}</div>
+                <code style="display: block; font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #F7F7F5; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap">{{ p.diff }}</code>
+                <div style="display: flex; gap: 8px"><button onClick="{{ p.accept }}" style="padding: 7px 12px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">Accept</button><button onClick="{{ p.dismiss }}" style="padding: 7px 12px; border-radius: 9px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 36px">Not now</button></div>
+              </div>
+            </sc-for>
+          </sc-if>
+          <div style="display: flex; gap: 16px; flex-wrap: wrap">
+            <div style="flex: 1 1 380px; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+              <div style="font-weight: 600">Connect</div>
+              <div style="font-size: 12.5px; color: #6E6E78">Claude Code</div>
+              <code style="display: block; font-family: ui-monospace, Menlo, monospace; font-size: 12px; background: #F7F7F5; border-radius: 8px; padding: 8px 10px; white-space: pre-wrap">claude mcp add stella-ontology -- stella-ontology mcp --dir examples/ecommerce</code>
+              <div style="font-size: 12.5px; color: #6E6E78">Claude Desktop, ChatGPT, Cursor: same command, or the hosted URL once Stella Cloud exists.</div>
+            </div>
+            <div style="flex: 1 1 380px; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 12px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+              <div style="font-weight: 600">What an agent can ask</div>
+              <sc-for list="{{ tools }}" as="t" hint-placeholder-count="12">
+                <div style="display: flex; gap: 10px; font-size: 13px"><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #2B5CFF; width: 118px; flex: 0 0 auto">{{ t.name }}</span><span style="color: #3F3F46">{{ t.desc }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Activity</div>
+          <sc-for list="{{ activity }}" as="ev" hint-placeholder-count="4">
+            <div style="display: flex; gap: 10px; align-items: flex-start; font-size: 13px"><span style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: {{ ev.color }}; margin-top: 7px"></span><span>{{ ev.text }} <span style="color: #8E8E96">· {{ ev.who }}</span></span></div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isData }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; min-width: 0; padding: 24px 28px; overflow: auto; display: flex; flex-direction: column; gap: 16px; max-width: 980px">
+          <div><h1 style="margin: 0 0 4px; font-size: 24px; font-weight: 700">Data &amp; SQL</h1><p style="margin: 0; color: #6E6E78">One SQL door across the ontology and every readable source. Read-only.</p></div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap"><sc-for list="{{ sqlChips }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.pick }}" style="padding: 6px 10px; border-radius: 999px; border: 1px solid #D9D9D4; background: #FFFFFF; font-size: 12px; font-family: ui-monospace, Menlo, monospace; cursor: pointer; min-height: 32px">{{ c.label }}</button></sc-for></div>
+          <label for="sql" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">SQL</label>
+          <textarea id="sql" value="{{ sql }}" onChange="{{ setSql }}" rows="4" style="padding: 10px 12px; border: 1px solid #D9D9D4; border-radius: 10px; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: #1A1A1F; background: #FFFFFF; resize: vertical"></textarea>
+          <button onClick="{{ runSql }}" style="align-self: flex-start; padding: 8px 14px; border-radius: 9px; border: none; background: #2B5CFF; color: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">Run</button>
+          <sc-if value="{{ sqlRan }}" hint-placeholder-val="{{ false }}">
+            <table style="background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 10px; width: 100%; max-width: 760px">
+              <tr><sc-for list="{{ sqlCols }}" as="c" hint-placeholder-count="3"><th style="text-align: left; padding: 8px 10px; font-size: 11.5px; color: #6E6E78; font-weight: 600; border-bottom: 1px solid #E6E6E2">{{ c.name }}</th></sc-for></tr>
+              <sc-for list="{{ sqlRows }}" as="r" hint-placeholder-count="4"><tr><td style="padding: 7px 10px; border-bottom: 1px solid #F0F0ED; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px">{{ r.a }}</td><td style="padding: 7px 10px; border-bottom: 1px solid #F0F0ED; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px">{{ r.b }}</td><td style="padding: 7px 10px; border-bottom: 1px solid #F0F0ED; font-family: ui-monospace, Menlo, monospace; font-size: 12.5px">{{ r.c }}</td></tr></sc-for>
+            </table>
+            <div style="font-size: 12px; color: #6E6E78">{{ sqlMeta }}</div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <footer style="padding: 8px 20px; border-top: 1px solid #E6E6E2; background: #FFFFFF; color: #6E6E78; font-size: 12px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center">
+    <span>✓ valid · 0 errors · {{ warningsText }}</span><span>git master</span><span style="margin-left: auto">MCP: <span style="font-family: ui-monospace, Menlo, monospace">stella-ontology mcp --dir examples/ecommerce</span></span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2B5CFF"},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      screen: 'map', mapSel: 'Order', search: '',
+      selType: 'Order', typeTab: 'fields', descOv: {}, typeDescOv: {}, creating: false, nt: { name: '', domain: 'Customers & orders', desc: '' }, addedTypes: [],
+      relDescOv: {}, addedRels: [], lf: { from: 'Order', verb: '', to: 'Customer', card: 'many-to-one', desc: '' },
+      ruleFilter: 'all', ruleQuery: '', selRule: 'EC-001', addedRules: [], rf: { sentence: '', applies: 'Order', field: 'status', op: 'is', value: '', sev: 'block', why: '', who: '' },
+      selAction: 'apply_promotion', tryInputs: {}, tryResult: null,
+      proposals: { p1: 'pending', p2: 'pending' },
+      activity: [
+        { text: 'Claude proposed adding gift_card to PaymentMethod.kind after a support question.', who: 'Claude via MCP · 10:41', color: '#B45309' },
+        { text: 'Claude proposed a guardrail: hazardous goods need a signature on delivery.', who: 'Claude via MCP · 10:12', color: '#B45309' },
+        { text: 'validate(refund_order) called 14 times today; 3 blocked by RT-002.', who: 'agents · today', color: '#2B5CFF' },
+        { text: 'Priya added one sentence to the paid_with link.', who: 'Priya · 09:20', color: '#15803D' }
+      ],
+      bound: {}, extraSources: [], sql: 'select n.name, n.source_kind, count(c.id) as rules\nfrom nodes n left join constraints c on c.applies_to = n.name\ngroup by all order by rules desc', sqlRan: false
+    };
+  }
+
+  data() {
+    return {"name":"lumen-ecommerce","types":[{"name":"Customer","domain":"Customers & orders","description":"A person or business with an account on the storefront. Segment is set nightly from order history; fraud_flag is set by Risk and only Risk clears it.","key":"customer_id","properties":[{"name":"customer_id","type":"string","description":"Storefront customer number, e.g. CUS-0107","key":true},{"name":"name","type":"string","description":""},{"name":"email","type":"string","description":""},{"name":"country","type":"string","description":"ISO country code of the default shipping address"},{"name":"segment","type":"enum","description":"new = no delivered orders yet, vip = 10+ orders or $5k lifetime","values":["new","regular","vip"]},{"name":"since","type":"date","description":"Account creation date"},{"name":"orders_count","type":"integer","description":"Delivered orders, lifetime"},{"name":"lifetime_value_usd","type":"number","description":""},{"name":"fraud_flag","type":"boolean","description":"Set by Risk after a chargeback or card-testing pattern; blocks nothing by itself but every refund rule looks at it"}],"source":{"connection":"shop_files","kind":"csv","table":"customers"},"file":"types/customer.yaml"},{"name":"Order","domain":"Customers & orders","description":"One checkout. Status follows the parcel (placed → paid → packing → shipped → delivered); payment_status follows the money. Both matter for refunds and cancellations.","key":"order_id","properties":[{"name":"order_id","type":"string","description":"Order number, e.g. ORD-1007","key":true},{"name":"customer_id","type":"string","description":"Customer who placed it; see Customer"},{"name":"placed_on","type":"date","description":""},{"name":"status","type":"enum","description":"Fulfilment state","values":["placed","paid","packing","shipped","delivered","cancelled","returned"]},{"name":"payment_status","type":"enum","description":"Money state, owned by Payments","values":["pending","paid","refunded","partially_refunded"]},{"name":"subtotal_usd","type":"number","description":"Lines before discounts and shipping"},{"name":"discount_pct","type":"number","description":"Percent already taken off the subtotal by promotions applied so far"},{"name":"total_usd","type":"number","description":"What the customer was charged"},{"name":"is_first_order","type":"boolean","description":"True when the customer had no delivered orders at checkout; drives fraud and promotion rules"},{"name":"payment_method_id","type":"string","description":"The card or wallet charged; see PaymentMethod"},{"name":"destination_region","type":"enum","description":"Shipping region of the address","values":["east","central","west"]}],"source":{"connection":"shop_files","kind":"csv","table":"orders"},"file":"types/order.yaml"},{"name":"OrderLine","domain":"Customers & orders","description":"One variant and quantity inside an order. Final-sale lines cannot be returned.","key":"line_id","properties":[{"name":"line_id","type":"string","description":"","key":true},{"name":"order_id","type":"string","description":""},{"name":"variant_id","type":"string","description":""},{"name":"qty","type":"integer","description":""},{"name":"unit_price_usd","type":"number","description":""},{"name":"line_total_usd","type":"number","description":""},{"name":"final_sale","type":"boolean","description":"Copied from the product at checkout; final-sale lines are excluded from returns"}],"source":{"connection":"shop_files","kind":"csv","table":"order_lines"},"file":"types/order_line.yaml"},{"name":"PaymentMethod","domain":"Customers & orders","description":"A card or wallet a customer has saved. Lives in the payments warehouse (PCI scope), so it is not readable here: agents call where_is(PaymentMethod), fetch the row with their own connector and pass it inline to validate.","key":"payment_method_id","properties":[{"name":"payment_method_id","type":"string","description":"Token, e.g. PM-88213; never the card number","key":true},{"name":"customer_id","type":"string","description":""},{"name":"kind","type":"enum","description":"","values":["card","paypal","store_credit","bank"]},{"name":"brand","type":"string","description":"visa, mastercard, amex… for cards"},{"name":"last4","type":"string","description":""},{"name":"expires","type":"string","description":"YYYY-MM for cards"},{"name":"status","type":"enum","description":"Refunds only succeed against active methods","values":["active","expired","removed"]}],"source":{"connection":"payments_bigquery","kind":"bigquery","table":"payments.payment_methods"},"file":"types/payment_method.yaml"},{"name":"Return","domain":"Customers & orders","description":"A customer sending goods back (the warehouse calls it an RMA). A refund is only paid once the return is received and inspected. delivered_on is copied from the shipment so the return window can be checked on the return alone.","key":"return_id","properties":[{"name":"return_id","type":"string","description":"RMA number, e.g. RET-501","key":true},{"name":"order_id","type":"string","description":""},{"name":"requested_on","type":"date","description":"When the customer asked for the return"},{"name":"delivered_on","type":"date","description":"When the parcel was delivered (from Shipment)"},{"name":"reason","type":"enum","description":"","values":["defective","wrong_item","changed_mind","damaged_in_transit"]},{"name":"condition","type":"enum","description":"Set by the warehouse on inspection","values":["unopened","opened","damaged"]},{"name":"status","type":"enum","description":"","values":["requested","approved","in_transit","received","refunded","rejected"]},{"name":"refund_amount_usd","type":"number","description":"Amount Support approved, before any restocking fee"}],"source":{"connection":"shop_files","kind":"csv","table":"returns"},"file":"types/return.yaml"},{"name":"Product","domain":"Catalogue & stock","description":"A sellable item as merchandising sees it (a lamp, a kettle). Customers buy Variants of it. The hazardous flag drives carrier and warehouse rules.","key":"product_id","properties":[{"name":"product_id","type":"string","description":"Catalogue id, e.g. PRD-110","key":true},{"name":"name","type":"string","description":""},{"name":"category","type":"enum","description":"","values":["lighting","kitchen","outdoor","electronics","cleaning"]},{"name":"hazardous","type":"boolean","description":"Lithium batteries, aerosols or fuels: regulated as dangerous goods in transport and storage"},{"name":"final_sale","type":"boolean","description":"Clearance items that cannot be returned"},{"name":"unit_price_usd","type":"number","description":"List price before variant adjustments"},{"name":"status","type":"enum","description":"","values":["active","discontinued"]}],"source":{"connection":"shop_files","kind":"csv","table":"products"},"file":"types/catalogue.yaml"},{"name":"Variant","domain":"Catalogue & stock","description":"A specific colour or size of a Product with its own SKU, price and weight. Inventory and order lines point at variants, never at products.","key":"variant_id","properties":[{"name":"variant_id","type":"string","description":"SKU, e.g. SKU-110-BLK","key":true},{"name":"product_id","type":"string","description":""},{"name":"name","type":"string","description":"Human label, e.g. Black / 60cm"},{"name":"weight_kg","type":"number","description":"Packed weight, used for carrier limits"},{"name":"price_usd","type":"number","description":""},{"name":"status","type":"enum","description":"","values":["active","discontinued"]}],"source":{"connection":"shop_files","kind":"csv","table":"variants"},"file":"types/catalogue.yaml"},{"name":"Inventory","domain":"Catalogue & stock","description":"Units of one variant in one warehouse. on_hand is physical stock, reserved is promised to unshipped orders. The hazardous flag is copied from the product so warehouse rules can be checked without a join.","key":"inventory_id","properties":[{"name":"inventory_id","type":"string","description":"","key":true},{"name":"variant_id","type":"string","description":""},{"name":"warehouse_id","type":"string","description":""},{"name":"on_hand","type":"integer","description":"Physical units counted in the warehouse"},{"name":"reserved","type":"integer","description":"Units allocated to paid, unshipped orders"},{"name":"reorder_point","type":"integer","description":"Below this, Planning raises a purchase order"},{"name":"hazardous","type":"boolean","description":"Copied from Product.hazardous"}],"source":{"connection":"shop_files","kind":"csv","table":"inventory"},"file":"types/catalogue.yaml"},{"name":"Warehouse","domain":"Catalogue & stock","description":"A distribution centre we ship from. Only licensed sites may hold hazardous goods.","key":"warehouse_id","properties":[{"name":"warehouse_id","type":"string","description":"","key":true},{"name":"name","type":"string","description":""},{"name":"region","type":"enum","description":"","values":["east","central","west"]},{"name":"hazmat_licensed","type":"boolean","description":"Holds the local dangerous-goods storage licence"},{"name":"status","type":"enum","description":"","values":["active","closed"]}],"source":null,"file":"types/catalogue.yaml"},{"name":"Shipment","domain":"Fulfilment","description":"One parcel for one order. Carrier and service are chosen at label time and can be changed until the carrier picks it up. contains_hazmat and oversize are computed from the lines when the parcel is packed.","key":"shipment_id","properties":[{"name":"shipment_id","type":"string","description":"Parcel id, e.g. SHP-3004","key":true},{"name":"order_id","type":"string","description":""},{"name":"carrier_id","type":"string","description":"Current carrier; see Carrier"},{"name":"warehouse_id","type":"string","description":""},{"name":"status","type":"enum","description":"Carrier scan state","values":["label_created","ready_for_pickup","in_transit","delivered","lost"]},{"name":"service","type":"enum","description":"What the customer paid for","values":["standard","express"]},{"name":"weight_kg","type":"number","description":""},{"name":"contains_hazmat","type":"boolean","description":"True if any line is a hazardous product"},{"name":"oversize","type":"boolean","description":"Any side over 120 cm"},{"name":"destination_region","type":"enum","description":"","values":["east","central","west"]},{"name":"shipped_on","type":"date","description":""},{"name":"delivered_on","type":"date","description":""}],"source":{"connection":"shop_files","kind":"csv","table":"shipments"},"file":"types/fulfilment.yaml"},{"name":"Carrier","domain":"Fulfilment","description":"A delivery company we have a contract with. Regions served, parcel limits and dangerous-goods capability come from the contract and are maintained by Fulfilment.","key":"carrier_id","properties":[{"name":"carrier_id","type":"string","description":"","key":true},{"name":"name","type":"string","description":""},{"name":"mode","type":"enum","description":"Primary transport mode; air cannot carry hazardous goods","values":["ground","air","sea"]},{"name":"regions","type":"json","description":"Destination regions the contract covers, e.g. [east, central]"},{"name":"max_parcel_kg","type":"number","description":"Heaviest parcel the contract allows"},{"name":"accepts_oversize","type":"boolean","description":""},{"name":"offers_express","type":"boolean","description":"Can meet the express promise (2 days)"},{"name":"base_rate_usd","type":"number","description":"Average cost per standard parcel, for comparison only"},{"name":"status","type":"enum","description":"","values":["active","suspended"]}],"source":null,"file":"types/fulfilment.yaml"},{"name":"Promotion","domain":"Marketing","description":"A discount code. Marketing owns the budget (max_redemptions); Finance owns the stacking cap. Codes can be combined on one order unless the total discount would pass 40%.","key":"promotion_id","properties":[{"name":"promotion_id","type":"string","description":"Internal id, e.g. PROMO-SPRING15","key":true},{"name":"code","type":"string","description":"What the customer types"},{"name":"name","type":"string","description":""},{"name":"percent_off","type":"number","description":"Percent off the order subtotal"},{"name":"min_order_usd","type":"number","description":"Smallest subtotal the code applies to"},{"name":"first_order_only","type":"boolean","description":"Acquisition codes: only valid on a customer's first order"},{"name":"starts_on","type":"date","description":""},{"name":"ends_on","type":"date","description":""},{"name":"max_redemptions","type":"integer","description":"Budget approved by Marketing"},{"name":"redemptions","type":"integer","description":"Uses so far"},{"name":"status","type":"enum","description":"","values":["draft","active","paused","expired"]}],"source":{"connection":"shop_files","kind":"csv","table":"promotions"},"file":"types/promotion.yaml"}],"relationships":[{"name":"variant_of","from":"Variant","to":"Product","cardinality":"many-to-one","description":""},{"name":"of_variant","from":"Inventory","to":"Variant","cardinality":"many-to-one","description":""},{"name":"held_at","from":"Inventory","to":"Warehouse","cardinality":"many-to-one","description":""},{"name":"fulfils","from":"Shipment","to":"Order","cardinality":"many-to-one","description":""},{"name":"shipped_from","from":"Shipment","to":"Warehouse","cardinality":"many-to-one","description":""},{"name":"placed_by","from":"Order","to":"Customer","cardinality":"many-to-one","description":""},{"name":"paid_with","from":"Order","to":"PaymentMethod","cardinality":"many-to-one","description":"The payment method charged at checkout; refunds go back to it"},{"name":"part_of","from":"OrderLine","to":"Order","cardinality":"many-to-one","description":""},{"name":"for_variant","from":"OrderLine","to":"Variant","cardinality":"many-to-one","description":""},{"name":"belongs_to","from":"PaymentMethod","to":"Customer","cardinality":"many-to-one","description":""},{"name":"for_order","from":"Return","to":"Order","cardinality":"many-to-one","description":""},{"name":"discounted_by","from":"Order","to":"Promotion","cardinality":"many-to-many","description":"A promotion applied to an order. Rules here can see order and promotion. apply_promotion creates this edge, so stacking and eligibility rules are checked against the order as it stands."},{"name":"ships_via","from":"Shipment","to":"Carrier","cardinality":"many-to-one","description":"The carrier currently booked for the parcel. Rules here can see shipment and carrier. reroute_shipment moves this edge, so every rule here is checked against the new carrier."}],"rules":[{"id":"INV-001","name":"Inventory cannot go negative","applies_to":"Inventory","rule":"on_hand >= 0 && reserved >= 0","severity":"block","rationale":"A negative count means the system and the shelf disagree; the warehouse recounts before anything is booked against the record.","owner":"planning@lumen.example"},{"id":"INV-002","name":"Reserved cannot exceed on hand","applies_to":"Inventory","rule":"reserved <= on_hand","severity":"warn","rationale":"We have promised more units than we hold (oversold); Support has to warn the affected customers.","owner":"planning@lumen.example"},{"id":"INV-004","name":"Hazardous stock only in licensed warehouses","applies_to":"restock","rule":"inventory.hazardous == true implies warehouse.hazmat_licensed == true","severity":"block","rationale":"Fire code and the dangerous-goods storage licence; unlicensed sites may not hold lithium or aerosols.","owner":"compliance@lumen.example"},{"id":"WH-001","name":"Warehouse must be active","applies_to":"Warehouse","rule":"status == \"active\"","severity":"block","rationale":"Closed sites still exist in the data for history; nothing new is booked into them.","owner":"fulfilment@lumen.example"},{"id":"SH-001","name":"Hazardous goods cannot ship by air","applies_to":"ships_via","rule":"shipment.contains_hazmat == true implies carrier.mode != \"air\"","severity":"block","rationale":"IATA dangerous-goods regulations and our carrier contracts forbid lithium batteries, aerosols and fuels on aircraft without a certified shipper, which we are not.","owner":"compliance@lumen.example"},{"id":"SH-002","name":"Carrier must serve the destination","applies_to":"ships_via","rule":"shipment.destination_region in carrier.regions","severity":"block","rationale":"Outside its contracted regions a carrier hands the parcel to a partner we have no SLA with.","owner":"fulfilment@lumen.example"},{"id":"SH-003","name":"Parcel within the carrier weight limit","applies_to":"ships_via","rule":"shipment.weight_kg <= carrier.max_parcel_kg","severity":"block","rationale":"Overweight parcels are refused at pickup or surcharged at three times the rate.","owner":"fulfilment@lumen.example"},{"id":"SH-006","name":"Carrier must be active","applies_to":"Carrier","rule":"status == \"active\"","severity":"block","rationale":"Suspended carriers have an open contract or performance dispute; Fulfilment lifts the suspension.","owner":"fulfilment@lumen.example"},{"id":"SH-007","name":"Only unshipped parcels can be rerouted","applies_to":"Shipment","rule":"status in [\"label_created\", \"ready_for_pickup\"]","severity":"block","rationale":"After the pickup scan the parcel is in the carrier's network; rerouting means a return-to-sender.","owner":"fulfilment@lumen.example"},{"id":"SH-008","name":"Rerouting to the same carrier is a no-op","applies_to":"reroute_shipment","rule":"from.carrier_id != to.carrier_id","severity":"block","rationale":"Almost always a typo in the request.","owner":""},{"id":"EC-001","name":"Only unshipped orders can be cancelled","applies_to":"Order","rule":"status in [\"placed\", \"paid\", \"packing\"]","severity":"block","rationale":"Once the carrier has the parcel the order is handled as a return, not a cancellation.","owner":"support@lumen.example"},{"id":"EC-003","name":"Large first orders need fraud review","applies_to":"Order","rule":"total_usd > 2000.0 implies is_first_order == false","severity":"warn","rationale":"A first order above $2,000 is the classic card-testing and refund-fraud pattern. Risk reviews it before any discount or refund is applied.","owner":"risk@lumen.example"},{"id":"EC-004","name":"Refunds need a paid order","applies_to":"Order","rule":"payment_status == \"paid\"","severity":"block","rationale":"Pending charges are voided, not refunded; refunded orders cannot be refunded twice.","owner":"payments@lumen.example"},{"id":"PR-001","name":"No promotion stacking above 40% off","applies_to":"discounted_by","rule":"order.discount_pct + promotion.percent_off <= 40.0","severity":"block","rationale":"Finance margin floor FM-3; combined discounts above 40% sell below cost on most categories.","owner":"finance@lumen.example"},{"id":"PR-002","name":"Promotion must be live","applies_to":"Promotion","rule":"status == \"active\"","severity":"block","rationale":"Draft, paused and expired codes are not honoured, even if the customer has a screenshot.","owner":"marketing@lumen.example"},{"id":"PR-003","name":"Promotion valid on the order date","applies_to":"discounted_by","rule":"promotion.starts_on <= order.placed_on && order.placed_on <= promotion.ends_on","severity":"block","rationale":"Codes apply to orders placed inside their window; backdating is a Finance exception.","owner":"marketing@lumen.example"},{"id":"PR-005","name":"First-order codes only on first orders","applies_to":"discounted_by","rule":"promotion.first_order_only == true implies order.is_first_order == true","severity":"block","rationale":"Acquisition budget is for new customers; returning customers get the loyalty codes.","owner":"marketing@lumen.example"},{"id":"PR-006","name":"Promotions apply to unpaid orders only","applies_to":"Order","rule":"status == \"placed\"","severity":"block","rationale":"Once charged, the total is fixed; Support refunds the difference instead of re-pricing.","owner":"payments@lumen.example"},{"id":"PR-007","name":"Promotion budget nearly used up","applies_to":"Promotion","rule":"redemptions < max_redemptions","severity":"info","rationale":"Informational; Marketing approved a fixed number of redemptions and tops up the budget when it runs out.","owner":"marketing@lumen.example"},{"id":"RT-001","name":"30-day return window","applies_to":"Return","rule":"reason == \"defective\" || timestamp(requested_on + \"T00:00:00Z\") - timestamp(delivered_on + \"T00:00:00Z\") <= duration(\"720h\")","severity":"block","rationale":"Policy RP-12: changed-mind, wrong-item and transit-damage returns must be requested within 30 days (720 hours) of delivery. Defective goods are covered by the warranty instead and have no window.","owner":"support@lumen.example"},{"id":"RT-002","name":"Return must be received before refunding","applies_to":"Return","rule":"status == \"received\"","severity":"block","rationale":"The warehouse inspects the goods first; refunding on request is how we lost $40k in 2025.","owner":"support@lumen.example"},{"id":"RT-003","name":"Opened changed-mind returns get store credit","applies_to":"Return","rule":"reason == \"changed_mind\" implies condition == \"unopened\"","severity":"warn","rationale":"Opened goods cannot be resold as new; Support offers store credit minus a restocking fee instead of a card refund.","owner":"support@lumen.example"},{"id":"RT-004","name":"Return must belong to the order","applies_to":"refund_order","rule":"rma.order_id == order.order_id","severity":"block","rationale":"Prevents refunding the wrong order when a customer has several RMAs open.","owner":""},{"id":"PM-001","name":"Refund to the original payment method","applies_to":"refund_order","rule":"payment_method.payment_method_id == order.payment_method_id","severity":"block","rationale":"Card scheme rules and our anti-money-laundering policy: money goes back where it came from.","owner":"payments@lumen.example"},{"id":"PM-002","name":"Payment method must be active","applies_to":"PaymentMethod","rule":"status == \"active\"","severity":"block","rationale":"Refunds to expired or removed cards bounce; Support issues store credit or asks for a new card.","owner":"payments@lumen.example"}],"actions":[{"name":"apply_promotion","description":"Apply a discount code to an open order. The most common thing Support is asked to do, and the one Finance watches most closely.","inputs":{"order":"Order","promotion":"Promotion"},"checks":["PR-001","PR-002","PR-003","PR-005","PR-006","EC-003","PR-007"],"approver":"Nobody; Marketing is notified when a code passes 90% of its budget","side_effects":"Recalculates order total, records the redemption against the promotion budget."},{"name":"cancel_order","description":"Cancel an order before it ships and release its reserved stock. No refund is needed if payment is still pending.","inputs":{"order":"Order"},"checks":["EC-001"],"approver":"Nobody below $1,000; Support Lead above","side_effects":"Sets status=cancelled, voids the authorisation or refunds the charge, releases reserved inventory."},{"name":"refund_order","description":"Refund a delivered order to the original payment method after its return has been received. PaymentMethod rows live in the payments warehouse, so the agent passes the method it fetched as an inline record.","inputs":{"order":"Order","rma":"Return","payment_method":"PaymentMethod"},"checks":["EC-004","PM-001","PM-002","RT-001","RT-002","RT-004","EC-003","RT-003"],"approver":"Support Lead above $500; Risk if the customer is fraud-flagged","side_effects":"Creates a refund in the payments gateway, sets payment_status=refunded, closes the RMA."},{"name":"reroute_shipment","description":"Move a parcel that has not been picked up yet to a different carrier, for example after a carrier outage or a service downgrade request.","inputs":{"shipment":"Shipment","from":"Carrier","to":"Carrier"},"checks":["SH-001","SH-002","SH-003","SH-006","SH-007","SH-008"],"approver":"Fulfilment Lead if the new carrier costs more than 25% extra","side_effects":"Voids the old label, buys a new one, updates the tracking link sent to the customer."},{"name":"restock","description":"Book received units into an inventory record at a warehouse, from a supplier delivery or an inspected return.","inputs":{"inventory":"Inventory","warehouse":"Warehouse"},"checks":["INV-001","INV-004","WH-001","INV-002"],"approver":"Nobody; Planning is notified when a record crosses its reorder point","side_effects":"Increments on_hand, closes the receiving task, re-plans the reorder point."}],"sources":[{"connection":"payments_bigquery","kind":"bigquery","description":"Payments warehouse, PCI scope. Card details never leave it, so PaymentMethod rows are not readable here: an agent calls where_is(PaymentMethod), fetches the one row it needs with its own BigQuery connector, and passes it inline to validate."},{"connection":"shop_bigquery","kind":"bigquery","description":"The analytics warehouse that holds the full order history. Declared so agents know where the big tables live; nothing in this folder binds to it yet."},{"connection":"shop_files","kind":"csv","description":"Nightly CSV extracts from the storefront and the order management system. Good enough for demos and for agents to check rules against; the warehouse (shop_bigquery) is the source of truth."}],"glossary":[{"term":"basket","means":"Order"},{"term":"SKU","means":"Variant"},{"term":"RMA","means":"Return"},{"term":"coupon","means":"Promotion"},{"term":"discount code","means":"Promotion"},{"term":"DC","means":"Warehouse"},{"term":"hazmat","means":"Product"},{"term":"card on file","means":"PaymentMethod"},{"term":"parcel","means":"Shipment"},{"term":"chargeback refund","means":"refund_order"}]};
+  }
+
+  tries() {
+    return {
+      apply_promotion: { verdict: 'warn', summary: 'apply_promotion may proceed with warnings: EC-003.', rows: [['ok', 'PR-001', 'No promotion stacking above 40% off: holds for ORD-1012 + PROMO-SPRING15'], ['ok', 'PR-002', 'Promotion must be live: holds'], ['ok', 'PR-003', 'Promotion valid on the order date: holds'], ['ok', 'PR-005', 'First-order codes only on first orders: holds'], ['ok', 'PR-006', 'Promotions apply to unpaid orders only: holds'], ['warn', 'EC-003', 'Large first orders need fraud review: ORD-1012 is a $2,340 first order'], ['ok', 'PR-007', 'Promotion budget nearly used up: 412 of 500 used']], note: '' },
+      cancel_order: { verdict: 'pass', summary: 'cancel_order may proceed: all 1 rules hold.', rows: [['ok', 'EC-001', 'Only unshipped orders can be cancelled: ORD-1003 is still packing']], note: 'Sign-off: nobody below $1,000; Support Lead above.' },
+      refund_order: { verdict: 'fail', summary: 'refund_order is blocked by PM-002.', rows: [['fail', 'PM-002', 'Payment method must be active: could not evaluate for PM-88213'], ['ok', 'EC-004', 'Refunds need a paid order: holds for ORD-1007'], ['ok', 'PM-001', 'Refund to the original payment method: holds'], ['ok', 'RT-001', '30-day return window: holds for RET-501'], ['ok', 'RT-002', 'Return must be received before refunding: holds'], ['ok', 'RT-004', 'Return must belong to the order: holds']], note: 'PaymentMethod rows live in BigQuery and are not readable here. An agent fetches the row with its own connector and passes it inline, e.g. {"status": "active", "kind": "card"}. With that row, all 8 rules hold.' },
+      reroute_shipment: { verdict: 'fail', summary: 'reroute_shipment is blocked by SH-001.', rows: [['fail', 'SH-001', 'Hazardous goods cannot ship by air: SHP-3004 contains hazmat, CAR-AIR flies'], ['ok', 'SH-002', 'Carrier must serve the destination: holds'], ['ok', 'SH-003', 'Parcel within the carrier weight limit: holds'], ['ok', 'SH-006', 'Carrier must be active: holds'], ['ok', 'SH-007', 'Only unshipped parcels can be rerouted: holds'], ['ok', 'SH-008', 'Rerouting to the same carrier is a no-op: holds']], note: 'Would pass instead: CAR-GRN (ground), CAR-SEA (sea).' },
+      restock: { verdict: 'pass', summary: 'restock may proceed: all 4 rules hold.', rows: [['ok', 'INV-001', 'Inventory cannot go negative: holds'], ['ok', 'INV-004', 'Hazardous stock only in licensed warehouses: WH-EAST is licensed'], ['ok', 'WH-001', 'Warehouse must be active: holds'], ['ok', 'INV-002', 'Reserved cannot exceed on hand: holds']], note: '' }
+    };
+  }
+
+  renderVals() {
+    const s = this.state; const D = this.data();
+    const types = D.types.concat(s.addedTypes);
+    const rels = D.relationships.concat(s.addedRels);
+    const rules = D.rules.concat(s.addedRules);
+    const go = (screen, extra) => () => this.setState({ screen, search: '', ...(extra || {}) });
+    const domainColor = { 'Customers & orders': '#2B5CFF', 'Catalogue & stock': '#0F766E', 'Fulfilment': '#7C3AED', 'Marketing': '#DB2777' };
+    const sev = (v) => ({ sevLabel: v === 'block' ? 'stop' : (v === 'warn' ? 'warn' : 'note'), sevBg: v === 'block' ? '#FDE8E8' : (v === 'warn' ? '#FEF3E2' : '#E7EEFF'), sevFg: v === 'block' ? '#B91C1C' : (v === 'warn' ? '#B45309' : '#2B5CFF') });
+    const human = (n) => n.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
+    const ownerName = (o) => o ? o.split('@')[0].replace(/^./, c => c.toUpperCase()) + ' team' : 'no one named yet';
+    const propDesc = (t, p) => (s.descOv[t.name + '.' + p.name] !== undefined ? s.descOv[t.name + '.' + p.name] : p.description);
+    const typeDesc = (t) => (s.typeDescOv[t.name] !== undefined ? s.typeDescOv[t.name] : t.description);
+    const relDesc = (r) => { const k = r.from + '.' + r.name; return s.relDescOv[k] !== undefined ? s.relDescOv[k] : r.description; };
+    const gapsOf = (t) => t.properties.filter(p => !propDesc(t, p)).length;
+    const whenOf = (c) => { const rel = rels.find(r => r.name === c.applies_to); const act = D.actions.find(a => a.name === c.applies_to); return rel ? 'when linking ' + rel.from + ' to ' + rel.to : (act ? 'when running ' + human(act.name).toLowerCase() : 'whenever an action touches a ' + c.applies_to); };
+    const rulesForType = (name) => rules.filter(c => c.applies_to === name || rels.some(r => r.name === c.applies_to && (r.from === name || r.to === name)));
+
+    const totalProps = types.reduce((n, t) => n + t.properties.length, 0);
+    const describedProps = types.reduce((n, t) => n + t.properties.filter(p => !!propDesc(t, p)).length, 0);
+    const relsDescribed = rels.filter(r => !!relDesc(r)).length;
+    const typesWithSource = types.filter(t => t.source || s.bound[t.name]).length;
+    const ready = Math.round(100 * (describedProps / totalProps * 0.5 + relsDescribed / rels.length * 0.3 + typesWithSource / types.length * 0.2));
+    const pendingProposals = Object.values(s.proposals).filter(v => v === 'pending').length;
+    const gapTypes = types.filter(t => gapsOf(t) > 0);
+    const unbound = types.filter(t => !t.source && !s.bound[t.name]);
+
+    const buildDefs = [
+      { key: 'sources', title: 'Sources', status: (D.sources.length + s.extraSources.length) + ' connected · ' + unbound.length + ' things without data', warn: unbound.length > 0 },
+      { key: 'things', title: 'Things', status: types.length + ' · ' + gapTypes.length + ' need plain words', warn: gapTypes.length > 0 },
+      { key: 'links', title: 'Links', status: rels.length + ' · ' + (rels.length - relsDescribed) + ' without a sentence', warn: rels.length - relsDescribed > 0 },
+      { key: 'rules', title: 'Guardrails', status: rules.length + ' · ' + rules.filter(r => !r.owner).length + ' with no sign-off', warn: rules.some(r => !r.owner) },
+      { key: 'actions', title: 'Actions', status: D.actions.length + ' things agents may do', warn: false }
+    ];
+    const buildNav = buildDefs.map((d, i) => ({ ...d, num: String(i + 1), go: go(d.key), bg: s.screen === d.key ? '#EEF2FF' : 'transparent', dotBg: s.screen === d.key ? '#2B5CFF' : (d.warn ? '#FEF3E2' : '#E8F5EC'), dotFg: s.screen === d.key ? '#FFFFFF' : (d.warn ? '#B45309' : '#15803D'), statusFg: d.warn ? '#B45309' : '#6E6E78' }));
+    const useNav = [
+      { key: 'map', title: 'Map', status: 'the whole shape', badge: '', hasBadge: false },
+      { key: 'agents', title: 'Agents', status: 'MCP, proposals, activity', badge: String(pendingProposals), hasBadge: pendingProposals > 0 },
+      { key: 'data', title: 'Data & SQL', status: 'one door across sources', badge: '', hasBadge: false }
+    ].map(d => ({ ...d, go: go(d.key), bg: s.screen === d.key ? '#EEF2FF' : 'transparent' }));
+
+    const q = s.search.trim().toLowerCase();
+    const results = q ? [].concat(
+      types.filter(t => (t.name + ' ' + t.description).toLowerCase().includes(q)).map(t => ({ kind: 'thing', name: t.name, go: go('things', { selType: t.name, creating: false }) })),
+      rules.filter(c => (c.id + ' ' + c.name + ' ' + c.rationale).toLowerCase().includes(q)).map(c => ({ kind: 'rule', name: c.id + ' ' + c.name, go: go('rules', { selRule: c.id }) })),
+      D.actions.filter(a => (a.name + ' ' + a.description).toLowerCase().includes(q)).map(a => ({ kind: 'action', name: human(a.name), go: go('actions', { selAction: a.name }) })),
+      D.glossary.filter(g => g.term.toLowerCase().includes(q)).map(g => ({ kind: 'word', name: g.term + ' → ' + g.means, go: go('things', { selType: g.means, creating: false }) }))
+    ).slice(0, 12) : [];
+
+    const pos = { Customer: [20, 30], Order: [280, 30], OrderLine: [540, 30], Product: [800, 30], PaymentMethod: [20, 220], Return: [280, 220], Shipment: [540, 220], Variant: [800, 220], Promotion: [20, 410], Carrier: [280, 410], Warehouse: [540, 410], Inventory: [800, 410] };
+    const W = 220, H = 70;
+    let extraI = 0;
+    const posOf = (name) => pos[name] || (pos[name] = [20 + 260 * (extraI++ % 4), 500]);
+    const nodes = types.map(t => { const [x, y] = posOf(t.name); const rs = rulesForType(t.name); const blocks = rs.filter(r => r.severity === 'block').length; const gaps = gapsOf(t); const sel = s.mapSel === t.name; return { name: t.name, color: domainColor[t.domain] || '#6E6E78', hasBlock: blocks > 0, blockText: blocks + ' stop', hasGap: gaps > 0, gapText: gaps + ' need words', noSource: !t.source && !s.bound[t.name], style: 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: ' + W + 'px; height: ' + H + 'px; box-sizing: border-box; padding: 9px 12px; border-radius: 12px; border: 1px solid #E6E6E2; background: #FFFFFF; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; justify-content: center; box-shadow: ' + (sel ? '0 0 0 3px ' + (domainColor[t.domain] || '#6E6E78') + ', 0 8px 20px rgba(23,23,28,0.10)' : '0 1px 2px rgba(23,23,28,0.05)') + '; z-index: 1; font-family: inherit; color: inherit', pick: () => this.setState({ mapSel: sel ? null : t.name }) }; });
+    const center = (n) => { const [x, y] = posOf(n); return { x: x + W / 2, y: y + H / 2 }; };
+    const edges = rels.map(r => { const p = center(r.from), qd = center(r.to); const dx = qd.x - p.x, dy = qd.y - p.y, len = Math.sqrt(dx * dx + dy * dy), ang = Math.atan2(dy, dx) * 180 / Math.PI; const on = s.mapSel === r.from || s.mapSel === r.to; return { label: r.name, lineStyle: 'position: absolute; left: ' + p.x + 'px; top: ' + p.y + 'px; width: ' + len + 'px; height: 2px; background: ' + (on ? '#1A1A1F' : '#D2D2CC') + '; transform: rotate(' + ang + 'deg); transform-origin: 0 50%; z-index: 0', labelStyle: 'position: absolute; left: ' + ((p.x + qd.x) / 2 - 42) + 'px; top: ' + ((p.y + qd.y) / 2 - 10) + 'px; width: 84px; text-align: center; font-size: 10.5px; color: ' + (on ? '#1A1A1F' : '#9A9AA0') + '; background: #F7F7F5; border-radius: 999px; padding: 1px 0; z-index: 0; opacity: ' + (on || !s.mapSel ? 1 : 0.35) }; });
+    const mapSelT = types.find(t => t.name === s.mapSel);
+    const nudges = [].concat(
+      pendingProposals ? [{ title: pendingProposals + ' change' + (pendingProposals > 1 ? 's' : '') + ' proposed by agents', detail: 'Claude learned something while answering your team. Review it so the next person gets the same answer.', cta: 'Review', go: go('agents') }] : [],
+      gapTypes.length ? [{ title: gapTypes.length + ' things have fields without plain words', detail: gapTypes.slice(0, 4).map(t => t.name + ' (' + gapsOf(t) + ')').join(', ') + (gapTypes.length > 4 ? '…' : ''), cta: 'Add words', go: go('things', { selType: gapTypes[0].name, typeTab: 'fields', creating: false }) }] : [],
+      rels.length - relsDescribed ? [{ title: (rels.length - relsDescribed) + ' links have no sentence', detail: 'One line each, like "The carrier currently booked for the parcel".', cta: 'Describe links', go: go('links') }] : [],
+      unbound.length ? [{ title: unbound.map(t => t.name).join(' and ') + ' have no data behind them', detail: 'Agents can read their rules but cannot check a real row.', cta: 'Bind a table', go: go('sources') }] : [],
+      rules.some(r => !r.owner) ? [{ title: rules.filter(r => !r.owner).length + ' guardrails have no sign-off', detail: rules.filter(r => !r.owner).map(r => r.id).join(', '), cta: 'Name an owner', go: go('rules', { selRule: rules.find(r => !r.owner).id }) }] : []
+    );
+
+    const srcCount = { shop_files: 'csv · readable here', payments_bigquery: 'declared · agents fetch rows', shop_bigquery: 'declared · nothing bound yet' };
+    const sourceCards = D.sources.concat(s.extraSources).map(src => { const used = types.filter(t => (t.source && t.source.connection === src.connection) || s.bound[t.name] === src.connection).map(t => t.name); return { ...src, kindBg: src.kind === 'csv' ? '#E8F5EC' : '#E7EEFF', kindFg: src.kind === 'csv' ? '#15803D' : '#2B5CFF', usedBy: used.length ? 'Used by ' + used.join(', ') : 'Not used by anything yet', state: srcCount[src.connection] || 'connected', stateFg: src.kind === 'csv' ? '#15803D' : '#6E6E78' }; });
+    const addSources = [['Meta Ads', 'via its MCP'], ['Google Ads', 'via its MCP'], ['Shopify', 'via its MCP'], ['Snowflake', 'warehouse'], ['Postgres', 'database'], ['Parquet or CSV', 'files']].map(([name, sub]) => ({ name, sub, border: '#E6E6E2', add: () => this.setState({ extraSources: [...s.extraSources, { connection: name.toLowerCase().replace(/[^a-z]+/g, '_'), kind: sub.includes('MCP') ? 'mcp' : 'warehouse', description: name + ' connected just now. Tables will appear once the first sync runs.' }] }) }));
+
+    const domains = ['Customers & orders', 'Catalogue & stock', 'Fulfilment', 'Marketing'];
+    const typeList = [];
+    domains.forEach(d => { const ts = types.filter(t => t.domain === d); if (!ts.length) return; typeList.push({ isHeader: true, isItem: false, name: d }); ts.forEach(t => typeList.push({ isHeader: false, isItem: true, name: t.name, hasGap: gapsOf(t) > 0, gap: String(gapsOf(t)), bg: s.selType === t.name && !s.creating ? '#2B5CFF' : 'transparent', fg: s.selType === t.name && !s.creating ? '#FFFFFF' : '#1A1A1F', go: () => this.setState({ selType: t.name, creating: false }) })); });
+    const T = types.find(t => t.name === s.selType) || types[0];
+    const tTabs = [['fields', 'Fields'], ['links', 'Links'], ['rules', 'Guardrails'], ['data', 'Data'], ['yaml', 'YAML']].map(([k, label]) => ({ label, pick: () => this.setState({ typeTab: k }), line: s.typeTab === k ? '#2B5CFF' : 'transparent', fg: s.typeTab === k ? '#1A1A1F' : '#6E6E78' }));
+    const tFields = T.properties.map(p => { const d = propDesc(T, p); return { name: p.name, key: !!p.key, kind: p.type + (p.values ? ' · ' + p.values.join(' / ') : ''), desc: d, placeholder: d ? '' : 'What does ' + p.name + ' mean?', border: d ? '#E6E6E2' : '#F5D9A8', bg: d ? '#FFFFFF' : '#FFFBF3', set: (e) => this.setState({ descOv: { ...s.descOv, [T.name + '.' + p.name]: e && e.target ? e.target.value : '' } }) }; });
+    const tLinks = rels.filter(r => r.from === T.name || r.to === T.name).map(r => ({ a: r.from, verb: r.name, b: r.to, card: r.cardinality, desc: relDesc(r) || 'No sentence yet', descFg: relDesc(r) ? '#3F3F46' : '#B45309' }));
+    const tRules = rulesForType(T.name).map(c => ({ ...c, ...sev(c.severity) }));
+    const tSrc = T.source || (s.bound[T.name] ? { connection: s.bound[T.name], kind: 'csv', table: T.name.toLowerCase() + 's' } : null);
+    const tYaml = 'type: ' + T.name + '\ndescription: >\n  ' + typeDesc(T) + '\nproperties:\n' + T.properties.map(p => '  ' + p.name + ': { type: ' + p.type + (p.key ? ', key: true' : '') + (propDesc(T, p) ? ', description: "' + propDesc(T, p).replace(/"/g, '\\"') + '"' : '') + ' }').join('\n') + (rels.some(r => r.from === T.name) ? '\nrelationships:\n' + rels.filter(r => r.from === T.name).map(r => '  ' + r.name + ': { to: ' + r.to + ', cardinality: ' + r.cardinality + ' }').join('\n') : '') + (tSrc ? '\nsource:\n  connection: ' + tSrc.connection + '\n  table: ' + tSrc.table + '\n  key: ' + T.key : '');
+
+    const typeNames = types.map(t => ({ name: t.name }));
+    const lfCards = ['many-to-one', 'one-to-many', 'many-to-many'].map(c => ({ label: c, pick: () => this.setState({ lf: { ...s.lf, card: c } }), border: s.lf.card === c ? '#2B5CFF' : '#D9D9D4', bg: s.lf.card === c ? '#2B5CFF' : '#FFFFFF', fg: s.lf.card === c ? '#FFFFFF' : '#1A1A1F' }));
+    const linkGroups = types.filter(t => rels.some(r => r.from === t.name)).map(t => ({ from: t.name, items: rels.filter(r => r.from === t.name).map(r => ({ ...r, desc: relDesc(r), border: relDesc(r) ? '#E6E6E2' : '#F5D9A8', bg: relDesc(r) ? '#FFFFFF' : '#FFFBF3', set: (e) => this.setState({ relDescOv: { ...s.relDescOv, [r.from + '.' + r.name]: e && e.target ? e.target.value : '' } }) })) }));
+
+    const rfType = types.find(t => t.name === s.rf.applies) || T;
+    const rfFields = rfType.properties.map(p => ({ name: p.name }));
+    const opCel = { is: '==', isnot: '!=', atleast: '>=', atmost: '<=' };
+    const rfVal = s.rf.value === '' ? '…' : (isNaN(Number(s.rf.value)) && !['true', 'false'].includes(s.rf.value) ? '"' + s.rf.value + '"' : s.rf.value);
+    const rfPreview = (s.rf.field || 'field') + ' ' + opCel[s.rf.op] + ' ' + rfVal + '   # ' + s.rf.sev + ' · on ' + s.rf.applies;
+    const rfSevs = [['block', 'Stop it'], ['warn', 'Allow, but warn'], ['info', 'Just a note']].map(([v, label]) => ({ label, pick: () => this.setState({ rf: { ...s.rf, sev: v } }), border: s.rf.sev === v ? '#2B5CFF' : '#D9D9D4', bg: s.rf.sev === v ? '#2B5CFF' : '#FFFFFF', fg: s.rf.sev === v ? '#FFFFFF' : '#1A1A1F' }));
+    const rq = s.ruleQuery.trim().toLowerCase();
+    const filtered = rules.filter(c => (s.ruleFilter === 'all' || c.severity === s.ruleFilter) && (!rq || (c.id + ' ' + c.name + ' ' + c.applies_to + ' ' + c.rationale).toLowerCase().includes(rq)));
+    const ruleFilters = [['all', 'All ' + rules.length], ['block', 'Stop ' + rules.filter(r => r.severity === 'block').length], ['warn', 'Warn ' + rules.filter(r => r.severity === 'warn').length], ['info', 'Note ' + rules.filter(r => r.severity === 'info').length]].map(([v, label]) => ({ label, pick: () => this.setState({ ruleFilter: v }), border: s.ruleFilter === v ? '#1A1A1F' : '#D9D9D4', bg: s.ruleFilter === v ? '#1A1A1F' : '#FFFFFF', fg: s.ruleFilter === v ? '#FFFFFF' : '#1A1A1F' }));
+    const groupKeys = []; filtered.forEach(c => { if (!groupKeys.includes(c.applies_to)) groupKeys.push(c.applies_to); });
+    const ruleGroups = groupKeys.map(k => { const rel = rels.find(r => r.name === k); const act = D.actions.find(a => a.name === k); return { title: rel ? 'When linking ' + rel.from + ' to ' + rel.to + ' (' + k + ')' : (act ? 'When running ' + human(k).toLowerCase() : k), items: filtered.filter(c => c.applies_to === k).map(c => ({ ...c, ...sev(c.severity), when: whenOf(c) + ' · ' + ownerName(c.owner), border: s.selRule === c.id ? '#2B5CFF' : '#E6E6E2', pick: () => this.setState({ selRule: c.id }) })) }; });
+    const SR = rules.find(c => c.id === s.selRule);
+
+    const actionList = D.actions.map(a => ({ label: human(a.name), meta: Object.keys(a.inputs).length + ' input' + (Object.keys(a.inputs).length > 1 ? 's' : '') + ' · ' + a.checks.length + ' checks', pick: () => this.setState({ selAction: a.name, tryResult: null }), bg: s.selAction === a.name ? '#EEF2FF' : '#FFFFFF', border: s.selAction === a.name ? '#2B5CFF' : '#E6E6E2' }));
+    const SA = D.actions.find(a => a.name === s.selAction) || D.actions[0];
+    const sampleInputs = { apply_promotion: { order: 'ORD-1012', promotion: 'PROMO-SPRING15' }, cancel_order: { order: 'ORD-1003' }, refund_order: { order: 'ORD-1007', rma: 'RET-501', payment_method: 'PM-88213' }, reroute_shipment: { shipment: 'SHP-3004', from: 'CAR-GRN', to: 'CAR-AIR' }, restock: { inventory: 'INV-2201', warehouse: 'WH-EAST' } };
+    const saInputs = Object.entries(SA.inputs).map(([k, v]) => ({ id: 'try-' + k, name: k, type: v, value: s.tryInputs[SA.name + '.' + k] !== undefined ? s.tryInputs[SA.name + '.' + k] : (sampleInputs[SA.name] || {})[k] || '', set: (e) => this.setState({ tryInputs: { ...s.tryInputs, [SA.name + '.' + k]: e && e.target ? e.target.value : '' } }) }));
+    const saChecks = SA.checks.concat(rules.filter(c => c.applies_to === SA.name).map(c => c.id)).filter((v, i, a) => a.indexOf(v) === i).map(id => { const c = rules.find(r => r.id === id); return c ? { ...c, ...sev(c.severity) } : { id, name: id, ...sev('block') }; });
+    const TR = s.tryResult ? this.tries()[s.tryResult] : null;
+    const tone = { pass: ['#E8F5EC', '#15803D'], warn: ['#FEF3E2', '#B45309'], fail: ['#FDE8E8', '#B91C1C'] };
+
+    const proposalDefs = [
+      { id: 'p1', title: 'Add gift_card to the kinds of PaymentMethod', body: 'A support agent asked Claude "can we refund to a gift card?". Claude found no such kind on PaymentMethod and proposes adding it, plus a guardrail that gift-card refunds go to store credit.', diff: 'types/payment_method.yaml\n  kind: { type: enum, values: [card, paypal, store_credit, bank, gift_card] }\nconstraints/payments.yaml\n+ PM-003 · Gift-card orders refund to store credit · block' },
+      { id: 'p2', title: 'New guardrail: hazardous goods need a signature on delivery', body: 'While rerouting SHP-3004, Claude read the carrier contract summary in Shipment and noticed no rule covers signature on delivery for hazmat. It proposes one, warn level, owned by Fulfilment.', diff: 'constraints/fulfilment.yaml\n+ SH-009 · Hazardous parcels require signature on delivery · warn\n  applies_to: Shipment\n  rule: contains_hazmat == true implies service != "standard"' }
+    ];
+    const proposals = proposalDefs.filter(p => s.proposals[p.id] === 'pending').map(p => ({ ...p, accept: () => this.setState({ proposals: { ...s.proposals, [p.id]: 'accepted' }, addedRules: p.id === 'p2' ? [...s.addedRules, { id: 'SH-009', name: 'Hazardous parcels require signature on delivery', applies_to: 'Shipment', rule: 'contains_hazmat == true implies service != "standard"', severity: 'warn', rationale: 'Proposed by Claude from the carrier contract summary; accepted by Priya.', owner: 'fulfilment@lumen.example' }] : s.addedRules, activity: [{ text: 'Accepted: ' + p.title + '.', who: 'Priya · now', color: '#15803D' }, ...s.activity] }), dismiss: () => this.setState({ proposals: { ...s.proposals, [p.id]: 'dismissed' } }) }));
+    const tools = [['summary', 'the whole ontology in two pages'], ['search', 'find a thing, rule or word'], ['describe', 'one thing in full'], ['neighbors', 'what connects to it'], ['path', 'how two things relate'], ['constraints_for', 'every rule that applies'], ['validate', 'may I do this? with reasons'], ['where_is', 'which table holds the rows'], ['instances', 'rows, when readable here'], ['query', 'read-only SQL'], ['tables', 'what SQL can see'], ['propose_change', 'suggest a change for review']].map(([name, desc]) => ({ name, desc }));
+
+    const sqlChips = ['select * from Order limit 20', 'select applies_to, count(*) from constraints group by 1', 'select name, source_kind from nodes', "select * from Return where status = 'received'"].map(label => ({ label, pick: () => this.setState({ sql: label, sqlRan: true }) }));
+
+    return {
+      counts: types.length + ' things · ' + rels.length + ' links · ' + rules.length + ' guardrails · ' + D.actions.length + ' actions',
+      readyPct: ready + '%', readyText: ready + '% ready for agents',
+      search: s.search, setSearch: (e) => this.setState({ search: e && e.target ? e.target.value : '' }), searching: !!q, notSearching: !q, results,
+      buildNav, useNav,
+      isMap: s.screen === 'map', isSources: s.screen === 'sources', isThings: s.screen === 'things', isLinks: s.screen === 'links', isRules: s.screen === 'rules', isActions: s.screen === 'actions', isAgents: s.screen === 'agents', isData: s.screen === 'data',
+      nodes, edges, legend: domains.map(d => ({ name: d, color: domainColor[d] })),
+      mapHasSel: !!mapSelT, mapSelName: mapSelT ? mapSelT.name : '', mapSelColor: mapSelT ? domainColor[mapSelT.domain] : '#000', mapSelDesc: mapSelT ? typeDesc(mapSelT) : '', mapSelFacts: mapSelT ? mapSelT.properties.length + ' fields · ' + rels.filter(r => r.from === mapSelT.name || r.to === mapSelT.name).length + ' links · ' + rulesForType(mapSelT.name).length + ' guardrails · ' + (mapSelT.source ? mapSelT.source.kind + ' ' + mapSelT.source.table : 'no data bound') : '',
+      mapOpen: go('things', { selType: s.mapSel, creating: false, typeTab: 'fields' }), mapOpenRules: go('rules', { ruleQuery: s.mapSel || '' }),
+      nudges,
+      sourceCards, hasUnbound: unbound.length > 0, unboundTitle: unbound.map(t => t.name).join(' and ') + ' have no data behind them', unbound: unbound.map(t => ({ name: t.name, bind: () => this.setState({ bound: { ...s.bound, [t.name]: 'shop_files' } }) })), addSources,
+      typeList, startNewType: () => this.setState({ creating: true }), creating: s.creating, notCreating: !s.creating,
+      ntName: s.nt.name, ntDesc: s.nt.desc, setNtName: (e) => this.setState({ nt: { ...s.nt, name: e && e.target ? e.target.value : '' } }), setNtDesc: (e) => this.setState({ nt: { ...s.nt, desc: e && e.target ? e.target.value : '' } }),
+      ntDomains: domains.map(d => ({ name: d, pick: () => this.setState({ nt: { ...s.nt, domain: d } }), border: s.nt.domain === d ? '#2B5CFF' : '#D9D9D4', bg: s.nt.domain === d ? '#2B5CFF' : '#FFFFFF', fg: s.nt.domain === d ? '#FFFFFF' : '#1A1A1F' })),
+      saveNewType: () => { const name = s.nt.name.trim(); if (!name) return; this.setState({ addedTypes: [...s.addedTypes, { name, domain: s.nt.domain, description: s.nt.desc, key: name.toLowerCase() + '_id', properties: [{ name: name.toLowerCase() + '_id', type: 'string', description: 'Identifier', key: true }], source: null, file: 'types/' + name.toLowerCase() + '.yaml' }], creating: false, selType: name, nt: { name: '', domain: 'Customers & orders', desc: '' }, activity: [{ text: 'Created ' + name + '.', who: 'Priya · now', color: '#15803D' }, ...s.activity] }); },
+      cancelNewType: () => this.setState({ creating: false }),
+      tName: T.name, tDomain: T.domain, tFile: T.file, tDesc: typeDesc(T), setTDesc: (e) => this.setState({ typeDescOv: { ...s.typeDescOv, [T.name]: e && e.target ? e.target.value : '' } }),
+      tTabs, tabFields: s.typeTab === 'fields', tabLinks: s.typeTab === 'links', tabRules: s.typeTab === 'rules', tabData: s.typeTab === 'data', tabYaml: s.typeTab === 'yaml',
+      tFields, tLinks, tRules, tYaml,
+      goLinksForType: () => this.setState({ screen: 'links', lf: { ...s.lf, from: T.name } }), goRulesForType: () => this.setState({ screen: 'rules', rf: { ...s.rf, applies: T.name, field: T.properties[0].name } }),
+      tDataTitle: tSrc ? (tSrc.kind === 'csv' ? 'Readable here · ' + tSrc.connection + ' · ' + tSrc.table : 'Lives in ' + tSrc.connection + ' · ' + tSrc.table) : 'No data bound yet', tDataBody: tSrc ? (tSrc.kind === 'csv' ? 'Rows are read directly from the nightly CSV, so guardrails can be checked against a real ' + T.name + '.' : 'Not readable here. An agent calls where_is(' + T.name + '), fetches the row it needs with its own connector, and passes it inline to validate.') : 'Agents can read the rules for ' + T.name + ' but cannot check a real row. Bind a table in Sources.', tDataHint: tSrc ? 'key ' + T.key + ' · where_is("' + T.name + '") → ' + tSrc.connection + '.' + tSrc.table : '',
+      linksIntro: rels.length + ' links. ' + (rels.length - relsDescribed) + ' have no sentence yet; the fields below that are highlighted want one.',
+      typeNames, lfFrom: s.lf.from, lfTo: s.lf.to, lfVerb: s.lf.verb, lfDesc: s.lf.desc, lfCards,
+      setLfFrom: (e) => this.setState({ lf: { ...s.lf, from: e && e.target ? e.target.value : s.lf.from } }), setLfTo: (e) => this.setState({ lf: { ...s.lf, to: e && e.target ? e.target.value : s.lf.to } }), setLfVerb: (e) => this.setState({ lf: { ...s.lf, verb: e && e.target ? e.target.value : '' } }), setLfDesc: (e) => this.setState({ lf: { ...s.lf, desc: e && e.target ? e.target.value : '' } }),
+      lfPreview: 'Will be written in types/' + s.lf.from.toLowerCase() + '.yaml as  ' + (s.lf.verb || 'name') + ': { to: ' + s.lf.to + ', cardinality: ' + s.lf.card + ' }',
+      addLink: () => { const v = s.lf.verb.trim(); if (!v) return; this.setState({ addedRels: [...s.addedRels, { name: v, from: s.lf.from, to: s.lf.to, cardinality: s.lf.card, description: s.lf.desc }], lf: { ...s.lf, verb: '', desc: '' }, activity: [{ text: 'Linked ' + s.lf.from + ' ' + v + ' ' + s.lf.to + '.', who: 'Priya · now', color: '#15803D' }, ...s.activity] }); },
+      linkGroups,
+      ruleFilters, ruleQuery: s.ruleQuery, setRuleQuery: (e) => this.setState({ ruleQuery: e && e.target ? e.target.value : '' }), ruleGroups,
+      ruleSelected: !!SR, srId: SR ? SR.id : '', srName: SR ? SR.name : '', srRationale: SR ? SR.rationale : '', srWhen: SR ? whenOf(SR) : '', srOwner: SR ? ownerName(SR.owner) : '', srRule: SR ? SR.rule : '', ...(SR ? { srSevLabel: sev(SR.severity).sevLabel, srSevBg: sev(SR.severity).sevBg, srSevFg: sev(SR.severity).sevFg } : { srSevLabel: '', srSevBg: '#FFF', srSevFg: '#000' }),
+      rfSentence: s.rf.sentence, rfApplies: s.rf.applies, rfField: s.rf.field, rfOp: s.rf.op, rfValue: s.rf.value, rfWhy: s.rf.why, rfWho: s.rf.who, rfFields, rfSevs, rfPreview,
+      setRfSentence: (e) => this.setState({ rf: { ...s.rf, sentence: e && e.target ? e.target.value : '' } }), setRfApplies: (e) => { const name = e && e.target ? e.target.value : s.rf.applies; const t = types.find(x => x.name === name); this.setState({ rf: { ...s.rf, applies: name, field: t ? t.properties[0].name : '' } }); }, setRfField: (e) => this.setState({ rf: { ...s.rf, field: e && e.target ? e.target.value : '' } }), setRfOp: (e) => this.setState({ rf: { ...s.rf, op: e && e.target ? e.target.value : 'is' } }), setRfValue: (e) => this.setState({ rf: { ...s.rf, value: e && e.target ? e.target.value : '' } }), setRfWhy: (e) => this.setState({ rf: { ...s.rf, why: e && e.target ? e.target.value : '' } }), setRfWho: (e) => this.setState({ rf: { ...s.rf, who: e && e.target ? e.target.value : '' } }),
+      addRule: () => { const sent = s.rf.sentence.trim(); if (!sent || !s.rf.field) return; const id = 'NEW-' + String(s.addedRules.length + 1).padStart(3, '0'); this.setState({ addedRules: [...s.addedRules, { id, name: sent, applies_to: s.rf.applies, rule: s.rf.field + ' ' + opCel[s.rf.op] + ' ' + rfVal, severity: s.rf.sev, rationale: s.rf.why, owner: s.rf.who ? s.rf.who.toLowerCase().replace(/[^a-z]+/g, '') + '@lumen.example' : '' }], selRule: id, rf: { ...s.rf, sentence: '', value: '', why: '', who: '' }, activity: [{ text: 'Added guardrail ' + id + ': ' + sent + '.', who: 'Priya · now', color: '#B91C1C' }, ...s.activity] }); },
+      actionList, saLabel: human(SA.name), saDesc: SA.description, saChecks, saApprover: SA.approver, saSide: SA.side_effects, saInputs,
+      runTry: () => this.setState({ tryResult: SA.name }), hasTry: !!TR, tryBg: TR ? tone[TR.verdict][0] : '#FFF', tryFg: TR ? tone[TR.verdict][1] : '#000', trySummary: TR ? TR.summary : '', tryRows: TR ? TR.rows.map(([m, id, text]) => ({ id, text, mark: m === 'ok' ? '✓' : (m === 'warn' ? '!' : '✕'), color: m === 'ok' ? '#15803D' : (m === 'warn' ? '#B45309' : '#B91C1C') })) : [], hasTryNote: !!(TR && TR.note), tryNote: TR ? TR.note : '',
+      hasProposals: proposals.length > 0, proposals, tools, activity: s.activity,
+      sql: s.sql, setSql: (e) => this.setState({ sql: e && e.target ? e.target.value : '' }), runSql: () => this.setState({ sqlRan: true }), sqlRan: s.sqlRan, sqlChips,
+      sqlCols: [{ name: 'name' }, { name: 'source_kind' }, { name: 'rules' }], sqlRows: [{ a: 'Order', b: 'csv', c: '7' }, { a: 'Return', b: 'csv', c: '4' }, { a: 'Shipment', b: 'csv', c: '4' }, { a: 'PaymentMethod', b: 'bigquery', c: '2' }], sqlMeta: '4 of 12 rows shown · 9 ms · DuckDB, read-only',
+      warningsText: (gapTypes.length + (rels.length - relsDescribed)) + ' things to improve'
+    };
+  }
+}
+</script>
+</body>
+</html>

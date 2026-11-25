@@ -49,6 +49,10 @@ pub struct ViewInfo {
 
 pub struct Db {
     conn: Mutex<Connection>,
+    /// True when DuckDB was fenced to the folders the views read from (no
+    /// other file, no network) before any query ran. Off when a source is
+    /// remote (postgres, s3) because those need external access at query time.
+    pub fenced: bool,
     /// Type name, or `From.relationship` for relationships → view.
     views: IndexMap<String, ViewInfo>,
     /// Type/relationship name → why its view could not be created (a real failure: missing file, bad credentials…).
@@ -229,9 +233,21 @@ struct Builder<'c> {
     views: IndexMap<String, ViewInfo>,
     skipped: IndexMap<String, String>,
     unreadable: IndexMap<String, String>,
+    /// The ontology folder as an absolute path, so view paths and the fence agree.
+    root: PathBuf,
+    /// Folders the local views read from; the only ones queries may touch afterwards.
+    local_dirs: HashSet<String>,
+    /// A postgres/s3/http source was attached: the fence has to stay open.
+    remote: bool,
 }
 
 impl<'c> Builder<'c> {
+    fn note_local(&mut self, p: &Path) {
+        let dir = p.parent().map(|d| d.to_path_buf()).unwrap_or_default();
+        let dir = std::fs::canonicalize(&dir).unwrap_or(dir);
+        self.local_dirs.insert(dir.display().to_string());
+    }
+
     fn exec(&self, sql: &str) -> Result<()> {
         self.conn.execute_batch(sql).map_err(|e| anyhow!("{}", e)).with_context(|| format!("running `{}`", truncate_sql(sql)))
     }
@@ -296,15 +312,18 @@ impl<'c> Builder<'c> {
         match kind.as_str() {
             "csv" => {
                 let p = file_in(root, src.path.as_ref(), table, "csv");
+                self.note_local(&p);
                 Ok(format!("read_csv({}, header = true)", lit(&p.display().to_string())))
             }
             "parquet" => {
                 let p = file_in(root, src.path.as_ref(), table, "parquet");
+                self.note_local(&p);
                 Ok(format!("read_parquet({})", lit(&p.display().to_string())))
             }
             "duckdb" => {
                 let Some(file) = src.path.as_ref() else { bail!("source `{}` (duckdb) needs `path: <file>.duckdb`", src.connection) };
                 let p = root.join(file);
+                self.note_local(&p);
                 let alias = alias_for(&src.connection);
                 self.attach(&alias, &p.display().to_string(), "")?;
                 let mut parts: Vec<&str> = vec![alias.as_str()];
@@ -320,6 +339,7 @@ impl<'c> Builder<'c> {
                     bail!("source `{}` (postgres) needs `env: <VAR>` naming the environment variable that holds the libpq connection string", src.connection)
                 };
                 self.load_extension("postgres")?;
+                self.remote = true;
                 let alias = alias_for(&src.connection);
                 self.attach(&alias, &conn_str, "TYPE postgres")?;
                 let schema = cfg_str(src, "schema").unwrap_or_else(|| "public".into());
@@ -329,6 +349,7 @@ impl<'c> Builder<'c> {
             }
             "s3" | "httpfs" => {
                 self.load_extension("httpfs")?;
+                self.remote = true;
                 let base = src.path.clone().or_else(|| cfg_str(src, "url")).or_else(|| cfg_str(src, "bucket").map(|b| format!("s3://{}", b)));
                 let url = match base {
                     Some(b) => url_in(&expand_env(&b)?, table),
@@ -388,7 +409,8 @@ impl<'c> Builder<'c> {
                 return Ok(());
             }
             let view = self.free_view_name(&t.name)?;
-            let (select, from) = self.select_for(&ont.root, src, &b.table, &b.columns)?;
+            let root = self.root.clone();
+            let (select, from) = self.select_for(&root, src, &b.table, &b.columns)?;
             self.exec(&format!("CREATE VIEW {} AS {}", ident(&view), select))?;
             let columns = self.columns_of(&view)?;
             self.views.insert(t.name.clone(), ViewInfo { view, source: from, columns });
@@ -430,7 +452,8 @@ impl<'c> Builder<'c> {
             return Ok(());
         }
         let view = self.free_view_name(&rel.name).or_else(|_| self.free_view_name(&format!("{}_{}", rel.from, rel.name)))?;
-        let (select, from) = self.select_for(&ont.root, src, &b.table, &b.columns)?;
+        let root = self.root.clone();
+        let (select, from) = self.select_for(&root, src, &b.table, &b.columns)?;
         self.exec(&format!("CREATE VIEW {} AS {}", ident(&view), select))?;
         let columns = self.columns_of(&view)?;
         self.views.insert(rel.qualified(), ViewInfo { view, source: from, columns });
@@ -638,7 +661,8 @@ impl Db {
     pub fn open(ont: &Ontology) -> Result<Db> {
         let conn = Connection::open_in_memory().context("opening DuckDB")?;
         let has_json = conn.query_row("SELECT to_json(1)::VARCHAR", [], |_| Ok(())).is_ok();
-        let mut b = Builder { conn: &conn, has_json, attached: HashSet::new(), loaded: HashSet::new(), views: IndexMap::new(), skipped: IndexMap::new(), unreadable: IndexMap::new() };
+        let root = std::fs::canonicalize(&ont.root).unwrap_or_else(|_| ont.root.clone());
+        let mut b = Builder { conn: &conn, has_json, attached: HashSet::new(), loaded: HashSet::new(), views: IndexMap::new(), skipped: IndexMap::new(), unreadable: IndexMap::new(), root, local_dirs: HashSet::new(), remote: false };
         for t in ont.types.values() {
             if let Err(e) = b.type_view(ont, t) {
                 b.skipped.insert(t.name.clone(), format!("{:#}", e));
@@ -653,8 +677,26 @@ impl Db {
             }
         }
         b.ontology_tables(ont)?;
+        // The fence. Everything the views need is set up; from here on a query
+        // may read only the folders those views point at: no other file on
+        // the machine, no extension install, no network. `lock_configuration`
+        // stops a query from switching it back on.
+        let fenced = if b.remote {
+            false
+        } else {
+            let mut dirs: Vec<String> = b.local_dirs.iter().map(|d| format!("{}/", d.trim_end_matches('/'))).collect();
+            dirs.sort();
+            let sql = format!("SET allowed_directories = {}; SET enable_external_access = false; SET lock_configuration = true;", lit_list(&dirs));
+            match conn.execute_batch(&sql) {
+                Ok(()) => true,
+                Err(e) => {
+                    eprintln!("warn  DuckDB could not be fenced to the data folders: {}", e);
+                    false
+                }
+            }
+        };
         let (views, skipped, unreadable) = (b.views, b.skipped, b.unreadable);
-        Ok(Db { conn: Mutex::new(conn), views, skipped, unreadable, has_json })
+        Ok(Db { conn: Mutex::new(conn), fenced, views, skipped, unreadable, has_json })
     }
 
     fn conn(&self) -> MutexGuard<'_, Connection> {
@@ -902,6 +944,15 @@ mod tests {
         assert!(db.view("PurchaseOrder").is_none());
         assert!(db.view_error("PurchaseOrder").unwrap().contains("snowflake"));
         assert!(db.skipped.is_empty(), "{:?}", db.skipped);
+
+        // the fence: a query reaches the data folder and nothing else on the machine
+        assert!(db.fenced);
+        let outside = if cfg!(windows) { "C:/Windows/win.ini" } else { "/etc/passwd" };
+        let err = db.query(&format!("select * from read_csv_auto('{}')", outside), 5).unwrap_err().to_string();
+        assert!(err.to_lowercase().contains("permission") || err.to_lowercase().contains("disabled") || err.to_lowercase().contains("not allowed"), "{}", err);
+        assert!(db.query(&format!("select * from read_text('{}')", outside), 5).is_err());
+        assert!(db.query("select count(*) as n from Supplier", 5).is_ok(), "the data folder itself still works");
+        assert!(db.query("install httpfs", 5).is_err());
 
         // renamed key column, decimal → number, date and list → text/json
         let p = db.find("Part", &["part_id".into()], "p-1").unwrap().unwrap();

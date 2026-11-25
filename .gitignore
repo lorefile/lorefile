@@ -2,3 +2,4 @@
 .stella/
 *.log
 .DS_Store
+/spaces/

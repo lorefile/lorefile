@@ -471,6 +471,7 @@ impl<'a> DataLayer<'a> {
         let views: Vec<Json> = db.views().into_iter().map(|(name, view, source)| json!({ "name": name, "view": view, "source": source })).collect();
         Ok(json!({
             "duckdb": db.version(),
+            "fenced": db.fenced,
             "tables": ["nodes", "properties", "edges", "constraints", "actions", "sources"],
             "views": views,
             "skipped": db.skipped,

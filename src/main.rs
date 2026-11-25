@@ -8,9 +8,12 @@ mod edit;
 mod loader;
 mod mcp;
 mod ontology;
+mod patch;
+mod proposals;
 mod rules;
 mod schema;
 mod serve;
+mod spaces;
 mod validate;
 
 use anyhow::{bail, Result};
@@ -20,14 +23,21 @@ use edit::EditConfig;
 use indexmap::IndexMap;
 use ontology::Ontology;
 use serde_json::{json, Value as Json};
+use spaces::Registry;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "stella-ontology", version, about = "Lightweight, file-based, AI-agent-first ontology graph.")]
 struct Cli {
-    /// Ontology folder (defaults to ./ontology or the current folder).
+    /// An ontology folder, or a folder of spaces (one sub-folder per ontology). Defaults to ./ontology, else the current folder.
     #[arg(short, long, global = true)]
     dir: Option<PathBuf>,
+    /// Which space to work on when --dir holds several (shipped examples start with @, e.g. @supply-chain).
+    #[arg(short, long, global = true)]
+    space: Option<String>,
+    /// Leave out the examples and packs that ship inside the binary.
+    #[arg(long, global = true)]
+    no_examples: bool,
     /// Print machine-readable JSON instead of text.
     #[arg(long, global = true)]
     json: bool,
@@ -37,7 +47,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Compile the folder and report errors and warnings.
+    /// Compile the folder (every space, on a folder of spaces) and report errors and warnings.
     Validate,
     /// Print the compact Markdown summary agents load into their context.
     Summary,
@@ -134,7 +144,7 @@ fn print_json<T: serde::Serialize>(v: &T) {
     println!("{}", serde_json::to_string_pretty(v).unwrap_or_default());
 }
 
-fn print_report(ont: &Ontology, report: &validate::Report) {
+pub(crate) fn print_report(ont: &Ontology, report: &validate::Report) {
     let st = ont.stats();
     for d in &report.diags {
         let tag = match d.level {
@@ -178,14 +188,39 @@ fn main() -> Result<()> {
     }
 
     let dir = resolve_dir(cli.dir.clone());
-    let (ont, report) = load_ontology(&dir)?;
+    let with_db = matches!(cli.cmd, Cmd::Serve { .. } | Cmd::Mcp { .. });
+    let mut reg = Registry::discover(&dir, !cli.no_examples, with_db)?;
+
+    // the long-running servers take the whole registry
+    match cli.cmd {
+        Cmd::Mcp { allow_edit, commit_edits } => {
+            return mcp::run_stdio(reg, EditConfig { allow: allow_edit, commit: commit_edits }, cli.space);
+        }
+        Cmd::Serve { port, host, allow_edit, commit_edits } => {
+            return serve::run(reg, &host, port, EditConfig { allow: allow_edit, commit: commit_edits });
+        }
+        _ => {}
+    }
+
+    // `validate` on a folder of spaces checks each of them
+    if matches!(cli.cmd, Cmd::Validate) && cli.space.is_none() && !reg.single && !cli.json {
+        let ok = spaces::validate_all(&mut reg)?;
+        if !ok {
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
+
+    let space_id = reg.resolve(cli.space.as_deref()).map_err(|e| anyhow::anyhow!("{}. Pass --space <id>.", e))?;
+    let loaded = reg.get(&space_id)?;
+    let (ont, report) = (&loaded.ont, &loaded.report);
 
     match cli.cmd {
         Cmd::Validate => {
             if cli.json {
-                print_json(&json!({ "ok": report.ok(), "stats": ont.stats(), "diagnostics": report.diags }));
+                print_json(&json!({ "ok": report.ok(), "space": space_id, "stats": ont.stats(), "diagnostics": report.diags }));
             } else {
-                print_report(&ont, &report);
+                print_report(ont, report);
             }
             if !report.ok() {
                 std::process::exit(1);
@@ -242,11 +277,11 @@ fn main() -> Result<()> {
             }
         }
         Cmd::Where { name } => {
-            let data = DataLayer::new(&ont);
+            let data = DataLayer::new(ont);
             print_json(&data.where_is(&name)?);
         }
         Cmd::Instances { name, limit } => {
-            let data = DataLayer::new(&ont);
+            let data = DataLayer::new(ont);
             let rows = if ont.type_(&name).is_none() && !ont.relationship(&name).is_empty() { data.edges(&name)? } else { data.instances(&name)? };
             let total = rows.len();
             let shown: Vec<_> = rows.into_iter().take(limit).collect();
@@ -262,9 +297,9 @@ fn main() -> Result<()> {
             }
         }
         Cmd::Check { action, inputs } => {
-            let data = DataLayer::new(&ont);
+            let data = DataLayer::new(ont);
             let raw = parse_inputs(&inputs)?;
-            let rep = rules::check_action(&ont, &data, &action, &raw)?;
+            let rep = rules::check_action(ont, &data, &action, &raw)?;
             if cli.json {
                 print_json(&rep);
             } else {
@@ -305,7 +340,7 @@ fn main() -> Result<()> {
             } else {
                 sql
             };
-            let data = DataLayer::new(&ont);
+            let data = DataLayer::new(ont);
             let res = data.query(&sql, limit)?;
             if cli.json {
                 print_json(&res);
@@ -314,18 +349,10 @@ fn main() -> Result<()> {
             }
         }
         Cmd::Tables => {
-            let data = DataLayer::new(&ont);
+            let data = DataLayer::new(ont);
             print_json(&data.sql_catalog()?);
         }
-        Cmd::Mcp { allow_edit, commit_edits } => {
-            print_report(&ont, &report);
-            mcp::run_stdio(ont, EditConfig { allow: allow_edit, commit: commit_edits })?;
-        }
-        Cmd::Serve { port, host, allow_edit, commit_edits } => {
-            print_report(&ont, &report);
-            serve::run(dir, &host, port, EditConfig { allow: allow_edit, commit: commit_edits })?;
-        }
-        Cmd::Init { .. } => unreachable!(),
+        Cmd::Mcp { .. } | Cmd::Serve { .. } | Cmd::Init { .. } => unreachable!(),
     }
     Ok(())
 }
@@ -367,20 +394,9 @@ fn init(target: &Path) -> Result<()> {
     if target.join("ontology.yaml").exists() {
         bail!("{} already has an ontology.yaml", target.display());
     }
-    let files: [(&str, &str); 5] = [
-        ("ontology.yaml", include_str!("starter/ontology.yaml")),
-        ("glossary.yaml", include_str!("starter/glossary.yaml")),
-        ("types/customer.yaml", include_str!("starter/types/customer.yaml")),
-        ("constraints/basics.yaml", include_str!("starter/constraints/basics.yaml")),
-        ("actions/close_account.yaml", include_str!("starter/actions/close_account.yaml")),
-    ];
-    for (rel, content) in files {
-        let p = target.join(rel);
-        if let Some(parent) = p.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&p, content)?;
-        eprintln!("wrote {}", p.display());
+    spaces::write_starter(target)?;
+    for (rel, _) in spaces::STARTER {
+        eprintln!("wrote {}", target.join(rel).display());
     }
     eprintln!("\nNext: stella-ontology validate --dir {}\n      stella-ontology serve --dir {}", target.display(), target.display());
     Ok(())

@@ -2,6 +2,19 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "ontology-spaces",
+      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "spaces",
+        "--port",
+        "7076",
+        "--allow-edit"
+      ],
+      "port": 7076
+    },
+    {
       "name": "ontology-ui",
       "runtimeExecutable": "./target/debug/stella-ontology",
       "runtimeArgs": [

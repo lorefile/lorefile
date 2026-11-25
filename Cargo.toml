@@ -25,6 +25,7 @@ csv = "1"
 regex = "1"
 cel = "0.16"
 tiny_http = "0.12"
+chrono = "0.4"
 # The data door. `bundled` compiles DuckDB from source (no system install);
 # `parquet` and `json` link those extensions statically so they need no download.
 duckdb = { version = "1.10506", features = ["bundled", "parquet", "json"], optional = true }

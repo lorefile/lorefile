@@ -5,15 +5,46 @@
 use crate::data::DataLayer;
 use crate::edit::{self, Change, EditConfig, Outcome};
 use crate::ontology::Ontology;
+use crate::proposals::{self, Proposal};
 use crate::rules;
+use crate::spaces::Registry;
 use crate::validate;
+use crate::validate::Report;
 use anyhow::Result;
 use indexmap::IndexMap;
 use serde_json::{json, Value as Json};
 use std::cell::Cell;
 use std::io::{self, BufRead, Write};
+use std::path::Path;
 
 const PROTOCOL: &str = "2025-06-18";
+
+/// The tool list a client sees. With several spaces every tool takes a `space`
+/// argument naming the ontology it is about, and a `spaces` tool lists them.
+pub fn tool_definitions_for(reg: &Registry, only: Option<&str>) -> Json {
+    let mut tools = tool_definitions();
+    if only.is_some() || reg.spaces.len() <= 1 {
+        return tools;
+    }
+    let ids: Vec<String> = reg.spaces.keys().cloned().collect();
+    let mine: Vec<&str> = reg.user_spaces().iter().map(|s| s.id.as_str()).collect();
+    let hint = if mine.len() == 1 {
+        format!("Which space (ontology) this is about. Defaults to {} when left out. Shipped examples start with @.", mine[0])
+    } else {
+        format!("Which space (ontology) this is about: one of {}. Shipped examples start with @. Call `spaces` to see what each one holds.", ids.join(", "))
+    };
+    if let Some(arr) = tools.as_array_mut() {
+        for t in arr.iter_mut() {
+            t["inputSchema"]["properties"]["space"] = json!({ "type": "string", "description": hint, "enum": ids });
+        }
+        arr.insert(0, json!({
+            "name": "spaces",
+            "description": "List the spaces this server holds: one ontology per brand or business unit, plus the shipped examples (ids starting with @). Call it when the user has not said which space they mean.",
+            "inputSchema": { "type": "object", "properties": {} }
+        }));
+    }
+    tools
+}
 
 pub fn tool_definitions() -> Json {
     json!([
@@ -98,7 +129,7 @@ pub fn tool_definitions() -> Json {
         },
         {
             "name": "propose_change",
-            "description": "Propose a change to ONE ontology YAML file and have the compiler check it: the whole ontology is validated with the change applied and the diagnostics come back (errors block, warnings do not). When the server runs with --allow-edit the file is written (and committed with --commit-edits); otherwise nothing is written and the result says so, which makes this a safe dry run. Send the complete new content of the file, not a patch. To add something, use a new path such as types/widget.yaml or actions/ship_order.yaml; rules live in a `constraints:` list file. Read the current text first with describe (its `file` field) and keep the author's formatting.",
+            "description": "Propose a change to the ontology: send the full new text of one YAML file plus a reason. It is compiled and checked first. When the server allows edits and the change is clean it is written; otherwise it is queued for a person to review in the web page, and you get the proposal id. Use it when you learn something the ontology is missing, such as a type, a field, a link or a guardrail.",
             "inputSchema": { "type": "object", "properties": {
                 "file": { "type": "string", "description": "Path relative to the ontology folder, ending in .yaml, e.g. types/supplier.yaml" },
                 "content": { "type": "string", "description": "The full new text of the file" },
@@ -118,10 +149,6 @@ pub struct Server<'a> {
 }
 
 impl<'a> Server<'a> {
-    pub fn new(ont: &'a Ontology) -> Self {
-        Server { ont, data: DataLayer::new(ont), edit: EditConfig::default(), reload_needed: Cell::new(false) }
-    }
-
     /// Share a data layer (and its open DuckDB) instead of opening a fresh one.
     pub fn with_data(ont: &'a Ontology, data: DataLayer<'a>) -> Self {
         Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false) }
@@ -132,7 +159,7 @@ impl<'a> Server<'a> {
         self
     }
 
-    fn text(v: impl ToString, is_error: bool) -> Json {
+    pub fn text(v: impl ToString, is_error: bool) -> Json {
         let mut j = json!({ "content": [{ "type": "text", "text": v.to_string() }] });
         if is_error {
             j["isError"] = json!(true);
@@ -140,18 +167,20 @@ impl<'a> Server<'a> {
         j
     }
 
-    /// A `tools/call` result holding one text block.
-    pub fn text_result(v: impl ToString, is_error: bool) -> Json {
-        Self::text(v, is_error)
-    }
 
     /// The `tools/call` result for `propose_change`, shared with `/api/tool`.
     /// Diagnostics as JSON plus a `note` saying what happened to the file.
-    pub fn propose_change_result(out: &Outcome, edit: EditConfig) -> Json {
+    pub fn propose_change_result(out: &Outcome, edit: EditConfig, queued: Option<&Proposal>) -> Json {
         if let Some(why) = &out.refused {
             return Self::text(format!("{}: {}", out.file, why), true);
         }
-        let note = if out.written {
+        let note = if let Some(p) = queued {
+            if out.ok {
+                format!("queued for review as {}: nothing was written; a person can accept it in the web page (Agents › Waiting for your review)", p.id)
+            } else {
+                format!("queued as {} but it has {} error(s), so it cannot be accepted until they are fixed; nothing was written", p.id, out.errors())
+            }
+        } else if out.written {
             match &out.commit {
                 Some(h) => format!("written to {} and committed as {}", out.file, h),
                 None if edit.commit => format!("written to {}; commit failed: {}", out.file, out.git_error.clone().unwrap_or_default()),
@@ -169,7 +198,29 @@ impl<'a> Server<'a> {
         Self::text(Self::pretty(&j), false)
     }
 
-    fn pretty(v: &Json) -> String {
+    /// Apply a proposed change. Written changes are logged; changes that were
+    /// validated but not written (edit mode off, or errors) are queued for a
+    /// person to review. Returns the outcome and the queued proposal, if any.
+    pub fn propose(root: &Path, edit: EditConfig, before: &Report, file: &str, content: &str, reason: &str, via: &str) -> (Outcome, Option<Proposal>) {
+        let out = edit::apply(root, edit, before, file, Change::Write(content.to_string()), via, None, reason);
+        let why = if reason.is_empty() { String::new() } else { format!(": {}", reason) };
+        if out.written {
+            proposals::log(root, via, &format!("changed {}{}", file, why), file);
+            return (out, None);
+        }
+        if out.refused.is_some() {
+            return (out, None);
+        }
+        match proposals::store(root, file, content, reason, via, &out) {
+            Ok(p) => {
+                proposals::log(root, via, &format!("proposed a change to {} (waiting for review){}", file, why), file);
+                (out, Some(p))
+            }
+            Err(_) => (out, None),
+        }
+    }
+
+    pub fn pretty(v: &Json) -> String {
         serde_json::to_string_pretty(v).unwrap_or_default()
     }
 
@@ -285,11 +336,11 @@ impl<'a> Server<'a> {
                 let content = Self::arg_str(args, &["content", "text"]).unwrap_or_default();
                 let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
                 let before = validate::validate(ont);
-                let out = edit::apply(&ont.root, self.edit, &before, &file, Change::Write(content), "MCP", None, &reason);
+                let (out, queued) = Self::propose(&ont.root, self.edit, &before, &file, &content, &reason, "agent via MCP");
                 if out.written {
                     self.reload_needed.set(true);
                 }
-                Self::propose_change_result(&out, self.edit)
+                Self::propose_change_result(&out, self.edit, queued.as_ref())
             }
             other => Self::text(format!("Unknown tool '{}'", other), true),
         }
@@ -328,8 +379,84 @@ impl<'a> Server<'a> {
         }
         None
     }
+}
 
-    pub fn handle(&self, msg: &Json) -> Option<Json> {
+/// One stdio server, many spaces. Each request names its space (or gets the
+/// implied one) and is answered by a `Server` built on that space's state.
+pub struct Hub {
+    pub reg: Registry,
+    pub edit: EditConfig,
+    /// `--space`: serve one space only, and hide the `space` argument.
+    pub only: Option<String>,
+}
+
+impl Hub {
+    fn edit_for(&self, id: &str) -> EditConfig {
+        match self.reg.info(id) {
+            Some(s) if s.builtin => EditConfig::default(),
+            _ => self.edit,
+        }
+    }
+
+    fn pick(&self, want: Option<&str>) -> Result<String, String> {
+        match &self.only {
+            Some(o) => Ok(o.clone()),
+            None => self.reg.resolve(want),
+        }
+    }
+
+    fn spaces_text(&mut self) -> String {
+        let list = self.reg.summaries();
+        let mut j = json!({ "root": self.reg.root.display().to_string(), "spaces": list });
+        if let Some(d) = self.reg.default_id() {
+            j["implied"] = json!(d);
+        }
+        Server::pretty(&j)
+    }
+
+    fn instructions(&self) -> String {
+        let mine = self.reg.user_spaces();
+        let shipped = self.reg.spaces.len() - mine.len();
+        let scope = match (&self.only, mine.len()) {
+            (Some(o), _) => format!("This server holds one ontology space, '{}'.", o),
+            (None, 0) => format!("This server holds no space of the user's own yet, only {} shipped examples (ids start with @). Name one with `space`, e.g. \"@supply-chain\".", shipped),
+            (None, 1) => format!("This server holds the ontology space '{}'{}. Tools default to it; pass `space` to look at a shipped example (ids start with @).", mine[0].id, if shipped > 0 { format!(" plus {} shipped examples", shipped) } else { String::new() }),
+            (None, n) => format!("This server holds {} ontology spaces: {}. Every tool takes `space`; ask the user which business or brand they mean when it is not obvious, or call `spaces`.", n, mine.iter().map(|s| s.id.as_str()).collect::<Vec<_>>().join(", ")),
+        };
+        format!(
+            "{} Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector. To change an ontology, send the full new text of one YAML file to `propose_change`; it is compiled and checked first{}. Shipped examples cannot be changed.",
+            scope,
+            if self.edit.allow { ", then written" } else { ", and queued for a person to accept in the web page" }
+        )
+    }
+
+    /// Resource URIs carry the space: `ontology://<space>/summary`. The flat
+    /// `ontology://summary` form still works and means the implied space.
+    fn split_uri(&self, uri: &str) -> Option<(String, String)> {
+        let rest = uri.strip_prefix("ontology://")?;
+        let (first, tail) = rest.split_once('/').unwrap_or((rest, ""));
+        if self.reg.spaces.contains_key(first) {
+            return Some((first.to_string(), format!("ontology://{}", tail)));
+        }
+        let id = self.pick(None).ok()?;
+        Some((id, uri.to_string()))
+    }
+
+    fn with_space<T>(&mut self, id: &str, f: impl FnOnce(&Server<'_>) -> T) -> Result<T, String> {
+        let edit = self.edit_for(id);
+        let l = self.reg.get(id).map_err(|e| format!("{:#}", e))?;
+        let srv = Server::with_data(&l.ont, l.data()).with_edit(edit);
+        let out = f(&srv);
+        let reload = srv.reload_needed.get();
+        drop(srv);
+        if reload {
+            l.reload();
+            self.reg.touched(id);
+        }
+        Ok(out)
+    }
+
+    pub fn handle(&mut self, msg: &Json) -> Option<Json> {
         let id = msg.get("id").cloned();
         let method = msg.get("method").and_then(|m| m.as_str()).unwrap_or("");
         let params = msg.get("params").cloned().unwrap_or(json!({}));
@@ -349,30 +476,69 @@ impl<'a> Server<'a> {
                     "protocolVersion": version,
                     "capabilities": { "tools": { "listChanged": false }, "resources": { "subscribe": false, "listChanged": false } },
                     "serverInfo": { "name": "stella-ontology", "version": env!("CARGO_PKG_VERSION") },
-                    "instructions": format!(
-                        "This server holds the business ontology '{}': {} types, {} rules, {} actions. Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector. To change the ontology itself, send the full new text of one YAML file to `propose_change`; it is compiled and checked first{}.",
-                        self.ont.manifest.name, self.ont.types.len(), self.ont.constraints.len(), self.ont.actions.len(),
-                        if self.edit.allow { ", then written" } else { " (edit mode is off here, so it is a dry run)" }
-                    )
+                    "instructions": self.instructions()
                 }))
             }
             "ping" => ok(json!({})),
-            "tools/list" => ok(json!({ "tools": tool_definitions() })),
+            "tools/list" => ok(json!({ "tools": tool_definitions_for(&self.reg, self.only.as_deref()) })),
             "tools/call" => {
                 let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                let args = params.get("arguments").cloned().unwrap_or(json!({}));
-                ok(self.call_tool(name, &args))
+                let mut args = params.get("arguments").cloned().unwrap_or(json!({}));
+                if name == "spaces" {
+                    return ok(Server::text(self.spaces_text(), false));
+                }
+                let want = args.get("space").and_then(|v| v.as_str()).map(|s| s.to_string());
+                if let Some(o) = args.as_object_mut() {
+                    o.remove("space");
+                }
+                let space = match self.pick(want.as_deref()) {
+                    Ok(s) => s,
+                    Err(e) => return ok(Server::text(e, true)),
+                };
+                if name == "propose_change" && self.reg.info(&space).map(|s| s.builtin).unwrap_or(false) {
+                    return ok(Server::text(format!("{} is a shipped example and stays read-only. Create a space of your own (or copy the example) and propose the change there.", space), true));
+                }
+                match self.with_space(&space, |srv| srv.call_tool(name, &args)) {
+                    Ok(r) => ok(r),
+                    Err(e) => ok(Server::text(e, true)),
+                }
             }
-            "resources/list" => ok(json!({ "resources": self.resources() })),
+            "resources/list" => {
+                // the user's spaces, or the shipped ones when there are none of theirs
+                let mut ids: Vec<String> = self.reg.user_spaces().iter().map(|s| s.id.clone()).collect();
+                if let Some(o) = &self.only {
+                    ids = vec![o.clone()];
+                } else if ids.is_empty() {
+                    ids = self.reg.spaces.keys().cloned().collect();
+                }
+                let prefix = ids.len() > 1;
+                let mut all = Vec::new();
+                for sid in ids {
+                    if let Ok(list) = self.with_space(&sid, |srv| srv.resources()) {
+                        for mut r in list.as_array().cloned().unwrap_or_default() {
+                            if prefix {
+                                let uri = r["uri"].as_str().unwrap_or("").replace("ontology://", &format!("ontology://{}/", sid));
+                                r["uri"] = json!(uri);
+                                r["name"] = json!(format!("{} · {}", sid, r["name"].as_str().unwrap_or("")));
+                            }
+                            all.push(r);
+                        }
+                    }
+                }
+                ok(json!({ "resources": all }))
+            }
             "resources/templates/list" => ok(json!({ "resourceTemplates": [
-                { "uriTemplate": "ontology://types/{name}", "name": "Type", "mimeType": "text/markdown" },
-                { "uriTemplate": "ontology://actions/{name}", "name": "Action", "mimeType": "application/json" }
+                { "uriTemplate": "ontology://{space}/types/{name}", "name": "Type", "mimeType": "text/markdown" },
+                { "uriTemplate": "ontology://{space}/actions/{name}", "name": "Action", "mimeType": "application/json" },
+                { "uriTemplate": "ontology://{space}/summary", "name": "Summary", "mimeType": "text/markdown" }
             ] })),
             "resources/read" => {
                 let uri = params.get("uri").and_then(|u| u.as_str()).unwrap_or("");
-                match self.read_resource(uri) {
-                    Some((mime, text)) => ok(json!({ "contents": [{ "uri": uri, "mimeType": mime, "text": text }] })),
-                    None => err(-32002, format!("resource not found: {}", uri)),
+                let Some((space, inner)) = self.split_uri(uri) else { return err(-32002, format!("resource not found: {}", uri)) };
+                match self.with_space(&space, |srv| srv.read_resource(&inner)) {
+                    Ok(Some((mime, text))) => ok(json!({ "contents": [{ "uri": uri, "mimeType": mime, "text": text }] })),
+                    Ok(None) => err(-32002, format!("resource not found: {}", uri)),
+                    Err(e) => err(-32002, e),
                 }
             }
             "prompts/list" => ok(json!({ "prompts": [] })),
@@ -382,18 +548,24 @@ impl<'a> Server<'a> {
     }
 }
 
-pub fn run_stdio(ont: Ontology, edit: EditConfig) -> Result<()> {
-    let mut ont = ont;
+pub fn run_stdio(reg: Registry, edit: EditConfig, only: Option<String>) -> Result<()> {
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut out = stdout.lock();
+    let only = match only {
+        Some(o) => Some(reg.resolve(Some(&o)).map_err(|e| anyhow::anyhow!(e))?),
+        None => None,
+    };
+    let mine = reg.user_spaces().len();
     eprintln!(
-        "stella-ontology MCP server ready on stdio ({} types, {} rules{})",
-        ont.types.len(),
-        ont.constraints.len(),
+        "stella-ontology MCP server ready on stdio ({} space{} of yours, {} shipped{}{})",
+        mine,
+        if mine == 1 { "" } else { "s" },
+        reg.spaces.len() - mine,
+        only.as_ref().map(|o| format!(", serving only {}", o)).unwrap_or_default(),
         if edit.allow { ", edit mode on" } else { "" }
     );
-    let mut server = Server::new(&ont).with_edit(edit);
+    let mut hub = Hub { reg, edit, only };
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(l) => l,
@@ -417,20 +589,10 @@ pub fn run_stdio(ont: Ontology, edit: EditConfig) -> Result<()> {
             m => vec![m],
         };
         for m in msgs {
-            if let Some(resp) = server.handle(&m) {
+            if let Some(resp) = hub.handle(&m) {
                 writeln!(out, "{}", resp)?;
                 out.flush()?;
             }
-        }
-        // a write happened: re-read the folder so the next call sees it
-        if server.reload_needed.get() {
-            drop(server);
-            let root = ont.root.clone();
-            match crate::load_ontology(&root) {
-                Ok((o, _)) => ont = o,
-                Err(e) => eprintln!("warn  reload after edit failed: {:#}", e),
-            }
-            server = Server::new(&ont).with_edit(edit);
         }
     }
     Ok(())

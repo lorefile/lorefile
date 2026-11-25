@@ -277,31 +277,39 @@ Rules of the door: exactly one `SELECT` or `WITH` statement (anything else is re
 
 **Build notes.** DuckDB is compiled from source by the `duckdb` cargo feature, on by default. On a 12-core Apple Silicon Mac with rustc 1.87: `cargo build` 2m50s and `cargo build --release` 2m57s from a clean checkout (DuckDB's C++ is the bulk of both; incremental rebuilds of this crate take seconds). The release binary grows from about 6 MB to about 40 MB, and still starts and answers a `check` in under 50 ms. `cargo build --no-default-features` gives a small CSV-only binary in under a minute, with `query` reporting that it was built without DuckDB. The crate pins `rust-version = "1.87"` with `resolver = "3"` so cargo picks dependency versions that compile on that toolchain (`duckdb` 1.10506 = DuckDB v1.5.6; `uuid` is pinned in `Cargo.lock` for the same reason). No system DuckDB is needed; if the bundled C++ build ever fails on a platform, `libduckdb-sys` also supports linking a system library via `pkg-config`.
 
-## Editing from the page
+DuckDB is **fenced**: once a space's views are built, the catalog may touch only the folders those views read from, external access is switched off and the configuration is locked, so a `query` cannot read other files on the machine, install extensions or reach the network (`tables` reports `fenced`). A space with a Postgres or S3 source keeps the fence open, since those need external access at query time.
 
-The page is read-only by default. Start the server with `--allow-edit` and every type, rule, action, relationship and source page gets an **Edit** button, and the left column a **+ New** menu (type, rule, action, relationship, source) pre-filled from the starter templates:
+## The web page
+
+`stella-ontology serve --dir ./ontology` opens a guided workspace at http://127.0.0.1:7070. It is organised around putting the ontology in place, not around the data model:
+
+- **Build**, five steps with live status: **Sources** (where the rows live), **Things** (each type with a plain-English description, its fields, links, guardrails, data and YAML), **Links** (a relationship builder and one sentence per link), **Guardrails** (rules grouped by what they apply to, a builder that writes the expression for you, and the expression itself one click away), **Actions** (what agents may do, with a try-it form that runs the same `validate` an agent runs).
+- **Use**: **Map** (the whole shape, with what to do next computed from the gaps), **Agents** (the MCP tools, connect commands, an inbox of changes agents proposed, and an activity log), **Data & SQL** (DuckDB over the ontology and every readable source).
+- A readiness meter in the header rises as fields get words, links get sentences and things get tables.
+
+### Editing from the page
+
+Start the server with `--allow-edit` and every description box, link sentence, builder and "Edit YAML" button writes a file. Each change is a small operation (`POST /api/patch`: describe a field, describe a link, add a link, add a guardrail, create a thing, bind a table) that becomes the full new text of one YAML file and goes through the same compiler check as any other write: errors refuse the save and are shown, warnings are allowed. Guardrails are appended as text, so their file keeps its comments; type files are rewritten through the YAML library, which keeps key order but drops comments in that one file. Add `--commit-edits` to commit each accepted change when the folder is a git repository; otherwise changes stay uncommitted for `git diff`.
+
+Without `--allow-edit` the page is read-only and says so. Keep it that way on anything reachable from the internet until authentication exists.
+
+### Proposals from agents
+
+An agent calls `propose_change` with the full new text of one file and a reason. When the server allows edits and the change is clean, it is written and logged. Otherwise it is queued under `<ontology>/.stella/proposals/` and shows up on the Agents page with a diff, where a person accepts or sets it aside; accepting writes it through the same checked path. Activity (who changed or proposed what, when) is kept in `<ontology>/.stella/activity.jsonl`. The `.stella/` folder is local state and is ignored by git.
+
+### Spaces: one server, many ontologies
+
+Point `serve` or `mcp` at a folder that has no `ontology.yaml` of its own and every sub-folder with one becomes a **space**: one ontology per brand, business unit or client. The page gets a picker at the top; each space has its own URL (`/s/brand-two/`), API (`/s/brand-two/api/…`), DuckDB catalog, proposals inbox and activity log. With `--allow-edit`, "＋ New space…" creates one as blank, from the starter, or as a copy of any other space.
 
 ```bash
-./target/release/stella-ontology serve --dir examples/supply-chain --allow-edit
+stella-ontology serve --dir ./spaces --allow-edit     # spaces/brand-one, spaces/brand-two, …
+stella-ontology validate --dir ./spaces               # checks every space (for CI)
+stella-ontology describe Campaign --dir ./spaces --space brand-two
 ```
 
-Nothing changes about where the ontology lives: the page writes the same YAML files you would edit by hand, and git stays the only history. Every save goes through the compiler first. The whole folder is loaded with your text in place of the file, the validator runs, and the file is written only when there are no errors. Errors (E…) are shown above the editor and block the save; warnings (W…) are shown and allowed. Deleting a file is checked the same way, so a type that a rule or relationship still refers to cannot be removed. A new rule is appended to the `constraints:` file you pick, and the rest of that file is kept byte for byte.
+The examples and packs ship inside the binary and are listed as read-only spaces whose ids start with `@` (`@ecommerce`, `@supply-chain-parquet`, `@meta-ads`), so you can open one to see how it is done and copy it. They are written out under `<dir>/.stella/examples/` at start (that folder hides itself from git); `--no-examples` leaves them out.
 
-**Git.** When the folder is inside a repository the footer shows the branch and any uncommitted change under the ontology folder. Add `--commit-edits` to have each accepted save committed on its own as `ontology: <kind> <name> edited via UI` (just that file; nothing is ever pushed). Without it, changes stay in the working tree for you to review with `git diff` and commit like any other change.
-
-**Agents and scripts.** The same check-then-write is the `propose_change` MCP tool (`stella-ontology mcp --allow-edit`; it takes `file`, `content` and a `reason` that becomes the commit body). Without `--allow-edit` the tool still validates and returns the diagnostics plus "edit mode is off; the change was validated but not written", so an agent can dry-run a change against any server. Over HTTP:
-
-```
-POST   /api/edit     {"file": "types/supplier.yaml", "content": "<yaml>"}
-POST   /api/create   {"kind": "type|constraint|action|relationship|source", "name": "Widget", "content": "<yaml>", "file": "constraints/x.yaml"}   (file: optional, rules only)
-DELETE /api/file?file=types/widget.yaml
-→ {"ok", "written", "file", "errors", "warnings", "diagnostics": [{"level", "code", "message", "file"}], "commit"?, "git"?}
-   200 written · 422 refused by the validator · 400 bad request · 403 edit mode off
-```
-
-`GET /api/summary` reports `"editable"` so the page knows whether to show the controls. Try it in the browser with the `ontology-ui-edit` entry in `.claude/launch.json`.
-
-**Security.** Edit mode has no authentication. `serve` binds to 127.0.0.1 only, refuses paths outside the ontology folder, hidden folders, `data/` and anything that is not `.yaml`, and refuses write requests that carry another site's `Origin` header or a non-JSON body, so a web page you happen to have open cannot post edits to your local server. That is the whole protection: keep `--allow-edit` off on any server reachable from the internet, or from other people on the network, until authentication exists.
+Over MCP, agents name the space in each call. With exactly one space of yours it is implied; with several, every tool takes `space:` (the tool list names them) and a `spaces` tool describes each one. `mcp --space brand-two` dedicates a server to one space. Resource URIs carry the space too: `ontology://brand-two/summary`.
 
 ## CLI
 
@@ -323,7 +331,7 @@ stella-ontology serve --port 7070 [--allow-edit [--commit-edits]]   web UI + JSO
 stella-ontology init [path]           starter ontology
 ```
 
-`--dir` picks the folder (defaults to `./ontology`, then `.`). `--json` switches any command to machine output.
+`--dir` picks the folder (defaults to `./ontology`, then `.`): an ontology folder, or a folder of spaces. `--space <id>` picks a space when there are several (`@…` for a shipped example); `--no-examples` leaves the shipped ones out. `--json` switches any command to machine output.
 
 ## Validation codes
 
@@ -373,4 +381,4 @@ The three read-out guards (`read_performance`, `compare_conversions`, `attribute
 
 ## License
 
-Apache-2.0
+Apache-2.0, see [LICENSE](LICENSE). Use it, change it, host it, sell what you build on it; keep the notice. "Stella" is a trademark of Stella: a hosted copy can be anything but Stella Cloud. Why Apache-2.0 and not MIT, AGPL or a source-available licence is in [PRODUCTION.md](PRODUCTION.md#6-licence).

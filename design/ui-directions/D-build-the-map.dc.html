@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Build the map</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#1D4ED8}a:hover{color:#1E40AF}
+button,input,textarea,select{font-family:inherit}
+input::placeholder,textarea::placeholder{color:#8A8A94}
+</style>
+</helmet>
+<div style="min-height: 900px; background: #F6F6F4; color: #17171C; font-family: 'DM Sans', system-ui, sans-serif; font-size: 15px; line-height: 1.5; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; gap: 14px; padding: 12px 22px; background: #FFFFFF; border-bottom: 1px solid #E6E6E2; flex-wrap: wrap">
+    <div style="width: 28px; height: 28px; border-radius: 8px; background: #1D4ED8; display: flex; align-items: center; justify-content: center">
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="12" cy="20" r="2"></circle><path d="M7 7l3 3M17 7l-3 3M12 15v3"></path></svg>
+    </div>
+    <div style="font-weight: 700; font-size: 16px">Stella Ontology</div>
+    <div style="color: #6E6E78; font-size: 14px">acme-marketing</div>
+    <span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #E8F5EC; color: #15803D">{{ savedText }}</span>
+    <div style="flex: 1 1 auto"></div>
+    <button onClick="{{ toggleActivity }}" style="padding: 8px 12px; border-radius: 10px; border: 1px solid #D9D9D4; background: {{ activityBg }}; color: {{ activityFg }}; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 40px; display: flex; align-items: center; gap: 8px">
+      <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+      Activity
+    </button>
+    <div style="width: 32px; height: 32px; border-radius: 50%; background: #FDE7D4; color: #9A4A12; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px">PR</div>
+  </header>
+
+  <div style="flex: 1 1 auto; display: flex; flex-wrap: wrap; min-height: 0">
+
+    <nav style="flex: 0 1 270px; min-width: 220px; background: #FFFFFF; border-right: 1px solid #E6E6E2; padding: 18px 14px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; padding: 0 8px 6px">Put the ontology in place</div>
+      <sc-for list="{{ steps }}" as="st" hint-placeholder-count="6">
+        <button onClick="{{ st.go }}" style="display: flex; gap: 12px; align-items: flex-start; text-align: left; background: {{ st.bg }}; border: none; border-radius: 12px; padding: 10px; cursor: pointer; min-height: 56px">
+          <span style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: {{ st.dotBg }}; color: {{ st.dotFg }}">{{ st.mark }}</span>
+          <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+            <span style="font-weight: 600; font-size: 14.5px; color: #17171C">{{ st.title }}</span>
+            <span style="font-size: 12.5px; color: #6E6E78">{{ st.status }}</span>
+          </span>
+        </button>
+      </sc-for>
+      <div style="height: 1px; background: #E6E6E2; margin: 10px 0"></div>
+      <button onClick="{{ goInbox }}" style="display: flex; gap: 12px; align-items: center; text-align: left; background: {{ inboxBg }}; border: 1px solid {{ inboxBorder }}; border-radius: 12px; padding: 10px; cursor: pointer; min-height: 56px">
+        <span style="flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; background: #FEF3E2; color: #B45309">{{ inboxCount }}</span>
+        <span style="display: flex; flex-direction: column; gap: 1px">
+          <span style="font-weight: 600; font-size: 14.5px; color: #17171C">Proposed by agents</span>
+          <span style="font-size: 12.5px; color: #6E6E78">{{ inboxStatus }}</span>
+        </span>
+      </button>
+      <div style="margin-top: auto; font-size: 12.5px; color: #6E6E78; line-height: 1.5; padding: 0 8px">Rows never move. The ontology only learns what things are and where they live.</div>
+    </nav>
+
+    <main style="flex: 999 1 560px; min-width: 0; display: flex; min-height: 0">
+
+      <sc-if value="{{ isConnect }}" hint-placeholder-val="{{ true }}">
+        <div style="flex: 1 1 auto; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 860px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 1 of 5</div>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 700">Where does the data live?</h1>
+            <p style="margin: 0; color: #6E6E78">Connect a source and we learn its shape. The rows stay where they are.</p>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+            <sc-for list="{{ sources }}" as="src" hint-placeholder-count="6">
+              <div style="background: #FFFFFF; border: 1px solid {{ src.border }}; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px">
+                <div style="display: flex; align-items: center; gap: 10px">
+                  <span style="width: 10px; height: 10px; border-radius: 50%; background: {{ src.color }}"></span>
+                  <span style="font-weight: 600; font-size: 15px">{{ src.name }}</span>
+                  <span style="font-size: 11.5px; color: #6E6E78; margin-left: auto">{{ src.kind }}</span>
+                </div>
+                <div style="font-size: 13.5px; color: #6E6E78">{{ src.blurb }}</div>
+                <sc-if value="{{ src.connected }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size: 13px; color: #15803D; font-weight: 600">✓ Connected · {{ src.cred }}</div>
+                </sc-if>
+                <sc-if value="{{ src.notConnected }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ src.connect }}" style="align-self: flex-start; padding: 8px 14px; border-radius: 10px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">Connect</button>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button onClick="{{ goPull }}" style="padding: 12px 20px; border-radius: 12px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 15px; cursor: pointer; min-height: 46px">See what is there</button>
+            <span style="font-size: 13.5px; color: #6E6E78">{{ connectedSummary }}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isPull }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 860px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 2 of 5</div>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 700">Here is what we found</h1>
+            <p style="margin: 0; color: #6E6E78">Tick the tables that matter to your team. Untick the rest; you can come back.</p>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <sc-for list="{{ tables }}" as="t" hint-placeholder-count="5">
+              <button onClick="{{ t.toggle }}" style="display: flex; gap: 14px; align-items: center; text-align: left; background: #FFFFFF; border: 1px solid {{ t.border }}; border-radius: 12px; padding: 12px 14px; cursor: pointer; min-height: 56px">
+                <span style="flex: 0 0 auto; width: 22px; height: 22px; border-radius: 6px; border: 2px solid {{ t.boxBorder }}; background: {{ t.boxBg }}; display: flex; align-items: center; justify-content: center; color: #FFFFFF; font-size: 13px; font-weight: 700">{{ t.tick }}</span>
+                <span style="display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto">
+                  <span style="font-weight: 600; font-size: 14.5px"><span style="font-family: ui-monospace, Menlo, monospace">{{ t.table }}</span> <span style="color: #6E6E78; font-weight: 400">from {{ t.source }}</span></span>
+                  <span style="font-size: 12.5px; color: #6E6E78">{{ t.fieldsText }}</span>
+                </span>
+                <span style="font-size: 12.5px; color: #6E6E78; white-space: nowrap">{{ t.rows }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button onClick="{{ goName }}" style="padding: 12px 20px; border-radius: 12px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 15px; cursor: pointer; min-height: 46px">Say what these are</button>
+            <button onClick="{{ goConnect }}" style="padding: 12px 16px; border-radius: 12px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 15px; cursor: pointer; min-height: 46px">Back</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isName }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 920px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 3 of 5</div>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 700">What is each of these, in plain words?</h1>
+            <p style="margin: 0; color: #6E6E78">We suggest a name and a description from the columns. Fix anything that is wrong. This is what agents will read.</p>
+          </div>
+          <div style="display: flex; gap: 16px; flex-wrap: wrap">
+            <div style="flex: 0 1 260px; min-width: 200px; display: flex; flex-direction: column; gap: 6px">
+              <sc-for list="{{ nameList }}" as="n" hint-placeholder-count="5">
+                <button onClick="{{ n.select }}" style="display: flex; gap: 10px; align-items: center; text-align: left; background: {{ n.bg }}; border: 1px solid {{ n.border }}; border-radius: 10px; padding: 10px 12px; cursor: pointer; min-height: 48px">
+                  <span style="width: 10px; height: 10px; border-radius: 50%; background: {{ n.color }}; flex: 0 0 auto"></span>
+                  <span style="display: flex; flex-direction: column; min-width: 0">
+                    <span style="font-weight: 600; font-size: 14px">{{ n.typeName }}</span>
+                    <span style="font-size: 12px; color: #6E6E78; font-family: ui-monospace, Menlo, monospace">{{ n.table }}</span>
+                  </span>
+                  <span style="margin-left: auto; font-size: 12px; font-weight: 600; color: {{ n.stateFg }}">{{ n.state }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="flex: 999 1 380px; min-width: 0; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <label for="type-name" style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">Call it</label>
+                <input id="type-name" value="{{ curName }}" onChange="{{ setName }}" style="padding: 10px 12px; border: 1px solid #D9D9D4; border-radius: 10px; font-size: 16px; font-weight: 600; color: #17171C; background: #FFFFFF">
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <label for="type-desc" style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">In plain words</label>
+                <textarea id="type-desc" value="{{ curDesc }}" onChange="{{ setDesc }}" rows="3" style="padding: 10px 12px; border: 1px solid #D9D9D4; border-radius: 10px; font-size: 14.5px; color: #17171C; background: #FFFFFF; resize: vertical"></textarea>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px">
+                <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">Which column identifies one of them?</div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap">
+                  <sc-for list="{{ curFields }}" as="f" hint-placeholder-count="5">
+                    <button onClick="{{ f.pickKey }}" style="padding: 6px 10px; border-radius: 999px; border: 1px solid {{ f.border }}; background: {{ f.bg }}; color: {{ f.fg }}; font-size: 12.5px; font-family: ui-monospace, Menlo, monospace; cursor: pointer; min-height: 32px">{{ f.name }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; margin-top: 4px">
+                <button onClick="{{ saveType }}" style="padding: 10px 16px; border-radius: 10px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 42px">{{ saveLabel }}</button>
+                <span style="font-size: 12.5px; color: #6E6E78">{{ curStoredAs }}</span>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button onClick="{{ goLink }}" style="padding: 12px 20px; border-radius: 12px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 15px; cursor: pointer; min-height: 46px">Link them</button>
+            <span style="font-size: 13.5px; color: #6E6E78">{{ namedSummary }}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLink }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 860px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 4 of 5</div>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 700">How do they connect?</h1>
+            <p style="margin: 0; color: #6E6E78">We spotted these from matching columns. Keep the ones that are true.</p>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <sc-for list="{{ relList }}" as="r" hint-placeholder-count="4">
+              <div style="display: flex; gap: 14px; align-items: center; background: #FFFFFF; border: 1px solid {{ r.border }}; border-radius: 12px; padding: 12px 14px; opacity: {{ r.opacity }}">
+                <span style="display: flex; flex-direction: column; gap: 1px; flex: 1 1 auto; min-width: 0">
+                  <span style="font-weight: 600; font-size: 15px"><span style="color: {{ r.fromColor }}">{{ r.fromName }}</span> {{ r.label }} <span style="color: {{ r.toColor }}">{{ r.toName }}</span></span>
+                  <span style="font-size: 12.5px; color: #6E6E78; font-family: ui-monospace, Menlo, monospace">{{ r.because }}</span>
+                </span>
+                <sc-if value="{{ r.pending }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ r.accept }}" style="padding: 8px 12px; border-radius: 10px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 38px">Keep</button>
+                  <button onClick="{{ r.reject }}" style="padding: 8px 12px; border-radius: 10px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13px; cursor: pointer; min-height: 38px">Not true</button>
+                </sc-if>
+                <sc-if value="{{ r.decided }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size: 13px; font-weight: 600; color: {{ r.decidedFg }}">{{ r.decidedText }}</span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button onClick="{{ goRules }}" style="padding: 12px 20px; border-radius: 12px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 15px; cursor: pointer; min-height: 46px">Add guardrails</button>
+            <span style="font-size: 13.5px; color: #6E6E78">{{ relSummary }}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isRules }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; padding: 32px; display: flex; flex-direction: column; gap: 20px; max-width: 920px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Step 5 of 5</div>
+            <h1 style="margin: 0; font-size: 28px; font-weight: 700">What should never happen without a check?</h1>
+            <p style="margin: 0; color: #6E6E78">Pick a guardrail that sounds like your team, then adjust it. Agents will check these before acting.</p>
+          </div>
+          <div style="display: flex; gap: 16px; flex-wrap: wrap">
+            <div style="flex: 0 1 300px; min-width: 220px; display: flex; flex-direction: column; gap: 6px">
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78; padding: 0 4px 4px">Common guardrails</div>
+              <sc-for list="{{ templates }}" as="tp" hint-placeholder-count="5">
+                <button onClick="{{ tp.pick }}" style="text-align: left; background: {{ tp.bg }}; border: 1px solid {{ tp.border }}; border-radius: 10px; padding: 10px 12px; cursor: pointer; min-height: 48px; font-size: 14px; display: flex; gap: 8px; align-items: center">
+                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: {{ tp.sevBg }}; color: {{ tp.sevFg }}; flex: 0 0 auto">{{ tp.sev }}</span>
+                  <span>{{ tp.text }}</span>
+                  <sc-if value="{{ tp.added }}" hint-placeholder-val="{{ false }}"><span style="margin-left: auto; color: #15803D; font-weight: 700">✓</span></sc-if>
+                </button>
+              </sc-for>
+            </div>
+            <div style="flex: 999 1 380px; min-width: 0; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+              <sc-if value="{{ noTemplate }}" hint-placeholder-val="{{ false }}"><div style="color: #6E6E78; font-size: 14.5px">Pick a guardrail on the left to see how it is written.</div></sc-if>
+              <sc-if value="{{ hasTemplate }}" hint-placeholder-val="{{ true }}">
+                <div style="font-weight: 700; font-size: 18px">{{ tplText }}</div>
+                <div style="display: flex; flex-direction: column; gap: 4px">
+                  <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">Applies to</div>
+                  <div style="font-size: 15px"><span style="font-weight: 600">{{ tplApplies }}</span> <span style="color: #6E6E78">· checked whenever an agent tries to {{ tplWhen }}</span></div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 4px">
+                  <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">How strict</div>
+                  <div style="display: flex; gap: 6px">
+                    <sc-for list="{{ sevChoices }}" as="sc" hint-placeholder-count="3">
+                      <button onClick="{{ sc.pick }}" style="padding: 7px 12px; border-radius: 999px; border: 1px solid {{ sc.border }}; background: {{ sc.bg }}; color: {{ sc.fg }}; font-size: 13px; font-weight: 600; cursor: pointer; min-height: 36px">{{ sc.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <label for="rule-approver" style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">Who signs off</label>
+                  <input id="rule-approver" value="{{ tplApprover }}" onChange="{{ setApprover }}" style="padding: 9px 12px; border: 1px solid #D9D9D4; border-radius: 10px; font-size: 14.5px; color: #17171C; background: #FFFFFF">
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <label for="rule-why" style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #6E6E78">Why this rule exists</label>
+                  <textarea id="rule-why" value="{{ tplWhy }}" onChange="{{ setWhy }}" rows="2" style="padding: 9px 12px; border: 1px solid #D9D9D4; border-radius: 10px; font-size: 14px; color: #17171C; background: #FFFFFF; resize: vertical"></textarea>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <button onClick="{{ addRule }}" style="padding: 10px 16px; border-radius: 10px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 14px; cursor: pointer; min-height: 42px">{{ addLabel }}</button>
+                  <span style="font-size: 12px; color: #6E6E78; font-family: ui-monospace, Menlo, monospace">{{ tplStored }}</span>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center">
+            <button onClick="{{ goMap }}" style="padding: 12px 20px; border-radius: 12px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 15px; cursor: pointer; min-height: 46px">See the map</button>
+            <span style="font-size: 13.5px; color: #6E6E78">{{ rulesSummary }}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isMap }}" hint-placeholder-val="{{ false }}">
+        <div style="flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; min-height: 0">
+          <sc-if value="{{ hasProposal }}" hint-placeholder-val="{{ true }}">
+            <div style="margin: 18px 22px 0; background: #FFFFFF; border: 1px solid #F5D9A8; border-radius: 14px; padding: 16px 18px; display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap">
+              <span style="flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px; background: #FEF3E2; color: #B45309; display: flex; align-items: center; justify-content: center">
+                <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M3 10h18M8 16h4"></path></svg>
+              </span>
+              <div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 6px">
+                <div style="font-weight: 700; font-size: 15px">Claude proposed a change from a question your team asked</div>
+                <div style="font-size: 14px; color: #3F3F46">Someone asked Claude <em>"what's our marketing spend this week?"</em>. Claude looked at Meta insights, found no Spend in the ontology, and suggests adding it so the next person gets the same answer.</div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px">
+                  <span style="font-size: 12.5px; padding: 3px 9px; border-radius: 999px; background: #E7EEFF; color: #1D4ED8; font-weight: 600">+ Spend · daily spend per campaign, from insights</span>
+                  <span style="font-size: 12.5px; padding: 3px 9px; border-radius: 999px; background: #E7EEFF; color: #1D4ED8; font-weight: 600">+ Spend belongs to Campaign</span>
+                  <span style="font-size: 12.5px; padding: 3px 9px; border-radius: 999px; background: #FEF3E2; color: #B45309; font-weight: 600">+ guardrail: spend is final only after 72 hours</span>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px; flex: 0 0 auto">
+                <button onClick="{{ acceptProposal }}" style="padding: 9px 14px; border-radius: 10px; border: none; background: #1D4ED8; color: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 40px">Add to the map</button>
+                <button onClick="{{ dismissProposal }}" style="padding: 9px 14px; border-radius: 10px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 40px">Not now</button>
+              </div>
+            </div>
+          </sc-if>
+          <div style="flex: 1 1 auto; display: flex; min-height: 0">
+            <div style="flex: 1 1 auto; min-width: 0; overflow: auto; position: relative; background-image: radial-gradient(#D6D6D0 1px, transparent 1px); background-size: 22px 22px">
+              <div style="position: relative; width: 1000px; height: 560px; margin: 0 auto">
+                <sc-for list="{{ edges }}" as="e" hint-placeholder-count="4">
+                  <div style="{{ e.lineStyle }}"></div>
+                  <div style="{{ e.labelStyle }}">{{ e.label }}</div>
+                </sc-for>
+                <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="5">
+                  <button onClick="{{ n.pick }}" style="{{ n.style }}">
+                    <div style="display: flex; align-items: center; gap: 10px">
+                      <span style="width: 12px; height: 12px; border-radius: 50%; background: {{ n.color }}; flex: 0 0 auto"></span>
+                      <span style="font-weight: 700; font-size: 16px">{{ n.name }}</span>
+                      <sc-if value="{{ n.isNew }}" hint-placeholder-val="{{ false }}"><span style="margin-left: auto; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: #E8F5EC; color: #15803D">new</span></sc-if>
+                    </div>
+                    <div style="font-size: 12.5px; color: #6E6E78; text-align: left">{{ n.tagline }}</div>
+                    <div style="display: flex; gap: 6px; flex-wrap: wrap">
+                      <sc-if value="{{ n.hasBlock }}" hint-placeholder-val="{{ true }}"><span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #FDE8E8; color: #B91C1C">{{ n.blockText }}</span></sc-if>
+                      <sc-if value="{{ n.hasWarn }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #FEF3E2; color: #B45309">{{ n.warnText }}</span></sc-if>
+                      <span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #F0F0ED; color: #6E6E78">{{ n.sourceText }}</span>
+                    </div>
+                  </button>
+                </sc-for>
+              </div>
+              <div style="position: absolute; left: 22px; bottom: 14px; display: flex; gap: 14px; font-size: 12.5px; color: #6E6E78; background: #FFFFFF; border: 1px solid #E6E6E2; border-radius: 999px; padding: 6px 14px">
+                <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #B91C1C; margin-right: 6px"></span>hard limit</span>
+                <span><span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #B45309; margin-right: 6px"></span>take care</span>
+                <span>Click a box to see or change it</span>
+              </div>
+            </div>
+            <sc-if value="{{ hasSelected }}" hint-placeholder-val="{{ false }}">
+              <aside style="flex: 0 0 360px; max-width: 100%; background: #FFFFFF; border-left: 1px solid #E6E6E2; padding: 20px; box-sizing: border-box; overflow: auto; display: flex; flex-direction: column; gap: 16px">
+                <div style="display: flex; align-items: flex-start; gap: 12px">
+                  <span style="margin-top: 8px; width: 12px; height: 12px; border-radius: 50%; background: {{ selColor }}; flex: 0 0 auto"></span>
+                  <div style="flex: 1 1 auto">
+                    <h2 style="margin: 0; font-size: 22px; font-weight: 700; line-height: 1.2">{{ selName }}</h2>
+                    <div style="font-size: 12.5px; color: #6E6E78; font-family: ui-monospace, Menlo, monospace">{{ selFile }}</div>
+                  </div>
+                  <button onClick="{{ closeSheet }}" aria-label="Close" style="width: 34px; height: 34px; border-radius: 10px; border: 1px solid #E6E6E2; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #6E6E78">
+                    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+                  </button>
+                </div>
+                <p style="margin: 0; font-size: 14.5px">{{ selDesc }}</p>
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Identified by</div>
+                  <div style="font-size: 14px; font-family: ui-monospace, Menlo, monospace">{{ selKey }}</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Guardrails</div>
+                  <sc-if value="{{ selNoRules }}" hint-placeholder-val="{{ false }}"><div style="font-size: 13.5px; color: #6E6E78">None yet. Add one in step 5.</div></sc-if>
+                  <sc-for list="{{ selRules }}" as="r" hint-placeholder-count="2">
+                    <div style="border: 1px solid #E6E6E2; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px">
+                      <div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: {{ r.sevBg }}; color: {{ r.sevFg }}">{{ r.sev }}</span><span style="font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #8A8A94">{{ r.id }}</span></div>
+                      <div style="font-size: 14px; font-weight: 600">{{ r.text }}</div>
+                      <div style="font-size: 12.5px; color: #6E6E78">Sign-off: {{ r.approver }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px">
+                  <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Where the rows live</div>
+                  <div style="font-size: 14px">{{ selSource }}</div>
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px">
+                  <button onClick="{{ editSelected }}" style="padding: 8px 12px; border-radius: 10px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">Change the wording</button>
+                  <button onClick="{{ goRules }}" style="padding: 8px 12px; border-radius: 10px; border: 1px solid #D9D9D4; background: #FFFFFF; font-weight: 600; font-size: 13.5px; cursor: pointer; min-height: 38px">Add a guardrail</button>
+                </div>
+              </aside>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ showActivity }}" hint-placeholder-val="{{ false }}">
+        <aside style="flex: 0 0 320px; max-width: 100%; background: #FFFFFF; border-left: 1px solid #E6E6E2; padding: 20px; box-sizing: border-box; overflow: auto; display: flex; flex-direction: column; gap: 14px">
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6E6E78">Activity</div>
+          <sc-for list="{{ activity }}" as="ev" hint-placeholder-count="4">
+            <div style="display: flex; gap: 10px; align-items: flex-start; padding-bottom: 12px; border-bottom: 1px solid #F0F0ED">
+              <span style="flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: {{ ev.color }}; margin-top: 7px"></span>
+              <div style="display: flex; flex-direction: column; gap: 2px">
+                <div style="font-size: 13.5px">{{ ev.text }}</div>
+                <div style="font-size: 12px; color: #8A8A94">{{ ev.who }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </aside>
+      </sc-if>
+
+    </main>
+  </div>
+
+  <footer style="padding: 10px 22px; border-top: 1px solid #E6E6E2; background: #FFFFFF; color: #6E6E78; font-size: 12.5px; display: flex; gap: 16px; flex-wrap: wrap; align-items: center">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><path d="M14 3v6h6"></path></svg>
+    <span>{{ footerText }}</span>
+    <span>·</span>
+    <span>Agents read the same files over MCP</span>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#1D4ED8"},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      screen: 'connect',
+      connected: { meta: true, google: false, shopify: false, snowflake: false, bigquery: false, files: false },
+      included: { campaigns: true, adsets: true, ads: false, insights: true, audiences: true, spend_daily: true },
+      types: {
+        campaigns: { name: 'Campaign', desc: 'A goal and a budget. Everything under it works towards that goal.', key: 'id', done: true },
+        adsets: { name: 'Ad set', desc: 'Who sees the ads, where, and on what budget. Learns for a few days after any big change.', key: 'id', done: true },
+        ads: { name: 'Ad', desc: 'One creative shown in one ad set.', key: 'id', done: false },
+        insights: { name: 'Conversion', desc: 'A purchase or sign-up Meta credits to an ad, counted under an attribution window.', key: 'campaign_id', done: false },
+        audiences: { name: 'Audience', desc: 'Who you are trying to reach: a list, a pixel, or a lookalike built from one of those.', key: 'id', done: false },
+        spend_daily: { name: 'Spend', desc: 'What was spent per campaign per day, from the finance warehouse.', key: 'campaign_ref', done: false }
+      },
+      selectedTable: 'insights',
+      rels: { r1: null, r2: null, r3: null, r4: null, r5: null },
+      rules: [],
+      tpl: null, tplSev: 'block', tplApprover: '', tplWhy: '',
+      proposal: 'pending',
+      selectedNode: null,
+      showActivity: false,
+      activity: [
+        { text: 'Connected Meta Ads (via its MCP). Token lives in META_ACCESS_TOKEN, not in the ontology.', who: 'Priya · 09:12', color: '#1D4ED8' },
+        { text: 'Named Campaign and Ad set from the Meta tables.', who: 'Priya · 09:20', color: '#1D4ED8' },
+        { text: 'Claude proposed a Spend type after a question about weekly marketing spend.', who: 'Claude via MCP · 10:41', color: '#B45309' }
+      ]
+    };
+  }
+
+  catalog() {
+    return {
+      sources: [
+        { key: 'meta', name: 'Meta Ads', kind: 'via its MCP', color: '#1D4ED8', blurb: 'Campaigns, ad sets, ads, insights, audiences.', cred: 'META_ACCESS_TOKEN' },
+        { key: 'google', name: 'Google Ads', kind: 'via its MCP', color: '#15803D', blurb: 'Campaigns, ad groups, keywords, conversions.', cred: 'GOOGLE_ADS_TOKEN' },
+        { key: 'shopify', name: 'Shopify', kind: 'via its MCP', color: '#7C3AED', blurb: 'Orders, products, customers, refunds.', cred: 'SHOPIFY_TOKEN' },
+        { key: 'snowflake', name: 'Snowflake', kind: 'warehouse', color: '#0F766E', blurb: 'Your finance and marketing tables.', cred: 'read-only service account' },
+        { key: 'bigquery', name: 'BigQuery', kind: 'warehouse', color: '#B45309', blurb: 'GA4 exports and your own tables.', cred: 'read-only service account' },
+        { key: 'files', name: 'CSV or Parquet files', kind: 'files', color: '#8A8A94', blurb: 'Drop a folder; good for a first try.', cred: 'local folder' }
+      ],
+      tables: [
+        { key: 'campaigns', table: 'campaigns', src: 'meta', source: 'Meta Ads', rows: '42 rows', fields: ['id', 'name', 'objective', 'status', 'daily_budget', 'is_in_experiment'] },
+        { key: 'adsets', table: 'adsets', src: 'meta', source: 'Meta Ads', rows: '118 rows', fields: ['id', 'campaign_id', 'name', 'daily_budget', 'learning_stage', 'custom_audience_ids'] },
+        { key: 'ads', table: 'ads', src: 'meta', source: 'Meta Ads', rows: '340 rows', fields: ['id', 'adset_id', 'name', 'creative_id', 'status'] },
+        { key: 'insights', table: 'insights', src: 'meta', source: 'Meta Ads', rows: '9,820 rows', fields: ['date', 'campaign_id', 'spend', 'purchases', 'attribution_window'] },
+        { key: 'audiences', table: 'custom_audiences', src: 'meta', source: 'Meta Ads', rows: '27 rows', fields: ['id', 'name', 'subtype', 'approximate_count', 'lookalike_spec'] },
+        { key: 'spend_daily', table: 'MARKETING.SPEND_DAILY', src: 'snowflake', source: 'Snowflake', rows: '180k rows', fields: ['date', 'channel', 'campaign_ref', 'amount_usd'] }
+      ],
+      colors: { campaigns: '#1D4ED8', adsets: '#7C3AED', ads: '#0F766E', insights: '#B45309', audiences: '#DB2777', spend_daily: '#0F766E' },
+      positions: { campaigns: [300, 40], adsets: [640, 40], ads: [640, 260], insights: [300, 260], audiences: [640, 440], spend_daily: [40, 260] },
+      rels: [
+        { id: 'r1', from: 'adsets', to: 'campaigns', label: 'belongs to', because: 'adsets.campaign_id matches campaigns.id' },
+        { id: 'r2', from: 'ads', to: 'adsets', label: 'belongs to', because: 'ads.adset_id matches adsets.id' },
+        { id: 'r3', from: 'insights', to: 'campaigns', label: 'is measured on', because: 'insights.campaign_id matches campaigns.id' },
+        { id: 'r4', from: 'adsets', to: 'audiences', label: 'targets', because: 'adsets.custom_audience_ids lists custom_audiences.id' },
+        { id: 'r5', from: 'spend_daily', to: 'campaigns', label: 'belongs to', because: 'SPEND_DAILY.campaign_ref matches campaigns.id' }
+      ],
+      templates: [
+        { key: 't1', text: 'Only an active Campaign can be paused', applies: 'campaigns', when: 'pause a campaign', sev: 'block', approver: 'Paid social lead', why: 'A paused campaign is already paused; a second pause is a mistake in the request.', stored: 'MA-011 · status == "ACTIVE"' },
+        { key: 't2', text: 'Campaigns in a running lift test are frozen', applies: 'campaigns', when: 'pause or change budget', sev: 'block', approver: 'Measurement team', why: 'Changing a campaign mid-test breaks the measurement for everyone in the test.', stored: 'MA-010 · is_in_experiment == false' },
+        { key: 't3', text: 'Budget changes over 20% restart learning', applies: 'adsets', when: 'change a budget', sev: 'warn', approver: 'Paid social lead', why: 'Meta re-enters the learning phase; results are noisy for a few days.', stored: 'MA-013 · change.pct <= 20' },
+        { key: 't4', text: 'Compare Conversions only under one attribution window', applies: 'insights', when: 'compare two reports', sev: 'block', approver: 'No one; this is a read', why: 'Numbers under different windows answer different questions.', stored: 'MA-001 · a.attribution_window == b.attribution_window' },
+        { key: 't5', text: 'A lookalike Audience needs a seed of 100+ people', applies: 'audiences', when: 'build a lookalike', sev: 'block', approver: 'Paid social lead', why: 'Meta refuses smaller seeds, and tiny seeds make poor lookalikes anyway.', stored: 'MA-015 · seed.approximate_count >= 100' }
+      ]
+    };
+  }
+
+  renderVals() {
+    const s = this.state; const C = this.catalog();
+    const go = (screen) => () => this.setState({ screen, selectedNode: null });
+    const connectedCount = Object.values(s.connected).filter(Boolean).length;
+    const includedKeys = C.tables.filter(t => s.included[t.key] && s.connected[t.src]).map(t => t.key);
+    const namedCount = includedKeys.filter(k => s.types[k].done).length;
+    const keptRels = C.rels.filter(r => s.rels[r.id] === true && includedKeys.includes(r.from) && includedKeys.includes(r.to));
+    const pendingRels = C.rels.filter(r => s.rels[r.id] === null && includedKeys.includes(r.from) && includedKeys.includes(r.to)).length;
+    const allRules = s.rules.concat(s.proposal === 'accepted' ? [{ id: 'SP-001', text: 'Spend figures are final only after 72 hours', applies: 'spend_daily', sev: 'warn', approver: 'No one; wait before reading out' }] : []);
+    const fileCount = 1 + namedCount + (s.proposal === 'accepted' ? 1 : 0) + (allRules.length > 0 ? 1 : 0) + connectedCount;
+
+    const stepDefs = [
+      { key: 'connect', title: 'Where the data lives', status: connectedCount + ' source' + (connectedCount === 1 ? '' : 's') + ' connected', done: connectedCount > 0 },
+      { key: 'pull', title: 'What is there', status: includedKeys.length + ' tables kept', done: includedKeys.length > 0 },
+      { key: 'name', title: 'What each thing is', status: namedCount + ' of ' + includedKeys.length + ' named', done: namedCount === includedKeys.length && includedKeys.length > 0 },
+      { key: 'link', title: 'How they connect', status: keptRels.length + ' kept · ' + pendingRels + ' to decide', done: pendingRels === 0 && keptRels.length > 0 },
+      { key: 'rules', title: 'Guardrails', status: allRules.length + ' in place', done: allRules.length > 0 },
+      { key: 'map', title: 'Your map', status: (namedCount + (s.proposal === 'accepted' ? 1 : 0)) + ' things · ' + (keptRels.length + (s.proposal === 'accepted' ? 1 : 0)) + ' links', done: false }
+    ];
+    const steps = stepDefs.map((d, i) => ({
+      ...d, go: go(d.key),
+      bg: s.screen === d.key ? '#EEF2FF' : 'transparent',
+      mark: d.done ? '✓' : String(i + 1),
+      dotBg: d.done ? '#15803D' : (s.screen === d.key ? '#1D4ED8' : '#E6E6E2'),
+      dotFg: d.done || s.screen === d.key ? '#FFFFFF' : '#6E6E78'
+    }));
+
+    const sources = C.sources.map(src => ({ ...src, connected: !!s.connected[src.key], notConnected: !s.connected[src.key], border: s.connected[src.key] ? src.color : '#E6E6E2', connect: () => this.setState({ connected: { ...s.connected, [src.key]: true }, activity: [{ text: 'Connected ' + src.name + '. Credential: ' + src.cred + '.', who: 'Priya · now', color: '#1D4ED8' }, ...s.activity] }) }));
+
+    const tables = C.tables.filter(t => s.connected[t.src]).map(t => ({ ...t, fieldsText: t.fields.join(', '), tick: s.included[t.key] ? '✓' : '', border: s.included[t.key] ? '#1D4ED8' : '#E6E6E2', boxBorder: s.included[t.key] ? '#1D4ED8' : '#C9C9C3', boxBg: s.included[t.key] ? '#1D4ED8' : '#FFFFFF', toggle: () => this.setState({ included: { ...s.included, [t.key]: !s.included[t.key] } }) }));
+
+    const nameList = includedKeys.map(k => { const t = C.tables.find(x => x.key === k); const ty = s.types[k]; const sel = s.selectedTable === k; return { table: t.table, typeName: ty.name, color: C.colors[k], bg: sel ? '#EEF2FF' : '#FFFFFF', border: sel ? '#1D4ED8' : '#E6E6E2', state: ty.done ? 'Done' : 'To do', stateFg: ty.done ? '#15803D' : '#B45309', select: () => this.setState({ selectedTable: k }) }; });
+    const curKey = includedKeys.includes(s.selectedTable) ? s.selectedTable : (includedKeys[0] || 'campaigns');
+    const cur = s.types[curKey]; const curTable = C.tables.find(x => x.key === curKey);
+    const curFields = curTable.fields.map(f => ({ name: f, pickKey: () => this.setState({ types: { ...s.types, [curKey]: { ...cur, key: f } } }), border: cur.key === f ? '#1D4ED8' : '#D9D9D4', bg: cur.key === f ? '#1D4ED8' : '#FFFFFF', fg: cur.key === f ? '#FFFFFF' : '#17171C' }));
+    const snake = (n) => n.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+    const relList = C.rels.filter(r => includedKeys.includes(r.from) && includedKeys.includes(r.to)).map(r => { const v = s.rels[r.id]; return { ...r, fromName: s.types[r.from].name, toName: s.types[r.to].name, fromColor: C.colors[r.from], toColor: C.colors[r.to], pending: v === null, decided: v !== null, decidedText: v ? 'Kept' : 'Dropped', decidedFg: v ? '#15803D' : '#6E6E78', border: v === true ? '#1D4ED8' : '#E6E6E2', opacity: v === false ? 0.45 : 1, accept: () => this.setState({ rels: { ...s.rels, [r.id]: true } }), reject: () => this.setState({ rels: { ...s.rels, [r.id]: false } }) }; });
+
+    const tpl = C.templates.find(t => t.key === s.tpl);
+    const templates = C.templates.map(t => ({ ...t, sevBg: t.sev === 'block' ? '#FDE8E8' : '#FEF3E2', sevFg: t.sev === 'block' ? '#B91C1C' : '#B45309', added: s.rules.some(r => r.tpl === t.key), bg: s.tpl === t.key ? '#EEF2FF' : '#FFFFFF', border: s.tpl === t.key ? '#1D4ED8' : '#E6E6E2', pick: () => this.setState({ tpl: t.key, tplSev: t.sev, tplApprover: t.approver, tplWhy: t.why }) }));
+    const sevChoices = [['block', 'Stop it'], ['warn', 'Allow, but warn'], ['info', 'Just a note']].map(([v, label]) => ({ label, pick: () => this.setState({ tplSev: v }), border: s.tplSev === v ? '#1D4ED8' : '#D9D9D4', bg: s.tplSev === v ? '#1D4ED8' : '#FFFFFF', fg: s.tplSev === v ? '#FFFFFF' : '#17171C' }));
+    const tplAdded = tpl ? s.rules.some(r => r.tpl === tpl.key) : false;
+
+    const W = 200, H = 84;
+    const visibleKeys = includedKeys.filter(k => s.types[k].done && (k !== 'spend_daily' || s.proposal === 'accepted'));
+    const nodes = visibleKeys.map(k => {
+      const ty = s.types[k]; const [x, y] = C.positions[k]; const t = C.tables.find(x => x.key === k);
+      const rules = allRules.filter(r => r.applies === k); const blocks = rules.filter(r => r.sev === 'block').length; const warns = rules.filter(r => r.sev === 'warn').length;
+      const sel = s.selectedNode === k;
+      return { key: k, name: ty.name, tagline: ty.desc.split('.')[0], color: C.colors[k], isNew: k === 'spend_daily', hasBlock: blocks > 0, blockText: blocks + (blocks === 1 ? ' hard limit' : ' hard limits'), hasWarn: warns > 0, warnText: warns + ' to watch', sourceText: t.source,
+        style: 'position: absolute; left: ' + x + 'px; top: ' + y + 'px; width: ' + W + 'px; height: ' + H + 'px; box-sizing: border-box; padding: 10px 12px; border-radius: 14px; border: 1px solid #E6E6E2; background: #FFFFFF; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 4px; justify-content: center; box-shadow: ' + (sel ? '0 0 0 3px ' + C.colors[k] + ', 0 8px 20px rgba(23,23,28,0.10)' : '0 1px 2px rgba(23,23,28,0.06)') + '; z-index: 1; font-family: inherit; color: inherit',
+        pick: () => this.setState({ selectedNode: sel ? null : k }) };
+    });
+    const center = (k) => { const [x, y] = C.positions[k]; return { x: x + W / 2, y: y + H / 2 }; };
+    const edgeDefs = keptRels.concat(s.proposal === 'accepted' ? [{ id: 'p', from: 'spend_daily', to: 'campaigns', label: 'belongs to' }] : []).filter(r => visibleKeys.includes(r.from) && visibleKeys.includes(r.to));
+    const edges = edgeDefs.map(r => { const p = center(r.from), q = center(r.to); const dx = q.x - p.x, dy = q.y - p.y, len = Math.sqrt(dx * dx + dy * dy), ang = Math.atan2(dy, dx) * 180 / Math.PI; const on = s.selectedNode === r.from || s.selectedNode === r.to; return { label: r.label, lineStyle: 'position: absolute; left: ' + p.x + 'px; top: ' + p.y + 'px; width: ' + len + 'px; height: 2px; background: ' + (on ? '#17171C' : '#C9C9C3') + '; transform: rotate(' + ang + 'deg); transform-origin: 0 50%; z-index: 0', labelStyle: 'position: absolute; left: ' + ((p.x + q.x) / 2 - 44) + 'px; top: ' + ((p.y + q.y) / 2 - 11) + 'px; width: 88px; text-align: center; font-size: 11.5px; color: ' + (on ? '#17171C' : '#8A8A94') + '; background: #F6F6F4; border-radius: 999px; padding: 2px 0; z-index: 0' }; });
+
+    const selK = s.selectedNode; const selT = selK ? s.types[selK] : null; const selTable = selK ? C.tables.find(x => x.key === selK) : null;
+    const selRules = selK ? allRules.filter(r => r.applies === selK).map(r => ({ ...r, sevBg: r.sev === 'block' ? '#FDE8E8' : (r.sev === 'warn' ? '#FEF3E2' : '#E7EEFF'), sevFg: r.sev === 'block' ? '#B91C1C' : (r.sev === 'warn' ? '#B45309' : '#1D4ED8') })) : [];
+
+    return {
+      savedText: 'Saved · ' + fileCount + ' YAML files on the ontology server',
+      toggleActivity: () => this.setState({ showActivity: !s.showActivity }), showActivity: s.showActivity, activityBg: s.showActivity ? '#17171C' : '#FFFFFF', activityFg: s.showActivity ? '#FFFFFF' : '#17171C', activity: s.activity,
+      steps,
+      goInbox: go('map'), inboxCount: s.proposal === 'pending' ? '1' : '0', inboxStatus: s.proposal === 'pending' ? 'Claude suggested a Spend type' : (s.proposal === 'accepted' ? 'Spend added to the map' : 'Nothing waiting'), inboxBg: s.proposal === 'pending' ? '#FFFBF3' : '#FFFFFF', inboxBorder: s.proposal === 'pending' ? '#F5D9A8' : '#E6E6E2',
+      isConnect: s.screen === 'connect', isPull: s.screen === 'pull', isName: s.screen === 'name', isLink: s.screen === 'link', isRules: s.screen === 'rules', isMap: s.screen === 'map',
+      sources, connectedSummary: connectedCount + ' connected. You can add more later.', goPull: go('pull'), goConnect: go('connect'), goName: go('name'), goLink: go('link'), goRules: go('rules'), goMap: go('map'),
+      tables,
+      nameList, curName: cur.name, curDesc: cur.desc, curFields,
+      setName: (e) => this.setState({ types: { ...s.types, [curKey]: { ...cur, name: e && e.target ? e.target.value : cur.name } } }),
+      setDesc: (e) => this.setState({ types: { ...s.types, [curKey]: { ...cur, desc: e && e.target ? e.target.value : cur.desc } } }),
+      saveType: () => this.setState({ types: { ...s.types, [curKey]: { ...cur, done: true } }, activity: [{ text: 'Named ' + cur.name + ' from ' + curTable.table + '.', who: 'Priya · now', color: '#1D4ED8' }, ...s.activity] }),
+      saveLabel: cur.done ? 'Save changes' : 'Looks right',
+      curStoredAs: 'stored as types/' + snake(cur.name) + '.yaml',
+      namedSummary: namedCount + ' of ' + includedKeys.length + ' named. The rest can wait.',
+      relList, relSummary: keptRels.length + ' kept · ' + pendingRels + ' still to decide',
+      templates, noTemplate: !tpl, hasTemplate: !!tpl,
+      tplText: tpl ? tpl.text : '', tplApplies: tpl ? s.types[tpl.applies].name : '', tplWhen: tpl ? tpl.when : '', tplApprover: s.tplApprover, tplWhy: s.tplWhy, tplStored: tpl ? 'stored as ' + tpl.stored : '',
+      sevChoices, setApprover: (e) => this.setState({ tplApprover: e && e.target ? e.target.value : '' }), setWhy: (e) => this.setState({ tplWhy: e && e.target ? e.target.value : '' }),
+      addRule: () => { if (!tpl || tplAdded) return; this.setState({ rules: [...s.rules, { tpl: tpl.key, id: tpl.stored.split(' ·')[0], text: tpl.text, applies: tpl.applies, sev: s.tplSev, approver: s.tplApprover }], activity: [{ text: 'Added guardrail: ' + tpl.text + '.', who: 'Priya · now', color: '#B91C1C' }, ...s.activity] }); },
+      addLabel: tplAdded ? 'Already added' : 'Add this guardrail',
+      rulesSummary: allRules.length + ' guardrail' + (allRules.length === 1 ? '' : 's') + ' in place',
+      hasProposal: s.proposal === 'pending',
+      acceptProposal: () => this.setState({ proposal: 'accepted', types: { ...s.types, spend_daily: { ...s.types.spend_daily, done: true } }, included: { ...s.included, spend_daily: true }, connected: { ...s.connected, snowflake: true }, activity: [{ text: 'Accepted Spend, its link to Campaign, and one guardrail, as proposed by Claude.', who: 'Priya · now', color: '#15803D' }, ...s.activity] }),
+      dismissProposal: () => this.setState({ proposal: 'dismissed' }),
+      nodes, edges,
+      hasSelected: !!selT, selName: selT ? selT.name : '', selColor: selK ? C.colors[selK] : '#000', selDesc: selT ? selT.desc : '', selKey: selT ? selT.key : '', selFile: selT ? 'types/' + snake(selT.name) + '.yaml' : '', selRules, selNoRules: !!selT && selRules.length === 0, selSource: selTable ? selTable.source + ' · ' + selTable.table + ' · ' + selTable.rows : '',
+      closeSheet: () => this.setState({ selectedNode: null }),
+      editSelected: () => this.setState({ screen: 'name', selectedTable: selK }),
+      footerText: 'Everything here is ' + fileCount + ' small YAML files on the ontology server; every change is a reviewable diff'
+    };
+  }
+}
+</script>
+</body>
+</html>
