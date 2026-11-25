@@ -1,0 +1,7 @@
+connection: shop_files
+kind: csv
+path: data
+description: >
+  Nightly CSV extracts from the storefront and the order management system.
+  Good enough for demos and for agents to check rules against; the warehouse
+  (shop_bigquery) is the source of truth.

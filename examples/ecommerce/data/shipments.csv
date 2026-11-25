@@ -1,0 +1,13 @@
+shipment_id,order_id,carrier_id,warehouse_id,status,service,weight_kg,contains_hazmat,oversize,destination_region,shipped_on,delivered_on
+SHP-3001,ORD-1001,CAR-GRN,WH-NJ,delivered,standard,14.2,false,false,east,2026-03-03,2026-03-06
+SHP-3002,ORD-1002,CAR-AIR,WH-TX,in_transit,express,1.9,false,false,central,2026-03-06,
+SHP-3004,ORD-1004,CAR-GRN,WH-TX,label_created,standard,9.6,true,false,east,,
+SHP-3005,ORD-1005,CAR-WST,WH-SEA,ready_for_pickup,standard,1.4,true,false,west,,
+SHP-3007,ORD-1007,CAR-RGL,WH-NJ,delivered,standard,3.5,false,false,central,2026-03-11,2026-03-14
+SHP-3008,ORD-1008,CAR-WST,WH-TX,delivered,standard,86.0,false,true,west,2026-03-13,2026-03-19
+SHP-3010,ORD-1010,CAR-GRN,WH-TX,delivered,standard,2.4,true,false,central,2026-02-15,2026-02-19
+SHP-3013,ORD-1013,CAR-SWF,WH-NJ,ready_for_pickup,express,1.9,false,false,east,,
+SHP-3014,ORD-1014,CAR-RGL,WH-NJ,delivered,standard,3.5,false,false,central,2026-03-02,2026-03-05
+SHP-3016,ORD-1016,CAR-GRN,WH-SEA,delivered,standard,3.0,false,false,central,2026-02-21,2026-02-26
+SHP-3017,ORD-1017,CAR-WST,WH-TX,in_transit,standard,5.9,true,false,west,2026-03-31,
+SHP-3018,ORD-1018,CAR-SWF,WH-NJ,delivered,express,1.5,true,false,east,2026-03-19,2026-03-20

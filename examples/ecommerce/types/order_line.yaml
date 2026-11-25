@@ -1,0 +1,18 @@
+type: OrderLine
+description: One variant and quantity inside an order. Final-sale lines cannot be returned.
+properties:
+  line_id:        { type: string, key: true }
+  order_id:       string
+  variant_id:     string
+  qty:            integer
+  unit_price_usd: { type: number, unit: USD }
+  line_total_usd: { type: number, unit: USD }
+  final_sale:     { type: boolean, description: "Copied from the product at checkout; final-sale lines are excluded from returns" }
+relationships:
+  part_of:     { to: Order, cardinality: many-to-one }
+  for_variant: { to: Variant, cardinality: many-to-one }
+source:
+  connection: shop_files
+  table: order_lines
+  key: line_id
+owner: support@lumen.example

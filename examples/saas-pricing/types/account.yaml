@@ -1,0 +1,21 @@
+type: Account
+description: >
+  A paying (or trialling) company. Status follows the money: trial accounts have
+  no payment method on file, past_due accounts have an unpaid invoice, churned
+  accounts have cancelled everything.
+properties:
+  account_id:    { type: string, key: true, description: "Billing account id, e.g. ACC-1004" }
+  name:          string
+  status:        { type: enum, values: [trial, active, past_due, churned], description: "trial = no payment method yet; past_due = an invoice is 15+ days late" }
+  segment:       { type: enum, values: [self_serve, mid_market, enterprise], description: "Set by Sales; drives who owns the account" }
+  country:       { type: string, description: "ISO country code of the billing address" }
+  billing_email: string
+  created_on:    date
+  trial_ends_on: { type: date, description: "Empty once the account has converted" }
+  arr_usd:       { type: number, unit: USD, description: "Annual recurring revenue across all subscriptions" }
+source:
+  connection: billing_files
+  table: accounts
+  key: account_id
+owner: billing@northstar.example
+tags: [accounts, core]

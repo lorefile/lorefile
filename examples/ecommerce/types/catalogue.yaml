@@ -1,0 +1,78 @@
+types:
+  - type: Product
+    description: >
+      A sellable item as merchandising sees it (a lamp, a kettle). Customers buy
+      Variants of it. The hazardous flag drives carrier and warehouse rules.
+    properties:
+      product_id:     { type: string, key: true, description: "Catalogue id, e.g. PRD-110" }
+      name:           string
+      category:       { type: enum, values: [lighting, kitchen, outdoor, electronics, cleaning] }
+      hazardous:      { type: boolean, description: "Lithium batteries, aerosols or fuels: regulated as dangerous goods in transport and storage" }
+      final_sale:     { type: boolean, description: "Clearance items that cannot be returned" }
+      unit_price_usd: { type: number, unit: USD, description: "List price before variant adjustments" }
+      status:         { type: enum, values: [active, discontinued] }
+    source:
+      connection: shop_files
+      table: products
+      key: product_id
+    owner: merchandising@lumen.example
+    tags: [catalogue, core]
+
+  - type: Variant
+    description: >
+      A specific colour or size of a Product with its own SKU, price and weight.
+      Inventory and order lines point at variants, never at products.
+    properties:
+      variant_id: { type: string, key: true, description: "SKU, e.g. SKU-110-BLK" }
+      product_id: string
+      name:       { type: string, description: "Human label, e.g. Black / 60cm" }
+      weight_kg:  { type: number, unit: kg, description: "Packed weight, used for carrier limits" }
+      price_usd:  { type: number, unit: USD }
+      status:     { type: enum, values: [active, discontinued] }
+    relationships:
+      variant_of: { to: Product, cardinality: many-to-one }
+    source:
+      connection: shop_files
+      table: variants
+      key: variant_id
+    owner: merchandising@lumen.example
+    tags: [catalogue, core]
+
+  - type: Inventory
+    description: >
+      Units of one variant in one warehouse. on_hand is physical stock,
+      reserved is promised to unshipped orders. The hazardous flag is copied
+      from the product so warehouse rules can be checked without a join.
+    properties:
+      inventory_id:  { type: string, key: true }
+      variant_id:    string
+      warehouse_id:  string
+      on_hand:       { type: integer, description: "Physical units counted in the warehouse" }
+      reserved:      { type: integer, description: "Units allocated to paid, unshipped orders" }
+      reorder_point: { type: integer, description: "Below this, Planning raises a purchase order" }
+      hazardous:     { type: boolean, description: "Copied from Product.hazardous" }
+    relationships:
+      of_variant: { to: Variant, cardinality: many-to-one }
+      held_at:    { to: Warehouse, cardinality: many-to-one }
+    source:
+      connection: shop_files
+      table: inventory
+      key: inventory_id
+    owner: planning@lumen.example
+    tags: [stock]
+
+  - type: Warehouse
+    description: A distribution centre we ship from. Only licensed sites may hold hazardous goods.
+    properties:
+      warehouse_id:    { type: string, key: true }
+      name:            string
+      region:          { type: enum, values: [east, central, west] }
+      hazmat_licensed: { type: boolean, description: "Holds the local dangerous-goods storage licence" }
+      status:          { type: enum, values: [active, closed] }
+    instances:
+      - { warehouse_id: WH-NJ,  name: Newark DC,  region: east,    hazmat_licensed: true,  status: active }
+      - { warehouse_id: WH-TX,  name: Dallas DC,  region: central, hazmat_licensed: true,  status: active }
+      - { warehouse_id: WH-SEA, name: Seattle DC, region: west,    hazmat_licensed: false, status: active }
+      - { warehouse_id: WH-ATL, name: Atlanta DC, region: east,    hazmat_licensed: false, status: closed }
+    owner: fulfilment@lumen.example
+    tags: [stock]

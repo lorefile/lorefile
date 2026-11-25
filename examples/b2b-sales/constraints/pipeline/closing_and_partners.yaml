@@ -1,0 +1,81 @@
+constraints:
+  - id: CW-001
+    name: Closed-won needs a signed order form
+    applies_to: Opportunity
+    rule: order_form_signed == true
+    severity: block
+    rationale: Revenue recognition and commission both start from the countersigned order form; a verbal yes is not a booking.
+    owner: finance@meridian.example
+    tags: [compliance]
+
+  - id: CW-002
+    name: Closed-won needs an accepted proposal
+    applies_to: Proposal
+    rule: status == "accepted"
+    severity: block
+    rationale: The accepted proposal is the scope the customer agreed to; onboarding is planned from it.
+    owner: sales-ops@meridian.example
+
+  - id: CW-003
+    name: Legal reviews deals above $100k
+    applies_to: close_won
+    rule: opportunity.amount_usd > 100000.0 implies proposal.legal_reviewed == true
+    severity: block
+    rationale: Contracts above $100k routinely carry liability and data-processing terms Legal must have seen.
+    owner: legal@meridian.example
+    tags: [compliance]
+
+  - id: CW-004
+    name: Proposal must belong to the opportunity
+    applies_to: close_won
+    rule: proposal.opportunity_id == opportunity.opportunity_id
+    severity: block
+    rationale: Prevents closing a deal on another deal's paperwork.
+
+  - id: CW-005
+    name: Closed-won needs a named economic buyer
+    applies_to: Opportunity
+    rule: economic_buyer_contact_id != null && economic_buyer_contact_id != ""
+    severity: block
+    rationale: Every won deal records who owned the budget; it is the first thing Customer Success asks for.
+    owner: sales-ops@meridian.example
+
+  - id: PD-001
+    name: Partner must be active
+    applies_to: Partner
+    rule: status == "active"
+    severity: block
+    rationale: Suspended partners are in a compliance or payment dispute; no new registrations until Channel clears them.
+    owner: channel@meridian.example
+
+  - id: PD-002
+    name: Partner must cover the deal's region
+    applies_to: sourced_by
+    rule: opportunity.region in partner.regions
+    severity: block
+    rationale: Referral fees are only payable inside the regions in the partner agreement.
+    owner: channel@meridian.example
+
+  - id: PD-003
+    name: Large deals prefer gold partners
+    applies_to: sourced_by
+    rule: opportunity.amount_usd > 250000.0 implies partner.tier == "gold"
+    severity: warn
+    rationale: Deals above $250k need a partner with enterprise delivery capacity; Channel reviews exceptions.
+    owner: channel@meridian.example
+
+  - id: PD-004
+    name: One partner per deal
+    applies_to: Opportunity
+    rule: partner_id == null || partner_id == ""
+    severity: block
+    rationale: Two partners claiming one deal is a fee dispute; Channel resolves conflicts before anything is registered.
+    owner: channel@meridian.example
+
+  - id: PD-005
+    name: Register before Proposal
+    applies_to: Opportunity
+    rule: stage_id in ["ST-01", "ST-02", "ST-03"]
+    severity: block
+    rationale: A partner registering a deal that is already at Proposal did not source it; late registrations are influence, not sourcing.
+    owner: channel@meridian.example

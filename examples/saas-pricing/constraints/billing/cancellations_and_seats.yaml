@@ -1,0 +1,57 @@
+constraints:
+  - id: CN-001
+    name: No cancellation inside an active contract term
+    applies_to: cancel_subscription
+    rule: contract.status != "active" || contract.end_on <= subscription.period_end
+    severity: block
+    rationale: The order form commits the customer to the full term; early exit is a Legal conversation, not a billing change.
+    owner: legal@northstar.example
+    tags: [contracts]
+
+  - id: CN-002
+    name: Contract must govern the subscription
+    applies_to: cancel_subscription
+    rule: subscription.contract_id == contract.contract_id
+    severity: block
+    rationale: Checking the wrong contract would let a committed subscription slip out.
+
+  - id: CN-003
+    name: Cancellation takes effect at period end
+    applies_to: Subscription
+    rule: auto_renew == true
+    severity: info
+    rationale: >
+      Informational: cancelling only turns auto_renew off; access and billing
+      run to period_end. If auto_renew is already false the subscription is
+      already scheduled to end and there is nothing to do.
+    owner: billing@northstar.example
+
+  - id: CN-005
+    name: Large churn goes to the save desk first
+    applies_to: Subscription
+    rule: mrr_usd <= 5000.0
+    severity: warn
+    rationale: Above $5,000 MRR the CSM team gets 48 hours to offer a save before the cancellation is processed.
+    owner: customer-success@northstar.example
+
+  - id: AS-001
+    name: Subscription must belong to the account
+    applies_to: add_seats
+    rule: subscription.account_id == account.account_id
+    severity: block
+    rationale: Seats are billed to the account; a mismatch means the wrong customer pays.
+
+  - id: AS-002
+    name: Plan must be the subscription's current plan
+    applies_to: add_seats
+    rule: subscription.plan_id == plan.plan_id
+    severity: block
+    rationale: The cap being checked has to be the cap of the plan actually billed.
+
+  - id: AS-003
+    name: Seat cap not yet reached
+    applies_to: add_seats
+    rule: plan.unlimited_seats == true || subscription.seats < plan.seat_cap
+    severity: block
+    rationale: Seats cannot exceed the plan cap; upgrade the plan first, then add seats.
+    owner: product@northstar.example

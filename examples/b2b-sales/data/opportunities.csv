@@ -1,0 +1,16 @@
+opportunity_id,account_id,name,stage_id,amount_usd,close_date,owner_rep_id,economic_buyer_contact_id,partner_id,forecast,region,order_form_signed,has_approved_quote,competitor
+OPP-5001,ACC-2001,Halden predictive maintenance rollout,ST-05,180000.0,2026-04-30,REP-11,CON-301,,commit,amer_east,true,true,Uptime Inc
+OPP-5002,ACC-2002,Brightwater asset platform,ST-04,420000.0,2026-06-30,REP-11,CON-304,,best_case,amer_east,false,false,
+OPP-5003,ACC-2003,Cobalt fleet maintenance,ST-04,310000.0,2026-07-15,REP-11,CON-305,,pipeline,amer_east,false,false,FleetWise
+OPP-5004,ACC-2004,Fairmont lab equipment monitoring,ST-03,95000.0,2026-05-29,REP-12,,,commit,amer_east,false,false,
+OPP-5005,ACC-2005,Ridgeline site expansion,ST-05,760000.0,2026-05-15,REP-14,CON-308,PTR-01,commit,amer_west,false,true,
+OPP-5006,ACC-2007,Nordwind turbine fleet,ST-02,520000.0,2026-09-30,REP-17,,,pipeline,emea,false,false,Uptime Inc
+OPP-5007,ACC-2008,Lisbon cranes pilot,ST-03,90000.0,2026-06-15,REP-18,CON-313,PTR-02,best_case,emea,false,false,
+OPP-5008,ACC-2009,Kaito line 4 renewal,ST-06,210000.0,2026-02-27,REP-16,CON-314,,closed,apac,true,true,
+OPP-5009,ACC-2010,Granite quarry sensors,ST-02,60000.0,2026-08-31,REP-12,CON-315,,pipeline,amer_east,false,false,
+OPP-5010,ACC-2011,Delta Rail depots,ST-03,340000.0,2026-08-15,REP-14,,,pipeline,amer_west,false,false,FleetWise
+OPP-5011,ACC-2012,Vossberg expansion,ST-04,275000.0,2026-05-31,REP-17,CON-317,,best_case,emea,false,false,
+OPP-5012,ACC-2013,Pioneer pump stations,ST-01,45000.0,2026-10-30,REP-13,,,pipeline,amer_east,false,false,
+OPP-5013,ACC-2015,Southern Cross pit-to-port,ST-03,1200000.0,2026-11-30,REP-16,CON-320,,pipeline,apac,false,false,Uptime Inc
+OPP-5014,ACC-2006,Sierra substation monitoring,ST-07,70000.0,2026-01-31,REP-15,CON-310,,closed,amer_west,false,false,FleetWise
+OPP-5015,ACC-2001,Halden phase 2,ST-01,150000.0,2026-12-15,REP-11,CON-301,,pipeline,amer_east,false,false,

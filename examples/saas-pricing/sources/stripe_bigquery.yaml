@@ -1,0 +1,10 @@
+connection: stripe_bigquery
+kind: bigquery
+description: >
+  Invoice history synced from the payment provider into the finance warehouse.
+  Not readable here: an agent calls where_is(Invoice), fetches the invoice with
+  its own BigQuery connector and passes it inline to validate. Credentials come
+  from the environment, never from this file.
+project: ${GCP_PROJECT}
+dataset: finance
+auth: env

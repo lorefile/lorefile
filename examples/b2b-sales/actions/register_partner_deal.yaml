@@ -1,0 +1,13 @@
+action: register_partner_deal
+description: >
+  Record that a partner sourced a deal, which locks their referral fee. Must
+  happen early in the cycle, before the deal reaches Proposal.
+inputs:
+  opportunity: Opportunity
+  partner: Partner
+effects:
+  - create: { relationship: sourced_by, from: opportunity, to: partner }
+checks: [PD-001, PD-002, PD-003, PD-004, PD-005]
+requires_approval_from: Channel manager
+side_effects: Writes the registration, sets Opportunity.partner_id, notifies the account owner.
+tags: [channel]

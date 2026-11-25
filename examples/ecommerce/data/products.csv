@@ -1,0 +1,13 @@
+product_id,name,category,hazardous,final_sale,unit_price_usd,status
+PRD-110,Arc floor lamp,lighting,false,false,120.0,active
+PRD-120,Halo pendant light,lighting,false,false,189.0,active
+PRD-220,Brew kettle 1.7L,kitchen,false,false,89.5,active
+PRD-330,Trail lantern (rechargeable),outdoor,true,false,129.0,active
+PRD-440,Patio solar lights 4-pack,outdoor,true,false,156.0,active
+PRD-550,Glass cleaner aerosol,cleaning,true,true,27.0,active
+PRD-660,Studio lighting kit Pro,electronics,true,false,2890.0,active
+PRD-770,Outdoor dining set,outdoor,false,false,1450.0,active
+PRD-880,Candle trio,lighting,false,false,22.0,active
+PRD-990,Camping stove with gas canister,outdoor,true,false,415.0,active
+PRD-100,Desk lamp (2024),lighting,false,true,45.0,discontinued
+PRD-230,Cast iron pan,kitchen,false,false,64.0,active

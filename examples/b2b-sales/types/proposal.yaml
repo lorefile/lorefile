@@ -1,0 +1,19 @@
+type: Proposal
+description: >
+  The written proposal sent to the buyer, versioned. A deal closes on an
+  accepted proposal; Legal reviews proposals above $100k before signature.
+properties:
+  proposal_id:    { type: string, key: true, description: "e.g. PRP-901" }
+  opportunity_id: string
+  version:        integer
+  status:         { type: enum, values: [draft, sent, accepted, declined] }
+  sent_on:        date
+  legal_reviewed: { type: boolean, description: "Legal has reviewed the commercial terms" }
+relationships:
+  for_opportunity: { to: Opportunity, cardinality: many-to-one }
+source:
+  connection: crm_files
+  table: proposals
+  key: proposal_id
+owner: sales-ops@meridian.example
+tags: [pipeline]

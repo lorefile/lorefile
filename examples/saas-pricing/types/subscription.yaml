@@ -1,0 +1,27 @@
+type: Subscription
+description: >
+  One account's paid access to one plan: how many seats, how it is billed, and
+  the current period. mrr_usd is after discounts. contract_id is empty for
+  self-serve accounts.
+properties:
+  subscription_id: { type: string, key: true, description: "e.g. SUB-3011" }
+  account_id:      string
+  plan_id:         { type: string, description: "Current plan; see Plan" }
+  status:          { type: enum, values: [trialing, active, past_due, cancelled] }
+  billing_period:  { type: enum, values: [monthly, annual] }
+  seats:           { type: integer, description: "Paid seats (see Seat for who holds them)" }
+  period_start:    date
+  period_end:      { type: date, description: "When the current paid period ends; downgrades and cancellations take effect here" }
+  mrr_usd:         { type: number, unit: USD, description: "Monthly recurring revenue after discounts" }
+  discount_pct:    { type: number, description: "Percent already taken off list by discounts applied so far" }
+  auto_renew:      { type: boolean, description: "False once a cancellation has been scheduled" }
+  contract_id:     { type: string, description: "Governing contract, empty for self-serve" }
+relationships:
+  held_by:     { to: Account, cardinality: many-to-one }
+  governed_by: { to: Contract, cardinality: many-to-one, description: "Empty for self-serve subscriptions" }
+source:
+  connection: billing_files
+  table: subscriptions
+  key: subscription_id
+owner: billing@northstar.example
+tags: [plans, core]

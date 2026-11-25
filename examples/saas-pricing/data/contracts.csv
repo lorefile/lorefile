@@ -1,0 +1,11 @@
+contract_id,account_id,status,term_months,start_on,end_on,acv_usd,payment_terms,auto_renews
+CT-503,ACC-1003,active,12,2025-09-05,2026-09-04,23880.0,net30,true
+CT-504,ACC-1004,active,12,2025-05-18,2026-05-17,47760.0,net30,true
+CT-505,ACC-1005,active,36,2024-11-30,2027-11-29,210000.0,upfront,false
+CT-507,ACC-1007,expired,12,2025-01-31,2026-01-31,28656.0,net30,false
+CT-509,ACC-1009,active,12,2025-10-09,2026-10-08,14328.0,net60,true
+CT-510,ACC-1010,active,24,2026-03-07,2028-03-06,180000.0,upfront,true
+CT-512,ACC-1012,active,12,2025-06-15,2026-06-14,264000.0,net30,true
+CT-515,ACC-1015,active,12,2026-01-25,2027-01-24,19104.0,net30,true
+CT-516,ACC-1011,draft,12,2026-05-01,2027-04-30,18000.0,net30,true
+CT-508,ACC-1008,expired,12,2024-01-20,2025-01-19,19104.0,net30,false

@@ -1,0 +1,54 @@
+types:
+  - type: Shipment
+    description: >
+      One parcel for one order. Carrier and service are chosen at label time and
+      can be changed until the carrier picks it up. contains_hazmat and oversize
+      are computed from the lines when the parcel is packed.
+    properties:
+      shipment_id:        { type: string, key: true, description: "Parcel id, e.g. SHP-3004" }
+      order_id:           string
+      carrier_id:         { type: string, description: "Current carrier; see Carrier" }
+      warehouse_id:       string
+      status:             { type: enum, values: [label_created, ready_for_pickup, in_transit, delivered, lost], description: "Carrier scan state" }
+      service:            { type: enum, values: [standard, express], description: "What the customer paid for" }
+      weight_kg:          { type: number, unit: kg }
+      contains_hazmat:    { type: boolean, description: "True if any line is a hazardous product" }
+      oversize:           { type: boolean, description: "Any side over 120 cm" }
+      destination_region: { type: enum, values: [east, central, west] }
+      shipped_on:         date
+      delivered_on:       date
+    relationships:
+      fulfils:      { to: Order, cardinality: many-to-one }
+      shipped_from: { to: Warehouse, cardinality: many-to-one }
+    source:
+      connection: shop_files
+      table: shipments
+      key: shipment_id
+    owner: fulfilment@lumen.example
+    tags: [fulfilment, core]
+
+  - type: Carrier
+    description: >
+      A delivery company we have a contract with. Regions served, parcel limits
+      and dangerous-goods capability come from the contract and are maintained
+      by Fulfilment.
+    properties:
+      carrier_id:       { type: string, key: true }
+      name:             string
+      mode:             { type: enum, values: [ground, air, sea], description: "Primary transport mode; air cannot carry hazardous goods" }
+      regions:          { type: json, description: "Destination regions the contract covers, e.g. [east, central]" }
+      max_parcel_kg:    { type: number, unit: kg, description: "Heaviest parcel the contract allows" }
+      accepts_oversize: boolean
+      offers_express:   { type: boolean, description: "Can meet the express promise (2 days)" }
+      base_rate_usd:    { type: number, unit: USD, description: "Average cost per standard parcel, for comparison only" }
+      status:           { type: enum, values: [active, suspended] }
+    instances:
+      - { carrier_id: CAR-GRN, name: GroundLine,      mode: ground, regions: [east, central, west], max_parcel_kg: 30.0,  accepts_oversize: true,  offers_express: false, base_rate_usd: 8.5,  status: active }
+      - { carrier_id: CAR-AIR, name: SkyParcel,       mode: air,    regions: [east, central, west], max_parcel_kg: 25.0,  accepts_oversize: false, offers_express: true,  base_rate_usd: 22.0, status: active }
+      - { carrier_id: CAR-SWF, name: SwiftPost,       mode: ground, regions: [east],                max_parcel_kg: 20.0,  accepts_oversize: false, offers_express: true,  base_rate_usd: 9.75, status: active }
+      - { carrier_id: CAR-RGL, name: Regional Ground, mode: ground, regions: [east, central],       max_parcel_kg: 40.0,  accepts_oversize: true,  offers_express: false, base_rate_usd: 10.0, status: active }
+      - { carrier_id: CAR-WST, name: Pacific Freight, mode: ground, regions: [west, central],       max_parcel_kg: 70.0,  accepts_oversize: true,  offers_express: false, base_rate_usd: 14.0, status: active }
+      - { carrier_id: CAR-OLD, name: Metro Courier,   mode: ground, regions: [east],                max_parcel_kg: 15.0,  accepts_oversize: false, offers_express: true,  base_rate_usd: 7.0,  status: suspended }
+      - { carrier_id: CAR-SEA, name: BlueWave Sea,    mode: sea,    regions: [west],                max_parcel_kg: 500.0, accepts_oversize: true,  offers_express: false, base_rate_usd: 30.0, status: active }
+    owner: fulfilment@lumen.example
+    tags: [fulfilment]

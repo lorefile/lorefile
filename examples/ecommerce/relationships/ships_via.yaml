@@ -1,0 +1,8 @@
+relationship: ships_via
+from: Shipment
+to: Carrier
+cardinality: many-to-one
+description: >
+  The carrier currently booked for the parcel. Rules on this relationship can
+  see `shipment` and `carrier` (or `from` and `to`). reroute_shipment moves
+  this edge, so every rule here is checked against the new carrier.

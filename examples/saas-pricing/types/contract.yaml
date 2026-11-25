@@ -1,0 +1,23 @@
+type: Contract
+description: >
+  Signed paper for mid-market and enterprise accounts: the order form plus the
+  MSA. A subscription under an active contract cannot be cancelled before the
+  contract ends. Self-serve accounts have no contract.
+properties:
+  contract_id:   { type: string, key: true, description: "Contract id, e.g. CT-507" }
+  account_id:    string
+  status:        { type: enum, values: [draft, signed, active, expired], description: "signed = countersigned but not yet started; active = inside the term" }
+  term_months:   integer
+  start_on:      date
+  end_on:        date
+  acv_usd:       { type: number, unit: USD, description: "Annual contract value" }
+  payment_terms: { type: enum, values: [net30, net60, upfront] }
+  auto_renews:   { type: boolean, description: "Evergreen clause: renews for another term unless notice is given 60 days before end_on" }
+relationships:
+  with: { to: Account, cardinality: many-to-one }
+source:
+  connection: billing_files
+  table: contracts
+  key: contract_id
+owner: legal@northstar.example
+tags: [contracts]

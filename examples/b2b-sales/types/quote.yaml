@@ -1,0 +1,23 @@
+type: Quote
+description: >
+  A priced offer generated in the CPQ system. Lives in Snowflake, not here:
+  agents call where_is(Quote), fetch the quote with their own connector and pass
+  it inline to validate. Deal Desk approval is recorded on the quote itself.
+properties:
+  quote_id:           { type: string, key: true, description: "CPQ quote number, e.g. Q-7781" }
+  opportunity_id:     string
+  amount_usd:         { type: number, unit: USD, description: "Total contract value on the quote" }
+  discount_pct:       { type: number, description: "Discount off list, after all line adjustments" }
+  status:             { type: enum, values: [draft, submitted, approved, rejected, expired] }
+  valid_until:        date
+  deal_desk_approved: { type: boolean, description: "Deal Desk has reviewed pricing and terms" }
+  payment_terms:      { type: enum, values: [net30, net60, net90, upfront] }
+relationships:
+  for_opportunity: { to: Opportunity, cardinality: many-to-one }
+source:
+  connection: cpq_snowflake
+  table: CPQ.QUOTES
+  key: QUOTE_NO
+  columns: { quote_id: QUOTE_NO, opportunity_id: OPP_ID, amount_usd: TOTAL_USD, discount_pct: DISCOUNT_PCT, status: STATUS, valid_until: VALID_UNTIL, deal_desk_approved: DD_APPROVED, payment_terms: PAY_TERMS }
+owner: deal-desk@meridian.example
+tags: [pipeline]

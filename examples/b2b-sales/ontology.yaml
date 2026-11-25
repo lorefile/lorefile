@@ -1,0 +1,17 @@
+name: meridian-b2b-sales
+version: 0.1.0
+description: >
+  Meridian Systems sells industrial-maintenance software through a direct sales
+  team and channel partners, with six-to-nine-month sales cycles. This ontology
+  is what our sales-ops and deal-desk agents read before they move a deal,
+  submit a quote, reassign an account or close anything.
+domains:
+  - name: Accounts & people
+    description: Companies we sell to, the people inside them, and the reps who own them.
+    types: [Account, Contact, Rep, Territory, Quota]
+  - name: Pipeline
+    description: Deals, the stages they move through, and the paper that closes them.
+    types: [Opportunity, Stage, Quote, Proposal, Activity]
+  - name: Channel
+    description: Partners that source or influence deals.
+    types: [Partner]

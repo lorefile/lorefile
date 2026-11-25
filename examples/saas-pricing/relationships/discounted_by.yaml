@@ -1,0 +1,16 @@
+relationship: discounted_by
+from: Subscription
+to: Discount
+cardinality: many-to-many
+description: >
+  A discount applied to a subscription. Rules here can see `subscription` and
+  `discount`. apply_discount creates this edge, so stacking and approval rules
+  are checked against the subscription as it stands.
+properties:
+  applied_on: date
+  ends_on:    { type: date, description: "applied_on plus Discount.max_months" }
+source:
+  connection: billing_files
+  table: subscription_discounts
+  from_key: subscription_id
+  to_key: discount_id

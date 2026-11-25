@@ -1,0 +1,8 @@
+connection: shop_bigquery
+kind: bigquery
+description: >
+  The analytics warehouse that holds the full order history. Declared so agents
+  know where the big tables live; nothing in this folder binds to it yet.
+project: ${GCP_PROJECT}
+dataset: shop
+auth: env

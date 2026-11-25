@@ -1,0 +1,31 @@
+terms:
+  - term: customer
+    means: Account
+    description: Sales says customer, billing says account, the product says workspace. Same thing.
+  - term: workspace
+    means: Account
+  - term: tier
+    means: Plan
+    description: Marketing talks about tiers (Free, Starter, Growth, Enterprise); billing talks about plans.
+  - term: licence
+    means: Seat
+  - term: user
+    means: Seat
+    description: In billing conversations a user means a paid seat, not a login.
+  - term: coupon
+    means: Discount
+  - term: bill
+    means: Invoice
+  - term: order form
+    means: Contract
+    description: Enterprise paper; the signed order form is the contract.
+  - term: MSA
+    means: Contract
+  - term: overage
+    means: Usage
+    description: Usage above the included quantity, billed at the overage rate.
+  - term: churn
+    means: cancel_subscription
+  - term: expansion
+    means: add_seats
+    description: Sales slang for selling more seats into an existing account.

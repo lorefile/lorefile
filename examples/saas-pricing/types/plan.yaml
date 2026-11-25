@@ -1,0 +1,23 @@
+type: Plan
+description: >
+  A price point we sell. Caps and minimums are part of the offer; the
+  enterprise plan is only sold on an annual contract. Legacy plans stay in the
+  data for existing subscribers but take no new ones.
+properties:
+  plan_id:           { type: string, key: true }
+  name:              string
+  tier:              { type: enum, values: [free, starter, growth, enterprise], description: "Feature tier; see Feature.min_tier" }
+  monthly_price_usd: { type: number, unit: USD, description: "List price per month for the whole workspace (seats are included up to the cap)" }
+  seat_cap:          { type: integer, description: "Most seats the plan allows; ignored when unlimited_seats is true" }
+  unlimited_seats:   boolean
+  min_seats:         { type: integer, description: "Fewest seats the plan is sold with" }
+  requires_annual:   { type: boolean, description: "Only sold with annual billing" }
+  status:            { type: enum, values: [active, legacy], description: "legacy plans cannot be moved to" }
+instances:
+  - { plan_id: PLAN-FREE,    name: Free,        tier: free,       monthly_price_usd: 0.0,    seat_cap: 3,  unlimited_seats: false, min_seats: 1,  requires_annual: false, status: active }
+  - { plan_id: PLAN-STARTER, name: Starter,     tier: starter,    monthly_price_usd: 49.0,   seat_cap: 10, unlimited_seats: false, min_seats: 1,  requires_annual: false, status: active }
+  - { plan_id: PLAN-GROWTH,  name: Growth,      tier: growth,     monthly_price_usd: 199.0,  seat_cap: 50, unlimited_seats: false, min_seats: 3,  requires_annual: false, status: active }
+  - { plan_id: PLAN-ENT,     name: Enterprise,  tier: enterprise, monthly_price_usd: 1500.0, seat_cap: 0,  unlimited_seats: true,  min_seats: 25, requires_annual: true,  status: active }
+  - { plan_id: PLAN-TEAM22,  name: Team (2022), tier: growth,     monthly_price_usd: 149.0,  seat_cap: 25, unlimited_seats: false, min_seats: 2,  requires_annual: false, status: legacy }
+owner: pricing@northstar.example
+tags: [plans, core]

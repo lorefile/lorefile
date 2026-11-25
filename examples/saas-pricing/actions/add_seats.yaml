@@ -1,0 +1,12 @@
+action: add_seats
+description: >
+  Add paid seats to a subscription. Billing is immediate and prorated, so the
+  account must be able to receive an invoice.
+inputs:
+  subscription: Subscription
+  plan: Plan
+  account: Account
+checks: [IN-001, SP-007]
+requires_approval_from: Nobody; Sales is notified when an account crosses 80% of its cap
+side_effects: Increments seats, issues a prorated invoice, raises the Seat cap in the product.
+tags: [billing, sales]

@@ -1,0 +1,23 @@
+type: Promotion
+description: >
+  A discount code. Marketing owns the budget (max_redemptions); Finance owns
+  the stacking cap. Codes can be combined on one order unless the total
+  discount would pass 40%.
+properties:
+  promotion_id:     { type: string, key: true, description: "Internal id, e.g. PROMO-SPRING15" }
+  code:             { type: string, description: "What the customer types" }
+  name:             string
+  percent_off:      { type: number, description: "Percent off the order subtotal" }
+  min_order_usd:    { type: number, unit: USD, description: "Smallest subtotal the code applies to" }
+  first_order_only: { type: boolean, description: "Acquisition codes: only valid on a customer's first order" }
+  starts_on:        date
+  ends_on:          date
+  max_redemptions:  { type: integer, description: "Budget approved by Marketing" }
+  redemptions:      { type: integer, description: "Uses so far" }
+  status:           { type: enum, values: [draft, active, paused, expired] }
+source:
+  connection: shop_files
+  table: promotions
+  key: promotion_id
+owner: marketing@lumen.example
+tags: [marketing]

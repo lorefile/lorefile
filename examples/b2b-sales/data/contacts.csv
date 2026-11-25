@@ -1,0 +1,21 @@
+contact_id,account_id,name,title,role,email,status
+CON-301,ACC-2001,Ingrid Halden,COO,economic_buyer,ingrid@halden.example,active
+CON-302,ACC-2001,Rob Mensah,Plant Director,champion,rob@halden.example,active
+CON-303,ACC-2002,Ava Brightwater,VP Operations,champion,ava@brightwater.example,active
+CON-304,ACC-2002,Sam Liu,CIO,technical_buyer,sam@brightwater.example,active
+CON-305,ACC-2003,Nadia Cobalt,Head of Fleet,champion,nadia@cobalt.example,active
+CON-306,ACC-2003,Peter Grey,CFO,blocker,peter@cobalt.example,active
+CON-307,ACC-2004,Lucia Fairmont,Head of Engineering,economic_buyer,lucia@fairmont.example,active
+CON-308,ACC-2005,Owen Ridge,SVP Mining Ops,economic_buyer,owen@ridgeline.example,active
+CON-309,ACC-2005,Kim Tran,Reliability Lead,champion,kim@ridgeline.example,active
+CON-310,ACC-2006,Jess Sierra,GM,economic_buyer,jess@sierra.example,active
+CON-311,ACC-2007,Klaus Nord,CTO,technical_buyer,klaus@nordwind.example,active
+CON-312,ACC-2007,Anke Wind,Head of Asset Mgmt,champion,anke@nordwind.example,active
+CON-313,ACC-2008,Rui Lisboa,Port Director,economic_buyer,rui@lisbonport.example,active
+CON-314,ACC-2009,Yuki Kaito,CEO,economic_buyer,yuki@kaito.example,active
+CON-315,ACC-2010,Bill Granite,Owner,economic_buyer,bill@granite.example,active
+CON-316,ACC-2011,Maria Delta,VP Maintenance,champion,maria@deltarail.example,active
+CON-317,ACC-2012,Hans Voss,COO,economic_buyer,hans@vossberg.example,left_company
+CON-318,ACC-2012,Petra Berg,Site Manager,champion,petra@vossberg.example,active
+CON-319,ACC-2013,Dee Pioneer,Director,economic_buyer,dee@pioneer.example,active
+CON-320,ACC-2015,Jack Cross,CFO,economic_buyer,jack@southerncross.example,active

@@ -1,0 +1,11 @@
+discount_id,name,percent_off,kind,max_months,stackable,applies_to_period,status
+DSC-LAUNCH10,Launch 10% for 3 months,10.0,promotional,3,false,monthly,active
+DSC-ANNUAL15,Annual prepay 15%,15.0,promotional,12,true,annual,active
+DSC-PARTNER20,Partner referral 20%,20.0,partner,12,false,any,active
+DSC-PARTNER40,Strategic partner 40%,40.0,partner,12,false,any,active
+DSC-NONPROFIT30,Nonprofit 30%,30.0,nonprofit,0,false,any,active
+DSC-EDU25,Education 25%,25.0,nonprofit,0,false,annual,active
+DSC-WINBACK50,Win-back 50% for 6 months,50.0,promotional,6,false,monthly,active
+DSC-BLACKFRI30,Black Friday 30%,30.0,promotional,12,false,any,expired
+DSC-NEGO12,Negotiated 12% (Deal Desk),12.0,negotiated,0,true,annual,active
+DSC-LOYAL5,Loyalty 5%,5.0,promotional,12,true,any,active

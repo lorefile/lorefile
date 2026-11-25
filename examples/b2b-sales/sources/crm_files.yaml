@@ -1,0 +1,7 @@
+connection: crm_files
+kind: csv
+path: data
+description: >
+  Nightly CSV extracts from the CRM (accounts, contacts, opportunities,
+  proposals, reps, quotas, activities). Good enough for agents to check rules
+  against; the CRM itself is the system of record.

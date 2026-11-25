@@ -1,0 +1,11 @@
+action: restock
+description: >
+  Book received units into an inventory record at a warehouse, from a supplier
+  delivery or an inspected return.
+inputs:
+  inventory: Inventory
+  warehouse: Warehouse
+checks: [INV-001, INV-002, INV-004, WH-001]
+requires_approval_from: Nobody; Planning is notified when a record crosses its reorder point
+side_effects: Increments on_hand, closes the receiving task, re-plans the reorder point.
+tags: [stock]

@@ -24,6 +24,42 @@
         "7071"
       ],
       "port": 7071
+    },
+    {
+      "name": "ontology-ui-ecommerce",
+      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/ecommerce",
+        "--port",
+        "7073"
+      ],
+      "port": 7073
+    },
+    {
+      "name": "ontology-ui-saas-pricing",
+      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/saas-pricing",
+        "--port",
+        "7074"
+      ],
+      "port": 7074
+    },
+    {
+      "name": "ontology-ui-b2b-sales",
+      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/b2b-sales",
+        "--port",
+        "7075"
+      ],
+      "port": 7075
     }
   ]
 }

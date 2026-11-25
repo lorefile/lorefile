@@ -1,0 +1,42 @@
+constraints:
+  - id: DS-001
+    name: Discounts above 30% need the CFO
+    applies_to: discounted_by
+    rule: discount.percent_off <= 30.0
+    severity: warn
+    rationale: Deal Desk may approve up to 30%; anything deeper is a CFO decision under the pricing policy.
+    owner: finance@northstar.example
+    tags: [approvals]
+
+  - id: DS-002
+    name: Only stackable discounts combine
+    applies_to: discounted_by
+    rule: discount.stackable == true || subscription.discount_pct == 0.0
+    severity: block
+    rationale: Most discounts are exclusive; a second one replaces the first, it does not add.
+    owner: finance@northstar.example
+
+  - id: DS-003
+    name: Combined discount capped at 50%
+    applies_to: discounted_by
+    rule: subscription.discount_pct + discount.percent_off <= 50.0
+    severity: block
+    rationale: Below half of list we lose money on support alone; this is the hard floor in the pricing policy.
+    owner: finance@northstar.example
+    tags: [margin]
+
+  - id: DS-004
+    name: Discount must be active
+    applies_to: Discount
+    rule: status == "active"
+    severity: block
+    rationale: Expired codes are not honoured; Marketing issues a new code if the campaign is extended.
+    owner: marketing@northstar.example
+
+  - id: DS-005
+    name: Discount must match the billing period
+    applies_to: discounted_by
+    rule: discount.applies_to_period == "any" || discount.applies_to_period == subscription.billing_period
+    severity: block
+    rationale: Annual-only discounts are the incentive to prepay; applying them to monthly billing defeats the point.
+    owner: pricing@northstar.example

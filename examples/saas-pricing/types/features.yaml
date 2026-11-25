@@ -1,0 +1,62 @@
+types:
+  - type: Feature
+    description: A capability of the product, gated by plan tier. Add-ons can be bought on top of any tier at or above min_tier.
+    properties:
+      feature_id: { type: string, key: true }
+      name:       string
+      min_tier:   { type: enum, values: [free, starter, growth, enterprise], description: "Lowest plan tier that includes it" }
+      add_on:     { type: boolean, description: "Sold separately rather than included in the tier" }
+    instances:
+      - { feature_id: FEAT-DASH,   name: Dashboards,           min_tier: free,       add_on: false }
+      - { feature_id: FEAT-FUNNEL, name: Funnels,              min_tier: starter,    add_on: false }
+      - { feature_id: FEAT-COHORT, name: Cohorts,              min_tier: growth,     add_on: false }
+      - { feature_id: FEAT-API,    name: API access,           min_tier: growth,     add_on: false }
+      - { feature_id: FEAT-DWH,    name: Warehouse export,     min_tier: growth,     add_on: true }
+      - { feature_id: FEAT-SSO,    name: SSO / SAML,           min_tier: enterprise, add_on: false }
+      - { feature_id: FEAT-AUDIT,  name: Audit log,            min_tier: enterprise, add_on: false }
+      - { feature_id: FEAT-SLA,    name: 99.9% uptime SLA,     min_tier: enterprise, add_on: false }
+    owner: product@northstar.example
+    tags: [features]
+
+  - type: Entitlement
+    description: >
+      What one subscription may use of one feature, and why. Overrides are
+      hand-granted by Support and should expire.
+    properties:
+      entitlement_id:  { type: string, key: true }
+      subscription_id: string
+      feature_id:      string
+      limit_value:     { type: integer, description: "Quantity limit where the feature has one (seats, destinations, retention days); 0 = no limit" }
+      source:          { type: enum, values: [plan, add_on, override], description: "plan = comes with the tier; add_on = bought; override = granted by Support" }
+      expires_on:      { type: date, description: "Empty for plan entitlements" }
+    relationships:
+      grants:           { to: Feature, cardinality: many-to-one }
+      for_subscription: { to: Subscription, cardinality: many-to-one }
+    source:
+      connection: billing_files
+      table: entitlements
+      key: entitlement_id
+    owner: product@northstar.example
+    tags: [features]
+
+  - type: Usage
+    description: >
+      Monthly roll-up of one metered quantity for one subscription. Anything above
+      included_quantity is billed at overage_rate_usd on the next invoice. The raw
+      events live in product_snowflake.
+    properties:
+      usage_id:          { type: string, key: true }
+      subscription_id:   string
+      metric:            { type: enum, values: [events, api_calls, storage_gb, active_seats] }
+      period:            { type: string, description: "Calendar month, YYYY-MM" }
+      quantity:          integer
+      included_quantity: { type: integer, description: "What the plan includes for the period" }
+      overage_rate_usd:  { type: number, unit: USD, description: "Price per unit above the included quantity" }
+    relationships:
+      metered_on: { to: Subscription, cardinality: many-to-one }
+    source:
+      connection: billing_files
+      table: usage
+      key: usage_id
+    owner: billing@northstar.example
+    tags: [usage]

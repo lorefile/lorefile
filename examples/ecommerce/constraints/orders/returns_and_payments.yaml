@@ -1,0 +1,52 @@
+constraints:
+  - id: RT-001
+    name: 30-day return window
+    applies_to: Return
+    rule: reason == "defective" || timestamp(requested_on + "T00:00:00Z") - timestamp(delivered_on + "T00:00:00Z") <= duration("720h")
+    severity: block
+    rationale: >
+      Policy RP-12: changed-mind, wrong-item and transit-damage returns must be
+      requested within 30 days (720 hours) of delivery. Defective goods are
+      covered by the warranty instead and have no window. Dates are ISO strings,
+      so the rule lifts them to timestamps before subtracting.
+    owner: support@lumen.example
+
+  - id: RT-002
+    name: Return must be received before refunding
+    applies_to: Return
+    rule: status == "received"
+    severity: block
+    rationale: The warehouse inspects the goods first; refunding on request is how we lost $40k in 2025.
+    owner: support@lumen.example
+
+  - id: RT-003
+    name: Opened changed-mind returns get store credit
+    applies_to: Return
+    rule: reason == "changed_mind" implies condition == "unopened"
+    severity: warn
+    rationale: Opened goods cannot be resold as new; Support offers store credit minus a restocking fee instead of a card refund.
+    owner: support@lumen.example
+
+  - id: RT-004
+    name: Return must belong to the order
+    applies_to: refund_order
+    rule: rma.order_id == order.order_id
+    severity: block
+    rationale: Prevents refunding the wrong order when a customer has several RMAs open.
+
+  - id: PM-001
+    name: Refund to the original payment method
+    applies_to: refund_order
+    rule: payment_method.payment_method_id == order.payment_method_id
+    severity: block
+    rationale: "Card scheme rules and our anti-money-laundering policy: money goes back where it came from."
+    owner: payments@lumen.example
+    tags: [compliance]
+
+  - id: PM-002
+    name: Payment method must be active
+    applies_to: PaymentMethod
+    rule: status == "active"
+    severity: block
+    rationale: Refunds to expired or removed cards bounce; Support issues store credit or asks for a new card.
+    owner: payments@lumen.example

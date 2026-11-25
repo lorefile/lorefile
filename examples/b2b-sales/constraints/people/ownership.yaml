@@ -1,0 +1,38 @@
+constraints:
+  - id: RP-001
+    name: One owner per account per territory
+    applies_to: owned_by
+    rule: account.territory_id == rep.territory_id
+    severity: warn
+    rationale: >
+      Ownership follows territory. An account owned by a rep outside its
+      territory has two claims on it (the territory's rep and the owner), which
+      is how two reps end up working the same account. The row-level rule checks
+      the new owner's territory; the cross-row uniqueness check is the SQL below.
+    sql: >
+      select account_id from accounts group by account_id, territory_id having count(distinct owner_rep_id) > 1
+    owner: sales-ops@meridian.example
+    tags: [territory]
+
+  - id: RP-002
+    name: Only active reps own accounts
+    applies_to: Rep
+    rule: status == "active"
+    severity: block
+    rationale: Accounts owned by reps on leave or gone go cold; Sales Ops reassigns them the same week.
+    owner: sales-ops@meridian.example
+
+  - id: RP-003
+    name: Strategic accounts need ramped reps
+    applies_to: owned_by
+    rule: account.tier == "strategic" implies rep.ramped == true
+    severity: block
+    rationale: The top 50 accounts are not where a new rep learns the product.
+    owner: sales-leadership@meridian.example
+
+  - id: RP-005
+    name: Reassigning to the same rep is a no-op
+    applies_to: reassign_account
+    rule: from.rep_id != to.rep_id
+    severity: block
+    rationale: Almost always a typo in the request.

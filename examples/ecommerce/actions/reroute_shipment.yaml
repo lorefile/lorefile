@@ -1,0 +1,15 @@
+action: reroute_shipment
+description: >
+  Move a parcel that has not been picked up yet to a different carrier, for
+  example after a carrier outage or a service downgrade request.
+inputs:
+  shipment: Shipment
+  from: Carrier
+  to: Carrier
+effects:
+  - remove: { relationship: ships_via, from: shipment, to: from }
+  - create: { relationship: ships_via, from: shipment, to: to }
+checks: [SH-001, SH-002, SH-003, SH-006, SH-007]
+requires_approval_from: Fulfilment Lead if the new carrier costs more than 25% extra
+side_effects: Voids the old label, buys a new one, updates the tracking link sent to the customer.
+tags: [fulfilment]

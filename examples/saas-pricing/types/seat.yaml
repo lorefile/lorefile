@@ -1,0 +1,16 @@
+type: Seat
+description: A named user on a subscription. Deactivated seats still count against the cap until the period ends.
+properties:
+  seat_id:         { type: string, key: true }
+  subscription_id: string
+  user_email:      string
+  role:            { type: enum, values: [admin, member, viewer] }
+  status:          { type: enum, values: [active, deactivated] }
+  last_active_on:  date
+relationships:
+  on_subscription: { to: Subscription, cardinality: many-to-one }
+source:
+  connection: billing_files
+  table: seats
+  key: seat_id
+owner: support@northstar.example

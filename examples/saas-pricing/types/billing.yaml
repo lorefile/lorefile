@@ -1,0 +1,46 @@
+types:
+  - type: Invoice
+    description: >
+      One bill to one account. Lives in the finance warehouse synced from the
+      payment provider, so it is not readable here: agents call where_is(Invoice),
+      fetch the row with their own connector and pass it inline to validate.
+    properties:
+      invoice_id:      { type: string, key: true, description: "e.g. INV-9021" }
+      account_id:      string
+      subscription_id: string
+      amount_usd:      { type: number, unit: USD, description: "Total billed, after discounts and tax" }
+      status:          { type: enum, values: [draft, open, paid, void, uncollectible] }
+      issued_on:       date
+      due_on:          date
+      credit_usd:      { type: number, unit: USD, description: "Credit requested or applied against this invoice" }
+    relationships:
+      billed_to:        { to: Account, cardinality: many-to-one }
+      for_subscription: { to: Subscription, cardinality: many-to-one }
+    source:
+      connection: stripe_bigquery
+      table: finance.invoices
+      key: invoice_number
+      columns: { invoice_id: invoice_number, account_id: customer_ref, subscription_id: subscription_ref, amount_usd: total_usd, status: invoice_status, issued_on: created_date, due_on: due_date, credit_usd: credit_note_usd }
+    owner: finance@northstar.example
+    tags: [billing]
+
+  - type: Discount
+    description: >
+      A percentage off list price for a limited number of months. Promotional
+      codes come from Marketing, partner and nonprofit rates from Sales, and
+      negotiated discounts from Deal Desk.
+    properties:
+      discount_id:       { type: string, key: true, description: "e.g. DSC-PARTNER40" }
+      name:              string
+      percent_off:       { type: number, description: "Percent off list" }
+      kind:              { type: enum, values: [promotional, partner, nonprofit, negotiated] }
+      max_months:        { type: integer, description: "How long it applies; 0 = for the life of the subscription" }
+      stackable:         { type: boolean, description: "May be combined with a discount already on the subscription" }
+      applies_to_period: { type: enum, values: [monthly, annual, any], description: "Billing period the discount is valid for" }
+      status:            { type: enum, values: [active, expired] }
+    source:
+      connection: billing_files
+      table: discounts
+      key: discount_id
+    owner: finance@northstar.example
+    tags: [billing]

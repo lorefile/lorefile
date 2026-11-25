@@ -1,0 +1,8 @@
+relationship: on_plan
+from: Subscription
+to: Plan
+cardinality: many-to-one
+description: >
+  The plan a subscription is currently billed on. Rules here can see
+  `subscription` and `plan` (or `from` and `to`). upgrade_plan moves this edge,
+  so every rule here is checked against the new plan.

@@ -1,0 +1,15 @@
+action: reassign_account
+description: >
+  Move an account from one rep to another, for example when a rep leaves or
+  territories are re-cut. Open opportunities move with the account.
+inputs:
+  account: Account
+  from: Rep
+  to: Rep
+effects:
+  - remove: { relationship: owned_by, from: account, to: from }
+  - create: { relationship: owned_by, from: account, to: to }
+checks: [RP-001, RP-002, RP-003]
+requires_approval_from: Sales Ops; the VP Sales for strategic accounts
+side_effects: Changes account and open-opportunity ownership in the CRM, re-points quota credit, notifies both reps.
+tags: [people]

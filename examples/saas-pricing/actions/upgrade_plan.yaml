@@ -1,0 +1,15 @@
+action: upgrade_plan
+description: >
+  Move a subscription to a different plan, up or down. Upgrades are prorated
+  immediately; downgrades are scheduled for the end of the current period.
+inputs:
+  subscription: Subscription
+  from: Plan
+  to: Plan
+effects:
+  - remove: { relationship: on_plan, from: subscription, to: from }
+  - create: { relationship: on_plan, from: subscription, to: to }
+checks: [SP-001, SP-002, SP-003, SP-004, SP-007]
+requires_approval_from: Nobody for self-serve plans; Deal Desk for Enterprise
+side_effects: Changes the plan in billing, prorates the current invoice (upgrades) or schedules the change for period_end (downgrades), re-issues entitlements.
+tags: [billing, sales]

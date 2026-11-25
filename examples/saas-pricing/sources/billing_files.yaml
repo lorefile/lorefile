@@ -1,0 +1,7 @@
+connection: billing_files
+kind: csv
+path: data
+description: >
+  Nightly CSV extracts from the billing system (accounts, subscriptions, seats,
+  discounts, entitlements, usage) and from the contract repository. Agents check
+  rules against these; the warehouse is the source of truth for history.

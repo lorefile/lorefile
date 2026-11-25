@@ -1,0 +1,51 @@
+constraints:
+  - id: SH-001
+    name: Hazardous goods cannot ship by air
+    applies_to: ships_via
+    rule: shipment.contains_hazmat == true implies carrier.mode != "air"
+    severity: block
+    rationale: >
+      IATA dangerous-goods regulations and our carrier contracts forbid lithium
+      batteries, aerosols and fuels on aircraft without a certified shipper,
+      which we are not.
+    owner: compliance@lumen.example
+    tags: [hazmat, compliance]
+
+  - id: SH-002
+    name: Carrier must serve the destination
+    applies_to: ships_via
+    rule: shipment.destination_region in carrier.regions
+    severity: block
+    rationale: Outside its contracted regions a carrier hands the parcel to a partner we have no SLA with.
+    owner: fulfilment@lumen.example
+
+  - id: SH-003
+    name: Parcel within the carrier weight limit
+    applies_to: ships_via
+    rule: shipment.weight_kg <= carrier.max_parcel_kg
+    severity: block
+    rationale: Overweight parcels are refused at pickup or surcharged at three times the rate.
+    owner: fulfilment@lumen.example
+
+  - id: SH-006
+    name: Carrier must be active
+    applies_to: Carrier
+    rule: status == "active"
+    severity: block
+    rationale: Suspended carriers have an open contract or performance dispute; Fulfilment lifts the suspension.
+    owner: fulfilment@lumen.example
+
+  - id: SH-007
+    name: Only unshipped parcels can be rerouted
+    applies_to: Shipment
+    rule: status in ["label_created", "ready_for_pickup"]
+    severity: block
+    rationale: After the pickup scan the parcel is in the carrier's network; rerouting means a return-to-sender.
+    owner: fulfilment@lumen.example
+
+  - id: SH-008
+    name: Rerouting to the same carrier is a no-op
+    applies_to: reroute_shipment
+    rule: from.carrier_id != to.carrier_id
+    severity: block
+    rationale: Almost always a typo in the request.

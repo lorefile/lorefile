@@ -1,0 +1,14 @@
+action: refund_order
+description: >
+  Refund a delivered order to the original payment method after its return has
+  been received. PaymentMethod rows live in the payments warehouse, so the agent
+  passes the method it fetched as an inline record. (The return input is called
+  `rma` because `return` is a reserved word in CEL.)
+inputs:
+  order: Order
+  rma: Return
+  payment_method: PaymentMethod
+checks: [EC-003, EC-004, RT-001, RT-002, RT-003, PM-002]
+requires_approval_from: Support Lead above $500; Risk if the customer is fraud-flagged
+side_effects: Creates a refund in the payments gateway, sets payment_status=refunded, closes the RMA.
+tags: [support]

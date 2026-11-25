@@ -1,0 +1,12 @@
+action: cancel_subscription
+description: >
+  Turn off auto-renew so the subscription ends at period_end. Access continues
+  until then. Subscriptions under an active contract cannot end before the
+  contract does.
+inputs:
+  subscription: Subscription
+  contract: Contract
+checks: [CN-003, CN-005, SP-007]
+requires_approval_from: CSM save desk above $5,000 MRR
+side_effects: Sets auto_renew=false, schedules the end-of-access job for period_end, notifies the account owner.
+tags: [billing, support]

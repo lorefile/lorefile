@@ -1,0 +1,13 @@
+action: apply_promotion
+description: >
+  Apply a discount code to an open order. The most common thing Support is
+  asked to do, and the one Finance watches most closely.
+inputs:
+  order: Order
+  promotion: Promotion
+effects:
+  - create: { relationship: discounted_by, from: order, to: promotion }
+checks: [EC-003, PR-001, PR-002, PR-003, PR-005, PR-006, PR-007]
+requires_approval_from: Nobody; Marketing is notified when a code passes 90% of its budget
+side_effects: Recalculates order total, records the redemption against the promotion budget.
+tags: [support, marketing]

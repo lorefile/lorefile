@@ -1,0 +1,11 @@
+promotion_id,code,name,percent_off,min_order_usd,first_order_only,starts_on,ends_on,max_redemptions,redemptions,status
+PROMO-SPRING15,SPRING15,Spring refresh 15%,15.0,50.0,false,2026-03-01,2026-04-30,5000,1240,active
+PROMO-WELCOME20,WELCOME20,Welcome 20% off your first order,20.0,30.0,true,2026-01-01,2026-12-31,20000,8830,active
+PROMO-VIP10,VIP10,VIP thank-you 10%,10.0,0.0,false,2026-01-01,2026-12-31,2000,415,active
+PROMO-OUTDOOR30,OUTDOOR30,Outdoor season 30%,30.0,200.0,false,2026-03-15,2026-05-15,800,790,active
+PROMO-FLASH40,FLASH40,Flash sale 40%,40.0,100.0,false,2026-02-14,2026-02-16,300,300,expired
+PROMO-WINTER25,WINTER25,Winter clearance 25%,25.0,75.0,false,2025-12-01,2026-02-28,1500,1322,expired
+PROMO-STAFF35,STAFF35,Staff purchase 35%,35.0,0.0,false,2026-01-01,2026-12-31,500,112,paused
+PROMO-SUMMER20,SUMMER20,Summer preview 20%,20.0,60.0,false,2026-06-01,2026-08-31,4000,0,draft
+PROMO-APP10,APP10,App download 10%,10.0,20.0,false,2026-01-01,2026-12-31,10000,9988,active
+PROMO-BUNDLE12,BUNDLE12,Lighting bundle 12%,12.0,150.0,false,2026-03-01,2026-06-30,2500,610,active

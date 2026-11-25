@@ -1,0 +1,11 @@
+proposal_id,opportunity_id,version,status,sent_on,legal_reviewed
+PRP-901,OPP-5001,3,accepted,2026-03-20,true
+PRP-902,OPP-5002,1,sent,2026-03-28,false
+PRP-903,OPP-5003,2,sent,2026-03-30,true
+PRP-904,OPP-5005,2,accepted,2026-03-25,false
+PRP-905,OPP-5008,1,accepted,2026-02-10,true
+PRP-906,OPP-5011,1,draft,,false
+PRP-907,OPP-5001,2,declined,2026-02-14,true
+PRP-908,OPP-5007,1,sent,2026-03-18,false
+PRP-909,OPP-5014,1,declined,2026-01-20,false
+PRP-910,OPP-5005,1,declined,2026-02-28,false

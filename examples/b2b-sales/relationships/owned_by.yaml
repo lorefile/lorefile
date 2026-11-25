@@ -1,0 +1,8 @@
+relationship: owned_by
+from: Account
+to: Rep
+cardinality: many-to-one
+description: >
+  The rep who owns the account. Rules here can see `account` and `rep`.
+  reassign_account moves this edge, so every rule here is checked against the
+  new owner.
