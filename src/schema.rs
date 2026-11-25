@@ -107,12 +107,19 @@ pub struct RelationshipStandalone {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TypeSource {
     pub connection: String,
+    /// Table, view, or file stem for data kinds. Not used by `kind: mcp` sources.
+    #[serde(default)]
     pub table: String,
     #[serde(default)]
     pub key: String,
     /// property name → column name. Missing entries default to the same name.
     #[serde(default)]
     pub columns: IndexMap<String, String>,
+    /// For `kind: mcp` sources: the tool to call on that server, and the parameters to pass it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub tool: String,
+    #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
+    pub params: IndexMap<String, Yaml>,
 }
 
 /// Where the rows for a relationship (an edge table) live.
@@ -254,10 +261,13 @@ pub struct ActionDef {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SourceDef {
     pub connection: String,
-    /// csv | parquet | postgres | mysql | snowflake | bigquery | duckdb | s3 | …
+    /// csv | parquet | postgres | mysql | snowflake | bigquery | duckdb | s3 | mcp | …
     pub kind: String,
     #[serde(default)]
     pub description: String,
+    /// For `kind: mcp`: the MCP server name as the agent has it configured (e.g. `meta-ads`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub server: Option<String>,
     /// For file kinds: folder (relative to the ontology root) holding the tables.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,

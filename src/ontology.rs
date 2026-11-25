@@ -594,7 +594,7 @@ impl Ontology {
             });
             if let Some(s) = &t.source {
                 let kind = self.sources.get(&s.connection).map(|x| x.kind.clone()).unwrap_or_else(|| "unknown".into());
-                j["source"] = json!({ "connection": s.connection, "kind": kind, "table": s.table, "key": s.key, "columns": s.columns });
+                j["source"] = json!({ "connection": s.connection, "kind": kind, "table": s.table, "key": s.key, "columns": s.columns, "tool": s.tool, "params": s.params });
             }
             if !t.instances.is_empty() {
                 j["inline_instances"] = json!(t.instances.len());

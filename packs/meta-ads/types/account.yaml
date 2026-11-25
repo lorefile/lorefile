@@ -1,0 +1,28 @@
+type: Account
+description: >
+  An ad account (act_<id>). Everything below it is in the account's currency
+  and reported in the account's time zone, so two accounts compare only after
+  converting both. account_status 1 (ACTIVE) is the only state in which
+  campaigns deliver and budgets can be changed. The account attribution setting
+  (default 7-day click plus 1-day view since January 2021) is the window Insight
+  and Conversion rows use unless a read-out asks for another one.
+domain: Account structure
+properties:
+  account_id:          { type: string, key: true, description: "Numeric id without the act_ prefix, e.g. 1234567890" }
+  id:                  { type: string, description: "act_<account_id>; what most tools take as object_id" }
+  name:                string
+  currency:            { type: string, description: "ISO 4217 code. Budgets, bids and spend are in this currency" }
+  timezone_name:       { type: string, description: "Reporting time zone. A 'day' in insights is this zone's day" }
+  account_status:      { type: enum, values: [1, 2, 3, 7, 8, 9, 100, 101], description: "1 ACTIVE, 2 DISABLED, 3 UNSETTLED, 7 PENDING_RISK_REVIEW, 8 PENDING_SETTLEMENT, 9 IN_GRACE_PERIOD, 100 PENDING_CLOSURE, 101 CLOSED" }
+  amount_spent:        { type: integer, description: "Lifetime spend in minor units (cents)" }
+  spend_cap:           { type: integer, description: "Lifetime spend cap in minor units; 0 means none" }
+  business_id:         { type: string, description: "Owning Business Manager" }
+  attribution_default: { type: string, description: "Account-level attribution setting, normally 7d_click_1d_view" }
+relationships:
+  owns: { to: Campaign, cardinality: one-to-many, description: "Campaigns in this account" }
+source:
+  connection: meta_ads
+  tool: get_ad_accounts
+  params: { user_id: me, limit: 25 }
+owner: measurement@stella.example
+tags: [meta, structure]

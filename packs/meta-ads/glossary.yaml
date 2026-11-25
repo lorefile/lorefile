@@ -1,0 +1,51 @@
+terms:
+  - term: ROAS
+    means: Conversion
+    description: Return on ad spend = Conversion.value / Insight.spend, under one attribution window. Meta's ROAS is attributed, not incremental.
+  - term: CPA
+    means: Conversion
+    description: Cost per action = Insight.spend / Conversion.count for one action_type under one window. Only fair for conversion-optimised ad sets.
+  - term: CPM
+    means: Insight
+    description: Cost per 1,000 impressions. The right KPI for awareness and reach objectives.
+  - term: frequency
+    means: Insight
+    description: impressions / reach over one exact date range; not additive across days.
+  - term: reach
+    means: Insight
+    description: Unique people who saw at least one impression in the date range.
+  - term: lift test
+    means: LiftStudy
+    description: Meta's randomised holdout experiment; the only incremental number Meta reports.
+  - term: conversion lift
+    means: LiftStudy
+    description: The lift study variant that counts conversions in test versus control.
+  - term: brand lift
+    means: LiftStudy
+  - term: Advantage+
+    means: Campaign
+    description: Meta's umbrella brand for automation. Advantage+ shopping campaigns are a locked campaign setup; Advantage campaign budget is the old CBO; Advantage+ placements, audience and creative are ad-set and creative settings.
+  - term: CBO
+    means: Campaign
+    description: Campaign budget optimisation, now called Advantage campaign budget; see Campaign.budget_optimization.
+  - term: ad group
+    means: AdSet
+    description: Google's word for what Meta calls an ad set.
+  - term: pixel
+    means: Conversion
+    description: The Meta Pixel is the website tag that sends the events a Conversion counts.
+  - term: AEM
+    means: Conversion
+    description: Aggregated Event Measurement, the iOS 14.5 regime that makes some conversions modelled and delayed.
+  - term: custom audience
+    means: Audience
+  - term: lookalike
+    means: Audience
+  - term: ad account
+    means: Account
+  - term: insights
+    means: Insight
+    description: The reporting endpoint; one Insight row per object, date range and breakdown value.
+  - term: attribution setting
+    means: AttributionWindow
+    description: The account-level default window, 7-day click plus 1-day view.

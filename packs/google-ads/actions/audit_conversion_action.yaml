@@ -1,0 +1,11 @@
+action: audit_conversion_action
+description: >
+  A read-out guard, not a write. Before trusting a conversion count, pass the
+  conversion action it counts: it flags secondary actions, counting rules that do
+  not fit the event, and last-click actions mixed into a data-driven account.
+inputs:
+  conversion_action: ConversionAction
+checks: [GA-008, GA-009, GA-010]
+requires_approval_from: none
+side_effects: None. Read-only.
+tags: [read, analysis]

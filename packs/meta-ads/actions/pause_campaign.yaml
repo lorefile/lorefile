@@ -1,0 +1,12 @@
+action: pause_campaign
+description: >
+  Set a campaign's status to PAUSED. Everything under it stops delivering at
+  once. Check first that the campaign is really active, is not a cell in a
+  running lift study or geo experiment, and that the reason for pausing is a
+  KPI the campaign can be judged on.
+inputs:
+  campaign: Campaign
+checks: [MA-007, MA-010]
+requires_approval_from: Paid social lead; measurement team if in_active_experiment is true
+side_effects: Calls update_campaign(campaign_id, status=PAUSED) on the meta-ads MCP server; delivery stops within minutes; the learning phase of every ad set restarts on resume.
+tags: [write]

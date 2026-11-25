@@ -1,0 +1,115 @@
+constraints:
+  - id: MA-001
+    name: Compare like with like, under one attribution window
+    applies_to: compare_conversions
+    rule: a.attribution_window == b.attribution_window && a.action_type == b.action_type
+    severity: block
+    rationale: >
+      A 7-day-click purchase count and a 1-day-click purchase count are different
+      populations, not two measurements of one thing; so are purchases and leads.
+      Put both reads under the same window and action type, or report them as two
+      numbers that must not be compared.
+    owner: measurement@stella.example
+    tags: [attribution]
+
+  - id: MA-002
+    name: Modelled iOS conversions arrive up to 72 hours late
+    applies_to: Conversion
+    rule: hours_since_date_stop >= 72
+    severity: warn
+    rationale: >
+      Since iOS 14.5, conversions from opted-out iOS users are modelled by Meta
+      and reported with a delay of up to three days. Any count whose date_stop is
+      less than 72 hours old will still grow; say so, or wait.
+    owner: measurement@stella.example
+    tags: [attribution, ios]
+
+  - id: MA-003
+    name: Seven-day windows stay open for a week after date_stop
+    applies_to: Conversion
+    rule: attribution_window in ["7d_click", "7d_click_1d_view", "dda"] implies hours_since_date_stop >= 168
+    severity: warn
+    rationale: >
+      Meta books a conversion on the day of the click, so a click on the last day
+      of the range can still add a purchase six days later. A 7-day-click number is
+      provisional until seven days after date_stop.
+    owner: measurement@stella.example
+    tags: [attribution]
+
+  - id: MA-004
+    name: Retired attribution windows mean a stale export
+    applies_to: Conversion
+    rule: "!(attribution_window in [\"28d_click\", \"28d_view\", \"7d_view\"])"
+    severity: warn
+    rationale: >
+      28-day click, 28-day view and 7-day view were removed in January 2021. A
+      count under one of them comes from an old export or a saved report, not from
+      the API today, and cannot be reconciled with current numbers.
+    owner: measurement@stella.example
+    tags: [attribution]
+
+  - id: MA-005
+    name: Geo breakdowns are delivery location at region or DMA level, not incrementality
+    applies_to: Conversion
+    rule: "!(breakdown in [\"country\", \"region\", \"dma\"])"
+    severity: info
+    rationale: >
+      Meta's geo reporting goes down to country, region (state or province) and US
+      DMA, never city or postcode, and it records where the person was when the ad
+      was delivered. A region's attributed conversions say how many conversions
+      Meta could connect to ads shown there; they say nothing about how many would
+      have happened without the ads. Incrementality by geo needs a geo experiment
+      with a holdout, not a breakdown.
+    owner: measurement@stella.example
+    tags: [geo, incrementality]
+
+  - id: MA-006
+    name: Reach and awareness campaigns are not judged on CPA or ROAS
+    applies_to: read_performance
+    rule: "!(campaign.objective in [\"OUTCOME_AWARENESS\", \"BRAND_AWARENESS\", \"REACH\", \"VIDEO_VIEWS\"])"
+    severity: warn
+    rationale: >
+      These objectives make Meta buy impressions, reach or ad recall from the
+      cheapest people to reach, not people likely to convert. Their conversions
+      are incidental, so a CPA or ROAS read on them measures the audience, not the
+      campaign. Judge them on CPM, reach, frequency and lift.
+    owner: measurement@stella.example
+    tags: [kpi]
+
+  - id: MA-007
+    name: Active in status but not delivering
+    applies_to: Campaign
+    rule: status == "ACTIVE" implies effective_status == "ACTIVE"
+    severity: warn
+    rationale: >
+      status is what was set; effective_status is what is happening. ACTIVE with
+      WITH_ISSUES or IN_PROCESS means no or broken delivery, which explains zero
+      spend better than any performance story does.
+    owner: measurement@stella.example
+    tags: [delivery]
+
+  - id: MA-008
+    name: Ad set still learning or learning-limited
+    applies_to: AdSet
+    rule: learning_stage_status == "SUCCESS"
+    severity: warn
+    rationale: >
+      Until an ad set has about 50 optimisation events in seven days its CPA is
+      unstable, and a budget or targeting edit restarts the learning phase.
+      FAIL (learning limited) means it never collected enough events; its numbers
+      are small-sample noise.
+    owner: measurement@stella.example
+    tags: [delivery]
+
+  - id: MA-009
+    name: Under Advantage campaign budget, ad-set budgets are advisory
+    applies_to: AdSet
+    rule: campaign_budget_optimization == false
+    severity: info
+    rationale: >
+      When the campaign carries the budget (Advantage campaign budget, formerly
+      CBO), Meta allocates spend across ad sets itself. The ad set's
+      daily_min_spend_target and daily_spend_cap only bound that allocation, so
+      changing them rarely changes spend; change the campaign budget instead.
+    owner: measurement@stella.example
+    tags: [budget]

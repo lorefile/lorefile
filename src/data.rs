@@ -431,6 +431,15 @@ impl<'a> DataLayer<'a> {
                                 j["hint"] = json!(e.to_string());
                             }
                         }
+                    } else if s.kind.eq_ignore_ascii_case("mcp") {
+                        let server = s.server.clone().unwrap_or_default();
+                        j.as_object_mut().map(|o| o.remove("table"));
+                        j["server"] = json!(server);
+                        j["tool"] = json!(b.tool);
+                        j["params"] = json!(b.params);
+                        j["readable_here"] = json!(false);
+                        let params = serde_json::to_string(&b.params).unwrap_or_else(|_| "{}".into());
+                        j["hint"] = json!(format!("Call tool `{}` on the `{}` MCP server with params {}; that server returns the rows, this ontology says what they mean.", b.tool, server, params));
                     } else {
                         j["readable_here"] = json!(false);
                         j["config"] = json!(s.config);

@@ -1,0 +1,80 @@
+constraints:
+  - id: MA-010
+    name: Campaigns in a running lift study or geo experiment are frozen
+    applies_to: Campaign
+    rule: in_active_experiment == false
+    severity: block
+    rationale: >
+      Pausing, re-budgeting or retargeting a test cell mid-flight changes the
+      treatment and voids the experiment. Wait for the read-out, or ask the
+      measurement team to end the test first.
+    owner: measurement@stella.example
+    tags: [experiment]
+
+  - id: MA-011
+    name: Only an active campaign can be paused
+    applies_to: pause_campaign
+    rule: campaign.status == "ACTIVE"
+    severity: block
+    rationale: >
+      Pausing a PAUSED, ARCHIVED or DELETED campaign does nothing; the request is
+      almost always aimed at the wrong campaign.
+    owner: measurement@stella.example
+
+  - id: MA-012
+    name: Change the budget where it lives
+    applies_to: change_budget
+    rule: change.level == "campaign" implies campaign.budget_optimization == true
+    severity: block
+    rationale: >
+      Without Advantage campaign budget there is no campaign budget to change;
+      the budget is on each ad set. With it, the campaign amount is the one that
+      moves spend (MA-009 explains why the ad-set amounts do not).
+    owner: measurement@stella.example
+    tags: [budget]
+
+  - id: MA-013
+    name: Budget changes over 20% restart learning
+    applies_to: change_budget
+    rule: double(change.new_amount) * 10.0 <= double(change.current_amount) * 12.0 && double(change.new_amount) * 10.0 >= double(change.current_amount) * 8.0
+    severity: warn
+    rationale: >
+      Meta treats a significant budget change as a significant edit and puts the
+      ad set back into the learning phase. The 20% threshold is our working rule
+      from practice, not a published Meta number; step larger changes over several
+      days.
+    owner: measurement@stella.example
+    tags: [budget]
+
+  - id: MA-014
+    name: A lookalike cannot be seeded from a lookalike
+    applies_to: create_lookalike
+    rule: seed.subtype != "LOOKALIKE"
+    severity: block
+    rationale: Meta rejects lookalike-of-lookalike; seed from a customer, website, app, engagement or value audience.
+    owner: measurement@stella.example
+    tags: [audience]
+
+  - id: MA-015
+    name: The seed needs at least 100 people from one country
+    applies_to: create_lookalike
+    rule: seed.approximate_count_lower_bound >= 100
+    severity: block
+    rationale: >
+      Meta's minimum for a source audience is 100 people in a single country.
+      It recommends 1,000 to 50,000: smaller seeds give noisy lookalikes, larger
+      ones dilute toward the general population.
+    owner: measurement@stella.example
+    tags: [audience]
+
+  - id: MA-016
+    name: Lookalike ratio is between 1% and 20%
+    applies_to: create_lookalike
+    rule: double(lookalike.lookalike_ratio) >= 0.01 && double(lookalike.lookalike_ratio) <= 0.2
+    severity: block
+    rationale: >
+      lookalike_spec.ratio is a fraction of the chosen country's population and
+      Meta accepts 0.01 to 0.20. 1% is most similar to the seed; each step up
+      adds reach and loses similarity.
+    owner: measurement@stella.example
+    tags: [audience]

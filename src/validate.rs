@@ -99,6 +99,13 @@ pub fn validate(ont: &Ontology) -> Report {
                     if t.key_property().is_none() {
                         r.warn("W103", &t.file, format!("type `{}` is bound to data but no property has `key: true`", t.name));
                     }
+                    if src.kind.eq_ignore_ascii_case("mcp") {
+                        if s.tool.trim().is_empty() {
+                            r.err("E012", &t.file, format!("type `{}` binds to MCP source `{}` but names no `tool`", t.name, s.connection));
+                        }
+                    } else if s.table.trim().is_empty() {
+                        r.err("E012", &t.file, format!("type `{}` binds to `{}` but names no `table`", t.name, s.connection));
+                    }
                     if let Some(path) = local_file(ont, src, &s.table) {
                         if !path.exists() {
                             r.warn("W106", &t.file, format!("type `{}`: {} file not found at {}", t.name, src.kind, path.display()));
@@ -106,6 +113,13 @@ pub fn validate(ont: &Ontology) -> Report {
                     }
                 }
             }
+        }
+    }
+
+    // sources
+    for s in ont.sources.values() {
+        if s.kind.eq_ignore_ascii_case("mcp") && s.server.as_deref().map(str::trim).unwrap_or("").is_empty() {
+            r.err("E011", &s.file, format!("source `{}` is `kind: mcp` but has no `server` (the MCP server name agents call)", s.connection));
         }
     }
 

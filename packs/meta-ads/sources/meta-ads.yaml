@@ -1,0 +1,13 @@
+connection: meta_ads
+kind: mcp
+server: meta-ads
+description: >
+  The Meta Ads MCP server the agent already has configured (for example the
+  open-source meta-ads-mcp). It returns rows from the Marketing API: ad accounts,
+  campaigns, ad sets, ads, creatives, audiences and insights. This ontology never
+  calls it. where_is(type) tells the agent which tool to call with which
+  parameters, and this pack says what the rows mean. Tool names follow
+  meta-ads-mcp; if your server names them differently, change the `tool:` on
+  each type's binding and nothing else.
+api_version: v21.0   # TODO verify: the Graph API version your MCP server pins
+amounts: Budgets, bids and spend are in the account currency's minor units (cents for USD, EUR, GBP) and come back as strings; cast before arithmetic.

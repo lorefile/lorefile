@@ -1,0 +1,30 @@
+type: Ad
+description: >
+  The unit that enters the auction: one creative inside one ad set. The ad carries
+  the tracking (pixel and app events through tracking_specs, the conversion_domain)
+  and therefore the attribution. Ad-level insights are the most granular Meta
+  offers and sum to the ad set. An ad that is PAUSED, DISAPPROVED or PENDING_REVIEW
+  inside an ACTIVE ad set delivers nothing, which is why an ad set can look
+  active and spend zero.
+domain: Account structure
+properties:
+  ad_id:             { type: string, key: true }
+  adset_id:          string
+  campaign_id:       string
+  account_id:        string
+  name:              string
+  status:            { type: enum, values: [ACTIVE, PAUSED, DELETED, ARCHIVED] }
+  effective_status:  { type: enum, values: [ACTIVE, PAUSED, DELETED, ARCHIVED, IN_PROCESS, WITH_ISSUES, PENDING_REVIEW, DISAPPROVED, PREAPPROVED, PENDING_BILLING_INFO, CAMPAIGN_PAUSED, ADSET_PAUSED] }
+  creative_id:       { type: string, description: "creative.id" }
+  conversion_domain: { type: string, description: "The domain whose pixel events this ad may claim (Aggregated Event Measurement)" }
+  created_time:      datetime
+  updated_time:      datetime
+relationships:
+  part_of: { to: AdSet, cardinality: many-to-one }
+  uses:    { to: Creative, cardinality: many-to-one }
+source:
+  connection: meta_ads
+  tool: get_ads
+  params: { account_id: "act_<Account.account_id>", adset_id: "<AdSet.adset_id>", limit: 100 }
+owner: measurement@stella.example
+tags: [meta, structure]

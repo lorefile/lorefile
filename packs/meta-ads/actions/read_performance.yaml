@@ -1,0 +1,14 @@
+action: read_performance
+description: >
+  A read-out guard, not a write. Call it before quoting a conversion number for a
+  campaign: pass the campaign and the Conversion row you are about to report. It
+  checks that the campaign can be judged on that KPI, that the window is current
+  and closed, that modelled iOS events have arrived, and that a geo breakdown is
+  not being read as incrementality. Nothing is changed on Meta.
+inputs:
+  campaign: Campaign
+  conversion: Conversion
+checks: [MA-002, MA-003, MA-004, MA-005, MA-007]
+requires_approval_from: none
+side_effects: None. Read-only.
+tags: [read, analysis]

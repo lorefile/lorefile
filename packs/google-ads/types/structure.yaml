@@ -1,0 +1,95 @@
+types:
+  - type: AdGroup
+    description: >
+      The level under a Search, Display, Shopping or Video campaign that holds
+      keywords or targeting and the ads. Bids and targets set here override the
+      campaign. Performance Max and Demand Gen campaigns have asset groups instead,
+      which report far less (no keywords, no search terms beyond categories).
+    domain: Account structure
+    properties:
+      ad_group_id:       { type: string, key: true }
+      campaign_id:       string
+      name:              string
+      status:            { type: enum, values: [ENABLED, PAUSED, REMOVED] }
+      type:              { type: enum, values: [SEARCH_STANDARD, DISPLAY_STANDARD, SHOPPING_PRODUCT_ADS, SHOPPING_SMART_ADS, HOTEL_ADS, VIDEO_BUMPER, VIDEO_TRUE_VIEW_IN_STREAM, VIDEO_TRUE_VIEW_IN_DISPLAY, VIDEO_NON_SKIPPABLE_IN_STREAM, VIDEO_OUTSTREAM, VIDEO_RESPONSIVE, VIDEO_EFFICIENT_REACH, SEARCH_DYNAMIC_ADS, SMART_CAMPAIGN_ADS, TRAVEL_ADS] }
+      cpc_bid_micros:    { type: integer, description: "Manual CPC bid; ignored under Smart Bidding" }
+      target_cpa_micros: { type: integer, description: "Ad-group level tCPA override, if any" }
+    relationships:
+      part_of:  { to: Campaign, cardinality: many-to-one }
+      contains: { to: Ad, cardinality: one-to-many }
+      bids_on:  { to: Keyword, cardinality: one-to-many }
+      observes: { to: Audience, cardinality: many-to-many, description: "Audience segments attached in Targeting or Observation mode" }
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT ad_group.id, ad_group.name, ad_group.status, ad_group.type, ad_group.campaign, ad_group.cpc_bid_micros, ad_group.target_cpa_micros FROM ad_group WHERE campaign.id = <Campaign.campaign_id> AND ad_group.status != 'REMOVED'"
+    owner: measurement@stella.example
+    tags: [google, structure]
+
+  - type: Keyword
+    description: >
+      A keyword criterion on an ad group (ad_group_criterion of type KEYWORD). The
+      match type decides how loosely queries match, and since 2021 all three
+      include close variants (same meaning), so a keyword's clicks are not clicks
+      on that exact text; search_term_view shows the queries that actually matched.
+      A negative keyword (negative true) excludes; negatives do not match close
+      variants. quality_score (1 to 10) is Google's estimate of expected CTR, ad
+      relevance and landing page experience; it is diagnostic, not a KPI.
+    domain: Account structure
+    properties:
+      criterion_id:    { type: string, key: true }
+      ad_group_id:     string
+      text:            string
+      match_type:      { type: enum, values: [EXACT, PHRASE, BROAD] }
+      status:          { type: enum, values: [ENABLED, PAUSED, REMOVED] }
+      negative:        { type: boolean, description: "True excludes queries instead of bidding on them" }
+      approval_status: { type: enum, values: [APPROVED, APPROVED_LIMITED, DISAPPROVED, PENDING_REVIEW, UNDER_REVIEW, AREA_OF_INTEREST_ONLY], description: "Policy state; disapproved keywords do not serve" }
+      quality_score:   { type: integer, description: "1 to 10, null for new or low-volume keywords" }
+      cpc_bid_micros:  integer
+      final_url:       { type: string, description: "Keyword-level final URL override, rarely set" }
+    relationships:
+      in: { to: AdGroup, cardinality: many-to-one }
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.status, ad_group_criterion.negative, ad_group_criterion.approval_status, ad_group_criterion.quality_info.quality_score, ad_group_criterion.cpc_bid_micros, ad_group.id FROM ad_group_criterion WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group.id = <AdGroup.ad_group_id>"
+    owner: measurement@stella.example
+    tags: [google, structure]
+
+  - type: Ad
+    description: >
+      An ad inside an ad group (ad_group_ad). Responsive search ads are the Search
+      default: Google assembles headlines and descriptions per auction, so the ad
+      reports as a whole and its assets only get performance labels. Expanded text
+      ads can no longer be created or edited (since June 2022) but still serve.
+      approval_status is policy; ad_strength is Google's asset-coverage rating,
+      not a performance measure. tracking_url_template and final_url_suffix are
+      where UTMs and ValueTrack parameters go.
+    domain: Account structure
+    properties:
+      ad_id:                 { type: string, key: true }
+      ad_group_id:           string
+      type:                  { type: enum, values: [RESPONSIVE_SEARCH_AD, EXPANDED_TEXT_AD, RESPONSIVE_DISPLAY_AD, VIDEO_RESPONSIVE_AD, VIDEO_AD, SHOPPING_PRODUCT_AD, APP_AD, CALL_AD, IMAGE_AD, DEMAND_GEN_MULTI_ASSET_AD, DEMAND_GEN_CAROUSEL_AD, DEMAND_GEN_VIDEO_RESPONSIVE_AD, LOCAL_AD, SMART_CAMPAIGN_AD] }
+      status:                { type: enum, values: [ENABLED, PAUSED, REMOVED] }
+      approval_status:       { type: enum, values: [APPROVED, APPROVED_LIMITED, DISAPPROVED, AREA_OF_INTEREST_ONLY], description: "policy_summary.approval_status" }
+      review_status:         { type: enum, values: [REVIEWED, REVIEW_IN_PROGRESS, UNDER_APPEAL, ELIGIBLE_MAY_SERVE], description: "policy_summary.review_status" }
+      ad_strength:           { type: enum, values: [PENDING, NO_ADS, POOR, AVERAGE, GOOD, EXCELLENT], description: "Asset coverage rating for responsive ads" }
+      final_urls:            { type: json, description: "Landing pages" }
+      tracking_url_template: { type: string, description: "ValueTrack template, e.g. {lpurl}?utm_source=google&utm_campaign={campaignid}" }
+      final_url_suffix:      string
+      headlines:             { type: json, description: "RSA headline assets (up to 15)" }
+      descriptions:          { type: json, description: "RSA description assets (up to 4)" }
+    relationships:
+      in: { to: AdGroup, cardinality: many-to-one }
+    source:
+      connection: google_ads
+      tool: search
+      params:
+        customer_id: "<Account.customer_id>"
+        query: "SELECT ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.status, ad_group_ad.policy_summary.approval_status, ad_group_ad.policy_summary.review_status, ad_group_ad.ad_strength, ad_group_ad.ad.final_urls, ad_group_ad.ad.tracking_url_template, ad_group_ad.ad.final_url_suffix, ad_group_ad.ad.responsive_search_ad.headlines, ad_group_ad.ad.responsive_search_ad.descriptions, ad_group.id FROM ad_group_ad WHERE ad_group.id = <AdGroup.ad_group_id> AND ad_group_ad.status != 'REMOVED'"
+    owner: creative@stella.example
+    tags: [google, structure]

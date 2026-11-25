@@ -1,0 +1,24 @@
+name: google-ads
+version: 0.1.0
+description: >
+  What Google Ads data means. The Google Ads MCP server runs GAQL and returns
+  rows: campaigns, ad groups, keywords, conversion actions, metrics. This pack
+  says what those rows are: which campaign type and bid strategy buys which
+  result, that metrics.conversions counts only primary conversion actions under
+  each action's attribution model (data-driven by default) and is booked on the
+  click date so recent days keep moving, that a geo segment is the targeted
+  location that matched (presence or interest) and not where the person stood,
+  and that none of it is incrementality. Load it next to the data MCP.
+domains:
+  - name: Account structure
+    description: Customer, campaign, ad group, keyword, ad.
+    types: [Account, Campaign, AdGroup, Keyword, Ad]
+  - name: Bidding and targeting
+    description: What the auction optimises for, who and where.
+    types: [BiddingStrategy, Audience, GeoTarget]
+  - name: Measurement
+    description: Conversion actions and the metric rows built on them.
+    types: [ConversionAction, Readout]
+  - name: Changes
+    description: Proposed edits an agent writes down before asking validate.
+    types: [BudgetChange, TargetChange]

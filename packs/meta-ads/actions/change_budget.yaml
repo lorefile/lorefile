@@ -1,0 +1,14 @@
+action: change_budget
+description: >
+  Raise or lower a daily or lifetime budget. The budget lives on the campaign
+  under Advantage campaign budget and on the ad set otherwise, so the agent names
+  the campaign, the ad set the request is about, and the change itself. Pass
+  amounts in minor units (cents) like the API.
+inputs:
+  campaign: Campaign
+  adset: AdSet
+  change: BudgetChange
+checks: [MA-007, MA-008, MA-009, MA-010]
+requires_approval_from: Paid social lead for changes above 20%; measurement team if in_active_experiment is true
+side_effects: Calls update_campaign or update_adset with daily_budget or lifetime_budget on the meta-ads MCP server; a change above about 20% restarts the learning phase.
+tags: [write, budget]

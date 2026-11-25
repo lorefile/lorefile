@@ -1,0 +1,11 @@
+action: change_bid_target
+description: >
+  Change a target CPA or target ROAS on a Smart Bidding campaign. Pass the
+  current and new target as decimals (tCPA in currency units, tROAS as a ratio).
+inputs:
+  campaign: Campaign
+  change: TargetChange
+checks: [GA-005, GA-012]
+requires_approval_from: Paid search lead
+side_effects: Mutates the campaign's target_cpa or target_roas through the google-ads MCP server; the strategy re-learns for one to two weeks. On a portfolio strategy the change hits every campaign sharing it.
+tags: [write, bidding]

@@ -1,0 +1,35 @@
+type: Audience
+description: >
+  A custom audience: people Meta lists from your data (website visitors through
+  the pixel, app events, a customer file, engagement) or expands into a lookalike.
+  Sizes are shown as a lower and upper bound, never exact. A lookalike is built
+  from a seed audience, one country and a ratio between 1% and 20% of that
+  country; it cannot be seeded from another lookalike, and Meta needs at least
+  100 people from one country in the seed (1,000 to 50,000 recommended). Website
+  audiences keep at most 180 days of visitors. Membership says nothing about
+  whether an ad caused anything, and overlapping audiences across ad sets make
+  those ad sets compete against each other.
+domain: Targeting and delivery
+properties:
+  audience_id:                   { type: string, key: true }
+  account_id:                    string
+  name:                          string
+  subtype:                       { type: enum, values: [CUSTOM, WEBSITE, APP, OFFLINE_CONVERSION, CLAIM, PARTNER, VIDEO, LOOKALIKE, ENGAGEMENT, BAG_OF_ACCOUNTS, STUDY_RULE_AUDIENCE, MEASUREMENT, REGULATED_CATEGORIES_AUDIENCE], description: "How the list is built. LOOKALIKE is derived from a seed" }
+  approximate_count_lower_bound: { type: integer, description: "Meta stopped showing exact sizes in 2022; this is the low end" }
+  approximate_count_upper_bound: integer
+  retention_days:                { type: integer, description: "For website and app audiences: how far back visitors are kept, max 180" }
+  delivery_status_code:          { type: integer, description: "delivery_status.code: 200 means ready for delivery; 300 means too small" }
+  operation_status_code:         { type: integer, description: "operation_status.code: 200 normal, 400-series means still populating or errored" }
+  lookalike_ratio:               { type: number, description: "lookalike_spec.ratio as a fraction, 0.01 to 0.20; only for LOOKALIKE. Pass 0.05, not 5" }
+  lookalike_country:             { type: string, description: "lookalike_spec.country, ISO 2-letter; one country per lookalike" }
+  origin_audience_id:            { type: string, description: "lookalike_spec.origin[0].id: the seed audience" }
+  data_source_type:              { type: string, description: "data_source.type, e.g. FILE_IMPORTED, EVENT_BASED, SEED_BASED" }
+  time_created:                  datetime
+relationships:
+  seeded_from: { to: Audience, cardinality: many-to-one, description: "For a lookalike, the seed audience" }
+source:
+  connection: meta_ads
+  tool: get_custom_audiences   # TODO verify: tool name on your Meta Ads MCP server
+  params: { account_id: "act_<Account.account_id>", limit: 100 }
+owner: measurement@stella.example
+tags: [meta, targeting]

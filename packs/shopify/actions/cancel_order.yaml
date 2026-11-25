@@ -1,0 +1,11 @@
+action: cancel_order
+description: >
+  Cancel an order: releases or refunds the payment, optionally restocks, and
+  sets cancelled_at. Only unfulfilled orders can be cancelled; shipped ones are
+  refunded instead.
+inputs:
+  order: Order
+checks: [SH-001, SH-002]
+requires_approval_from: Store manager; Finance when financial_status is paid
+side_effects: Calls orderCancel (or POST /orders/{id}/cancel.json) on the shopify MCP server with reason, restock and refund flags; the order leaves sales reports net of zero; the customer is emailed unless suppressed.
+tags: [write]

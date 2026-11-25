@@ -1,0 +1,15 @@
+action: create_lookalike
+description: >
+  Create a lookalike audience from a seed audience: one country, one ratio
+  between 1% and 20%. The agent describes the new audience as an Audience record
+  with subtype LOOKALIKE, lookalike_ratio, lookalike_country and
+  origin_audience_id pointing at the seed.
+inputs:
+  seed: Audience
+  lookalike: Audience
+effects:
+  - create: { relationship: seeded_from, from: lookalike, to: seed }
+checks: []
+requires_approval_from: Paid social lead
+side_effects: Calls create_custom_audience with a lookalike_spec on the meta-ads MCP server; the audience takes hours to populate and is not deliverable until delivery_status_code is 200.
+tags: [write, audience]

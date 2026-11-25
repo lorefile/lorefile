@@ -1,0 +1,12 @@
+action: change_budget
+description: >
+  Change a campaign's daily budget. Amounts in micros like the API. If the
+  budget is shared, the change is scoped to the shared budget and hits every
+  campaign on it.
+inputs:
+  campaign: Campaign
+  change: BudgetChange
+checks: [GA-005, GA-006, GA-012]
+requires_approval_from: Paid search lead for changes above 20% or on a shared budget; measurement team if in_active_experiment is true
+side_effects: Mutates campaign_budget.amount_micros through the google-ads MCP server; Smart Bidding enters LEARNING_BUDGET_CHANGE after a large change.
+tags: [write, budget]

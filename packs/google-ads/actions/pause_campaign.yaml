@@ -1,0 +1,12 @@
+action: pause_campaign
+description: >
+  Set a campaign's status to PAUSED. Every ad group under it stops serving.
+  Check that the campaign is enabled, is not an experiment arm or a cell in one
+  of our geo experiments, and that the reason is a KPI the bid strategy can be
+  judged on.
+inputs:
+  campaign: Campaign
+checks: [GA-006, GA-012]
+requires_approval_from: Paid search lead; measurement team if in_active_experiment is true
+side_effects: Mutates campaign.status to PAUSED through the google-ads MCP server; Smart Bidding re-learns on resume.
+tags: [write]

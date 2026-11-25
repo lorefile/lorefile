@@ -1,0 +1,33 @@
+types:
+  - type: BudgetChange
+    description: >
+      A proposed daily budget edit, written by the agent before calling validate.
+      Amounts are micros of the account currency, as the API stores them (1 USD =
+      1,000,000). If the campaign uses a shared budget the change applies to the
+      budget and every campaign on it, so scope must say shared_budget.
+    domain: Changes
+    properties:
+      change_id:             { type: string, key: true, description: "Made by the agent" }
+      campaign_id:           string
+      scope:                 { type: enum, values: [campaign_budget, shared_budget], description: "campaign_budget for a budget used by one campaign; shared_budget when campaign_budget.explicitly_shared is true" }
+      current_amount_micros: { type: integer, description: "As read from campaign_budget.amount_micros" }
+      new_amount_micros:     integer
+      reason:                string
+    owner: measurement@stella.example
+    tags: [google, change]
+
+  - type: TargetChange
+    description: >
+      A proposed change to a Smart Bidding target: target CPA (currency units,
+      e.g. 25.0) or target ROAS (a ratio, e.g. 3.5). Only campaigns or portfolio
+      strategies whose type carries that target can take it. Pass decimals.
+    domain: Changes
+    properties:
+      change_id:       { type: string, key: true, description: "Made by the agent" }
+      campaign_id:     string
+      target_type:     { type: enum, values: [target_cpa, target_roas] }
+      current_target:  { type: number, description: "tCPA in currency units or tROAS ratio; pass a decimal like 25.0" }
+      new_target:      { type: number, description: "Pass a decimal like 30.0" }
+      reason:          string
+    owner: measurement@stella.example
+    tags: [google, change]

@@ -1,0 +1,51 @@
+type: Campaign
+description: >
+  Where the campaign type, the bid strategy, the budget and the geo setting live.
+  advertising_channel_type fixes the inventory and the controls: SEARCH has
+  keywords, SHOPPING has product groups, VIDEO has YouTube formats, DISPLAY has
+  placements, PERFORMANCE_MAX and DEMAND_GEN have asset groups and few levers and
+  little reporting below the campaign. bidding_strategy_type is what the auction
+  optimises: MAXIMIZE_CONVERSIONS and TARGET_CPA buy conversions (judge on CPA),
+  MAXIMIZE_CONVERSION_VALUE and TARGET_ROAS buy value (judge on ROAS), MANUAL_CPC
+  and TARGET_SPEND buy clicks, MANUAL_CPM, TARGET_CPM, MANUAL_CPV and
+  TARGET_IMPRESSION_SHARE buy impressions, views or share (judge on those, never
+  on CPA). Smart Bidding re-learns for one to two weeks after a target, budget or
+  conversion-setting change, which bidding_strategy_system_status shows. The geo
+  target type matters for measurement: PRESENCE_OR_INTEREST (the default) serves
+  people outside the location who search for it, PRESENCE serves only people in
+  it. status is what was set; serving_status is whether it serves.
+domain: Account structure
+properties:
+  campaign_id:                    { type: string, key: true }
+  customer_id:                    string
+  name:                           string
+  status:                         { type: enum, values: [ENABLED, PAUSED, REMOVED], description: "Configured status" }
+  serving_status:                 { type: enum, values: [SERVING, NONE, ENDED, PENDING, SUSPENDED], description: "Whether it actually serves. ENDED means end_date passed; PENDING means start_date is in the future" }
+  advertising_channel_type:       { type: enum, values: [SEARCH, DISPLAY, SHOPPING, HOTEL, VIDEO, MULTI_CHANNEL, LOCAL, SMART, PERFORMANCE_MAX, LOCAL_SERVICES, DISCOVERY, DEMAND_GEN, TRAVEL], description: "Campaign type. MULTI_CHANNEL is App; DISCOVERY became DEMAND_GEN" }
+  advertising_channel_sub_type:   { type: string, description: "e.g. VIDEO_ACTION, APP_CAMPAIGN, SHOPPING_SMART_ADS, VIDEO_REACH_TARGET_FREQUENCY" }
+  bidding_strategy_type:          { type: enum, values: [MANUAL_CPC, MANUAL_CPM, MANUAL_CPV, MAXIMIZE_CONVERSIONS, MAXIMIZE_CONVERSION_VALUE, TARGET_CPA, TARGET_ROAS, TARGET_IMPRESSION_SHARE, TARGET_SPEND, TARGET_CPM, PERCENT_CPC, ENHANCED_CPC, COMMISSION], description: "What the auction optimises for. ENHANCED_CPC is retired for new campaigns" }
+  bidding_strategy_id:            { type: string, description: "Set when the strategy is a portfolio BiddingStrategy shared across campaigns" }
+  bidding_strategy_system_status: { type: enum, values: [ENABLED, LEARNING_NEW, LEARNING_SETTING_CHANGE, LEARNING_BUDGET_CHANGE, LEARNING_COMPOSITION_CHANGE, LEARNING_CONVERSION_TYPE_CHANGE, LEARNING_CONVERSION_SETTING_CHANGE, LIMITED_BY_BUDGET, LIMITED_BY_DATA, LIMITED_BY_CPC_BID_CEILING, LIMITED_BY_CPC_BID_FLOOR, LIMITED_BY_LOW_QUALITY, LIMITED_BY_INVENTORY, MISCONFIGURED_CONVERSION_TYPES, MISCONFIGURED_CONVERSION_SETTINGS, MISCONFIGURED_SHARED_BUDGET, MISCONFIGURED_STRATEGY_TYPE, MISCONFIGURED_ZERO_ELIGIBILITY, PAUSED, UNAVAILABLE, MULTIPLE_LEARNING, MULTIPLE_LIMITED, MULTIPLE_MISCONFIGURED, MULTIPLE], description: "Smart Bidding state. LEARNING_* means CPA and ROAS are unstable" }
+  target_cpa_micros:              { type: integer, description: "From target_cpa or maximize_conversions; micros of currency_code; 0 when none" }
+  target_roas:                    { type: number, description: "From target_roas or maximize_conversion_value; a ratio like 3.5; 0 when none" }
+  budget_amount_micros:           { type: integer, description: "campaign_budget.amount_micros, the daily budget; Google may spend up to twice it on a day and evens out over the month" }
+  budget_explicitly_shared:       { type: boolean, description: "campaign_budget.explicitly_shared: the budget is shared across campaigns and is changed on the budget, not here" }
+  positive_geo_target_type:       { type: enum, values: [PRESENCE_OR_INTEREST, SEARCH_INTEREST, PRESENCE], description: "geo_target_type_setting.positive_geo_target_type. PRESENCE_OR_INTEREST is the default" }
+  negative_geo_target_type:       { type: enum, values: [PRESENCE_OR_INTEREST, PRESENCE], description: "How excluded locations are applied" }
+  experiment_type:                { type: enum, values: [BASE, DRAFT, EXPERIMENT], description: "Google's own campaign experiments: EXPERIMENT is a trial arm of a BASE campaign" }
+  in_active_experiment:           { type: boolean, description: "Set by the measurement team, not by Google: true while this campaign is a cell in a running geo experiment or lift test" }
+  start_date:                     date
+  end_date:                       date
+relationships:
+  belongs_to: { to: Account, cardinality: many-to-one }
+  contains:   { to: AdGroup, cardinality: one-to-many, description: "Ad groups; Performance Max and Demand Gen have asset groups instead" }
+  bids_with:  { to: BiddingStrategy, cardinality: many-to-one, description: "Portfolio strategy, when bidding_strategy_id is set" }
+  targets:    { to: GeoTarget, cardinality: many-to-many, description: "Location criteria, positive and negative" }
+source:
+  connection: google_ads
+  tool: search
+  params:
+    customer_id: "<Account.customer_id>"
+    query: "SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.advertising_channel_type, campaign.advertising_channel_sub_type, campaign.bidding_strategy_type, campaign.bidding_strategy, campaign.bidding_strategy_system_status, campaign.target_cpa.target_cpa_micros, campaign.maximize_conversions.target_cpa_micros, campaign.target_roas.target_roas, campaign.maximize_conversion_value.target_roas, campaign_budget.amount_micros, campaign_budget.explicitly_shared, campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type, campaign.experiment_type, campaign.start_date, campaign.end_date FROM campaign WHERE campaign.status != 'REMOVED'"
+owner: measurement@stella.example
+tags: [google, structure]

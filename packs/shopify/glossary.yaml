@@ -1,0 +1,65 @@
+terms:
+  - term: GMV
+    means: Order
+    description: Gross merchandise value; sum of total_price over non-test, non-cancelled orders in a period, shop currency.
+  - term: AOV
+    means: Order
+    description: Average order value = total sales / number of orders, same exclusions.
+  - term: net sales
+    means: Order
+    description: Gross sales minus discounts minus returns, before tax and shipping; Shopify's own definition.
+  - term: gross sales
+    means: LineItem
+    description: price times quantity before discounts, returns, tax and shipping.
+  - term: total sales
+    means: Order
+    description: Shopify's headline number; gross sales minus discounts and returns, plus tax and shipping (and duties, fees).
+  - term: sales channel
+    means: Order
+    description: Where the order was taken; Order.source_name. Not the marketing channel.
+  - term: POS
+    means: Order
+    description: Point of sale; source_name pos.
+  - term: draft order
+    means: Order
+    description: Staff-created order; source_name shopify_draft_order.
+  - term: customer journey
+    means: Order
+    description: customerJourneySummary with first and last visit, UTMs and referrer; where attribution lives.
+  - term: UTM
+    means: Order
+    description: Campaign parameters on landing_site and in the customer journey visits.
+  - term: new customer
+    means: Order
+    description: An order with customer_order_index 1; not Customer.orders_count.
+  - term: return
+    means: Refund
+  - term: restock
+    means: Refund
+    description: Inventory coming back; refund_line_items restock_type.
+  - term: coupon
+    means: DiscountCode
+  - term: promo code
+    means: DiscountCode
+  - term: shipment
+    means: Fulfillment
+  - term: tracking
+    means: Fulfillment
+    description: shipment_status and tracking_number.
+  - term: SKU
+    means: Variant
+    description: The merchant's stock code on a variant; not guaranteed unique.
+  - term: inventory
+    means: Variant
+    description: inventory_quantity, summed over locations.
+  - term: gift card
+    means: LineItem
+    description: A line item with gift_card true; a liability, not a sale.
+  - term: guest checkout
+    means: Customer
+    description: An order without an account still creates a Customer with state disabled.
+  - term: storefront
+    means: Shop
+  - term: Online Store
+    means: Shop
+    description: The web sales channel; orders from it have source_name web.

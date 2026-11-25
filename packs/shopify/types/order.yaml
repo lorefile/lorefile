@@ -1,0 +1,82 @@
+type: Order
+# TODO verify: Shopify's marketing-report attribution model and window (stated below as last non-direct click, 30 days)
+description: >
+  One checkout, from any sales channel. Revenue rules: an order is a sale at
+  processed_at (the shop time zone's day), in the shop currency, unless test is
+  true or cancelled_at is set. total_price is the amount at order time (items
+  after discounts, plus shipping and tax); current_total_price is what is left
+  after refunds and edits. financial_status is the money (pending, authorized,
+  paid, partially_refunded, refunded, voided); fulfillment_status is the goods
+  (null means unfulfilled, partial, fulfilled, restocked); the two are
+  independent. source_name is the sales channel that created the order (web is
+  the Online Store; pos; shopify_draft_order for staff-made orders; a channel
+  app's handle or id for Shop, Facebook and Instagram, Google, TikTok). It is not
+  the marketing channel that earned the customer. For that, read the customer
+  journey (first and last visit with UTM parameters and referrer), landing_site
+  and referring_site; Shopify's own marketing reports use last non-direct click
+  with a 30-day window. customer_order_index 1 means this was the customer's
+  first order; that, not Customer.orders_count, is how to split new from
+  returning in a period.
+domain: Orders
+properties:
+  order_id:                 { type: string, key: true, description: "Numeric id; GraphQL gid://shopify/Order/<id>" }
+  name:                     { type: string, description: "The display number, e.g. #1001" }
+  order_number:             integer
+  created_at:               datetime
+  processed_at:             { type: datetime, description: "The date reports use. Equals created_at unless the order was imported or back-dated" }
+  updated_at:               datetime
+  cancelled_at:             { type: datetime, description: "null unless cancelled" }
+  cancel_reason:            { type: enum, values: [customer, fraud, inventory, declined, staff, other] }
+  closed_at:                { type: datetime, description: "Archived; null while open" }
+  test:                     { type: boolean, description: "True for orders placed with a test gateway or in test mode. Never revenue" }
+  confirmed:                boolean
+  financial_status:         { type: enum, values: [pending, authorized, partially_paid, paid, partially_refunded, refunded, voided, expired], description: "The money. authorized is reserved but not captured; voided means the authorization was released" }
+  fulfillment_status:       { type: string, description: "The goods: null (unfulfilled), partial, fulfilled, restocked" }
+  currency:                 { type: string, description: "Shop currency; all plain money fields are in it" }
+  presentment_currency:     { type: string, description: "What the customer paid in; differs from currency on multi-currency shops" }
+  total_price:              { type: number, description: "At order time: items after discounts + shipping + tax, shop currency" }
+  subtotal_price:           { type: number, description: "Items after discounts, before shipping and tax" }
+  total_discounts:          number
+  total_tax:                number
+  total_shipping_price:     { type: number, description: "total_shipping_price_set.shop_money.amount" }
+  current_total_price:      { type: number, description: "After refunds and edits: what the order is worth now" }
+  current_subtotal_price:   number
+  total_outstanding:        { type: number, description: "Still unpaid" }
+  source_name:              { type: string, description: "Sales channel that created the order: web, pos, shopify_draft_order, iphone, android, or an app handle/id. Not marketing attribution" }
+  source_identifier:        { type: string, description: "Channel-specific reference, e.g. the POS receipt or app order id" }
+  landing_site:             { type: string, description: "Landing URL of the session that placed the order, UTMs included" }
+  referring_site:           { type: string, description: "Referrer of that session" }
+  landing_site_ref:         { type: string, description: "The ref= parameter, if any" }
+  customer_order_index:     { type: integer, description: "customerJourneySummary.customerOrderIndex: 1 is the customer's first order" }   # TODO verify: index base
+  days_to_conversion:       { type: integer, description: "customerJourneySummary.daysToConversion" }
+  moments_count:            { type: integer, description: "customerJourneySummary.momentsCount: visits before the order" }
+  first_visit_source:       { type: string, description: "customerJourneySummary.firstVisit.source" }
+  first_visit_utm_campaign: { type: string, description: "customerJourneySummary.firstVisit.utmParameters.campaign" }
+  last_visit_source:        { type: string, description: "customerJourneySummary.lastVisit.source" }
+  last_visit_utm_campaign:  { type: string, description: "customerJourneySummary.lastVisit.utmParameters.campaign" }
+  customer_id:              string
+  email:                    { type: string, description: "Personal data; do not copy into reports" }
+  tags:                     json
+  note_attributes:          { type: json, description: "Custom key/values apps and themes attach, often attribution surveys" }
+  discount_codes:           { type: json, description: "Codes applied: [{code, amount, type}]" }
+  payment_gateway_names:    json
+  location_id:              { type: string, description: "POS location, when source_name is pos" }
+  app_id:                   { type: string, description: "The app or channel that created the order" }
+  customer_locale:          string
+relationships:
+  placed_by:   { to: Customer, cardinality: many-to-one }
+  contains:    { to: LineItem, cardinality: one-to-many }
+  shipped_by:  { to: Fulfillment, cardinality: one-to-many }
+  refunded_by: { to: Refund, cardinality: one-to-many }
+  used:        { to: DiscountCode, cardinality: many-to-many, description: "Codes applied at checkout" }
+  from_shop:   { to: Shop, cardinality: many-to-one }
+source:
+  connection: shopify
+  tool: get_orders
+  params:
+    status: any
+    created_at_min: "YYYY-MM-DDT00:00:00Z"
+    limit: 250
+    graphql: "{ orders(first: 250, query: \"processed_at:>=YYYY-MM-DD\") { nodes { id name processedAt createdAt cancelledAt cancelReason closedAt test confirmed displayFinancialStatus displayFulfillmentStatus currencyCode presentmentCurrencyCode totalPriceSet { shopMoney { amount } presentmentMoney { amount currencyCode } } currentTotalPriceSet { shopMoney { amount } } subtotalPriceSet { shopMoney { amount } } totalDiscountsSet { shopMoney { amount } } totalTaxSet { shopMoney { amount } } totalShippingPriceSet { shopMoney { amount } } sourceName sourceIdentifier landingPageUrl referrerUrl customerJourneySummary { customerOrderIndex daysToConversion momentsCount firstVisit { source sourceType referrerUrl landingPage utmParameters { source medium campaign content term } } lastVisit { source sourceType referrerUrl landingPage utmParameters { source medium campaign content term } } } customer { id } discountCodes tags customAttributes { key value } app { id name } } } }"
+owner: ecommerce@stella.example
+tags: [shopify, orders]

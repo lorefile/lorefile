@@ -1,0 +1,12 @@
+action: compare_readouts
+description: >
+  A read-out guard, not a write. Call it before saying "A did better than B" about
+  two metric values (two campaigns, two periods, two regions). It blocks when the
+  two rows are different metrics and warns when either is still provisional.
+inputs:
+  a: Readout
+  b: Readout
+checks: [GA-002, GA-003]
+requires_approval_from: none
+side_effects: None. Read-only.
+tags: [read, analysis]

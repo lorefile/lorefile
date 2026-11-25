@@ -1,0 +1,33 @@
+type: Account
+description: >
+  A Google Ads customer (GAQL resource customer). customer_id is ten digits
+  without dashes. Every metric under it is in currency_code and every date is a
+  day in time_zone; cost comes back in micros. A manager account (MCC) holds no
+  campaigns of its own: query the client customer_id, with the manager as
+  login-customer-id. A test account serves nothing and its metrics are fake.
+  auto_tagging_enabled adds the gclid to landing-page URLs, which is what lets a
+  conversion be tied back to a click; conversion_tracking_status says whether this
+  account or a manager owns the conversion actions (cross-account tracking).
+domain: Account structure
+properties:
+  customer_id:                { type: string, key: true, description: "Ten digits, no dashes, e.g. 1234567890" }
+  descriptive_name:           string
+  currency_code:              { type: string, description: "ISO 4217; every _micros field is in this currency" }
+  time_zone:                  { type: string, description: "IANA zone; a 'day' in any report is this zone's day" }
+  manager:                    { type: boolean, description: "True for an MCC; no campaigns live here" }
+  test_account:               { type: boolean, description: "True for a test account: nothing serves, metrics are synthetic" }
+  status:                     { type: enum, values: [ENABLED, CANCELED, SUSPENDED, CLOSED] }
+  auto_tagging_enabled:       { type: boolean, description: "Appends gclid to URLs; off means web analytics cannot see the click" }
+  conversion_tracking_id:     { type: string, description: "conversion_tracking_setting.conversion_tracking_id" }
+  conversion_tracking_status: { type: enum, values: [NOT_CONVERSION_TRACKED, CONVERSION_TRACKING_MANAGED_BY_SELF, CONVERSION_TRACKING_MANAGED_BY_THIS_MANAGER, CONVERSION_TRACKING_MANAGED_BY_ANOTHER_MANAGER], description: "Who owns the conversion actions this account reports" }
+  optimization_score:         { type: number, description: "Google's own 0 to 1 score of how many of its recommendations are applied; not a performance measure" }
+relationships:
+  owns: { to: Campaign, cardinality: one-to-many }
+source:
+  connection: google_ads
+  tool: search
+  params:
+    customer_id: "<customer_id>"
+    query: "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account, customer.status, customer.auto_tagging_enabled, customer.conversion_tracking_setting.conversion_tracking_id, customer.conversion_tracking_setting.conversion_tracking_status FROM customer"
+owner: measurement@stella.example
+tags: [google, structure]

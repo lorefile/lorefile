@@ -1,0 +1,12 @@
+connection: google_ads
+kind: mcp
+server: google-ads
+description: >
+  The Google Ads MCP server the agent already has configured. It runs Google Ads
+  Query Language (GAQL) against the Google Ads API and returns rows. This
+  ontology never calls it. where_is(type) gives the tool, the customer_id
+  parameter and a ready GAQL query for each type; the GAQL is the stable part, so
+  if your server names its query tool differently (search, run_gaql, execute_gaql),
+  change `tool:` on each binding and keep the query.
+tool_note: "TODO verify: tool name on your Google Ads MCP server (this pack assumes `search` with customer_id and query)"
+amounts: Money fields end in _micros and are in the account currency; divide by 1,000,000. customer_id is ten digits without dashes. Dates are the account time zone's days.
