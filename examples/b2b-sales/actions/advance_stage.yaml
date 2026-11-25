@@ -1,0 +1,15 @@
+action: advance_stage
+description: >
+  Move a deal to a different stage. The stage being entered decides what the
+  deal must already have; skipping ahead is allowed but flagged.
+inputs:
+  opportunity: Opportunity
+  from: Stage
+  to: Stage
+effects:
+  - remove: { relationship: at_stage, from: opportunity, to: from }
+  - create: { relationship: at_stage, from: opportunity, to: to }
+checks: [ST-001, ST-002, ST-003]
+requires_approval_from: Nobody; the sales manager is notified when a stage is skipped
+side_effects: Updates the stage and probability in the CRM, recalculates the weighted forecast.
+tags: [pipeline]

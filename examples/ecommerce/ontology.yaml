@@ -1,0 +1,20 @@
+name: lumen-ecommerce
+version: 0.1.0
+description: >
+  Lumen Home sells lighting, kitchen and outdoor goods online from three
+  warehouses. Some products ship as hazardous goods (lithium batteries,
+  aerosols). This ontology is what our support, fulfilment and marketing
+  agents read before they touch an order, a shipment or a promotion.
+domains:
+  - name: Customers & orders
+    description: Who bought what, how they paid, and what came back.
+    types: [Customer, Order, OrderLine, PaymentMethod, Return]
+  - name: Catalogue & stock
+    description: Products, their sellable variants, and where the units sit.
+    types: [Product, Variant, Inventory, Warehouse]
+  - name: Fulfilment
+    description: Parcels and the carriers that move them.
+    types: [Shipment, Carrier]
+  - name: Marketing
+    description: Discount codes and their guard rails.
+    types: [Promotion]

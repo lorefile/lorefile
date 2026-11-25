@@ -1,0 +1,16 @@
+relationship: discounted_by
+from: Order
+to: Promotion
+cardinality: many-to-many
+description: >
+  A promotion applied to an order. Rules here can see `order` and `promotion`.
+  apply_promotion creates this edge, so stacking and eligibility rules are
+  checked against the order as it stands.
+properties:
+  applied_on:   date
+  amount_usd:   { type: number, unit: USD, description: "Discount this code took off, in dollars" }
+source:
+  connection: shop_files
+  table: order_promotions
+  from_key: order_id
+  to_key: promotion_id

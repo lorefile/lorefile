@@ -1,0 +1,33 @@
+constraints:
+  - id: INV-001
+    name: Inventory cannot go negative
+    applies_to: Inventory
+    rule: on_hand >= 0 && reserved >= 0
+    severity: block
+    rationale: A negative count means the system and the shelf disagree; the warehouse recounts before anything is booked against the record.
+    owner: planning@lumen.example
+
+  - id: INV-002
+    name: Reserved cannot exceed on hand
+    applies_to: Inventory
+    rule: reserved <= on_hand
+    severity: warn
+    rationale: We have promised more units than we hold (oversold); Support has to warn the affected customers.
+    owner: planning@lumen.example
+
+  - id: INV-004
+    name: Hazardous stock only in licensed warehouses
+    applies_to: restock
+    rule: inventory.hazardous == true implies warehouse.hazmat_licensed == true
+    severity: block
+    rationale: Fire code and the dangerous-goods storage licence; unlicensed sites may not hold lithium or aerosols.
+    owner: compliance@lumen.example
+    tags: [hazmat, compliance]
+
+  - id: WH-001
+    name: Warehouse must be active
+    applies_to: Warehouse
+    rule: status == "active"
+    severity: block
+    rationale: Closed sites still exist in the data for history; nothing new is booked into them.
+    owner: fulfilment@lumen.example

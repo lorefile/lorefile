@@ -1,0 +1,27 @@
+constraints:
+  - id: EC-001
+    name: Only unshipped orders can be cancelled
+    applies_to: Order
+    rule: status in ["placed", "paid", "packing"]
+    severity: block
+    rationale: Once the carrier has the parcel the order is handled as a return, not a cancellation.
+    owner: support@lumen.example
+
+  - id: EC-003
+    name: Large first orders need fraud review
+    applies_to: Order
+    rule: total_usd > 2000.0 implies is_first_order == false
+    severity: warn
+    rationale: >
+      A first order above $2,000 is the classic card-testing and refund-fraud
+      pattern. Risk reviews it before any discount or refund is applied.
+    owner: risk@lumen.example
+    tags: [fraud]
+
+  - id: EC-004
+    name: Refunds need a paid order
+    applies_to: Order
+    rule: payment_status == "paid"
+    severity: block
+    rationale: Pending charges are voided, not refunded; refunded orders cannot be refunded twice.
+    owner: payments@lumen.example

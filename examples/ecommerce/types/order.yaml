@@ -1,0 +1,25 @@
+type: Order
+description: >
+  One checkout. Status follows the parcel (placed → paid → packing → shipped →
+  delivered); payment_status follows the money. Both matter for refunds and cancellations.
+properties:
+  order_id:          { type: string, key: true, description: "Order number, e.g. ORD-1007" }
+  customer_id:       { type: string, description: "Customer who placed it; see Customer" }
+  placed_on:         date
+  status:            { type: enum, values: [placed, paid, packing, shipped, delivered, cancelled, returned], description: "Fulfilment state" }
+  payment_status:    { type: enum, values: [pending, paid, refunded, partially_refunded], description: "Money state, owned by Payments" }
+  subtotal_usd:      { type: number, unit: USD, description: "Lines before discounts and shipping" }
+  discount_pct:      { type: number, description: "Percent already taken off the subtotal by promotions applied so far" }
+  total_usd:         { type: number, unit: USD, description: "What the customer was charged" }
+  is_first_order:    { type: boolean, description: "True when the customer had no delivered orders at checkout; drives fraud and promotion rules" }
+  payment_method_id: { type: string, description: "The card or wallet charged; see PaymentMethod" }
+  destination_region: { type: enum, values: [east, central, west], description: "Shipping region of the address" }
+relationships:
+  placed_by:  { to: Customer, cardinality: many-to-one }
+  paid_with:  { to: PaymentMethod, cardinality: many-to-one, description: "The payment method charged at checkout; refunds go back to it" }
+source:
+  connection: shop_files
+  table: orders
+  key: order_id
+owner: support@lumen.example
+tags: [orders, core]

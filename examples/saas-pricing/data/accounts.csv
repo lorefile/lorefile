@@ -1,0 +1,16 @@
+account_id,name,status,segment,country,billing_email,created_on,trial_ends_on,arr_usd
+ACC-1001,Harbor Labs,active,self_serve,US,ap@harborlabs.example,2024-02-11,,588.0
+ACC-1002,Quill & Co,trial,self_serve,GB,finance@quill.example,2026-03-20,2026-04-03,0.0
+ACC-1003,Verdant Mobility,active,mid_market,DE,billing@verdant.example,2023-09-05,,23880.0
+ACC-1004,Atlas Freight,active,mid_market,US,ap@atlasfreight.example,2023-05-18,,47760.0
+ACC-1005,Pebble Health,active,enterprise,US,procurement@pebble.example,2022-11-30,,210000.0
+ACC-1006,Nimbus Games,past_due,self_serve,CA,owner@nimbus.example,2025-01-14,,2388.0
+ACC-1007,Copperline Retail,active,mid_market,US,finance@copperline.example,2024-06-02,,28656.0
+ACC-1008,Sable Finance,churned,mid_market,US,ap@sable.example,2023-01-20,,0.0
+ACC-1009,Orchard Schools,active,mid_market,US,bursar@orchard.example,2024-10-09,,14328.0
+ACC-1010,Kestrel Robotics,active,enterprise,US,ap@kestrel.example,2023-03-07,,180000.0
+ACC-1011,Marlow Studio,active,self_serve,AU,hello@marlow.example,2025-08-22,,4704.0
+ACC-1012,Tidewater Energy,active,enterprise,US,procurement@tidewater.example,2022-06-15,,264000.0
+ACC-1013,Fennel Foods,trial,self_serve,US,ops@fennel.example,2026-03-28,2026-04-11,0.0
+ACC-1014,Granite Legal,active,self_serve,US,admin@granite.example,2025-11-03,,0.0
+ACC-1015,Lumen Home,active,mid_market,US,finance@lumen.example,2024-01-25,,19104.0

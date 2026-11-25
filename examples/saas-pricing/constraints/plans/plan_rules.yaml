@@ -1,0 +1,67 @@
+constraints:
+  - id: SP-001
+    name: Enterprise plans need annual billing
+    applies_to: on_plan
+    rule: plan.tier == "enterprise" implies subscription.billing_period == "annual"
+    severity: block
+    rationale: Enterprise pricing assumes a one-year commitment; monthly enterprise is not a product we sell.
+    owner: pricing@northstar.example
+    tags: [pricing]
+
+  - id: SP-002
+    name: Seats cannot exceed the plan cap
+    applies_to: on_plan
+    rule: plan.unlimited_seats == true || subscription.seats <= plan.seat_cap
+    severity: block
+    rationale: The cap is enforced in the product; moving a subscription with more seats than the cap locks users out.
+    owner: product@northstar.example
+
+  - id: SP-003
+    name: Plan minimum seats
+    applies_to: on_plan
+    rule: subscription.seats >= plan.min_seats
+    severity: block
+    rationale: The minimum is part of the plan's price; fewer seats means a different plan.
+    owner: pricing@northstar.example
+
+  - id: SP-004
+    name: Legacy plans take no new subscriptions
+    applies_to: Plan
+    rule: status == "active"
+    severity: block
+    rationale: Legacy plans exist only for grandfathered customers; nobody moves onto one.
+    owner: pricing@northstar.example
+
+  - id: SP-005
+    name: Changing to the same plan is a no-op
+    applies_to: upgrade_plan
+    rule: from.plan_id != to.plan_id
+    severity: block
+    rationale: Almost always a typo in the request.
+
+  - id: SP-006
+    name: Downgrades take effect at period end
+    applies_to: upgrade_plan
+    rule: to.monthly_price_usd >= from.monthly_price_usd
+    severity: info
+    rationale: >
+      Informational: when the new plan is cheaper the change is scheduled for
+      period_end with no proration, so the customer keeps what they paid for.
+    owner: billing@northstar.example
+
+  - id: SP-007
+    name: Subscription must be live
+    applies_to: Subscription
+    rule: status in ["trialing", "active"]
+    severity: block
+    rationale: Past-due subscriptions settle their invoice first; cancelled ones are reactivated through Sales, not edited.
+    owner: billing@northstar.example
+
+  - id: SP-008
+    name: Enterprise plans need a signed contract
+    applies_to: upgrade_plan
+    rule: to.tier == "enterprise" implies (subscription.contract_id != null && subscription.contract_id != "")
+    severity: block
+    rationale: Enterprise terms (SLA, DPA, liability) only exist on signed paper; billing cannot invent them.
+    owner: legal@northstar.example
+    tags: [contracts]

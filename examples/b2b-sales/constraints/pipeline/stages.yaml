@@ -1,0 +1,49 @@
+constraints:
+  - id: ST-001
+    name: Proposal and later need a named economic buyer
+    applies_to: at_stage
+    rule: stage.requires_economic_buyer == true implies (opportunity.economic_buyer_contact_id != null && opportunity.economic_buyer_contact_id != "")
+    severity: block
+    rationale: >
+      Deals without a budget owner stall after the proposal and distort the
+      forecast. Naming the economic buyer is the exit criterion for Discovery.
+    owner: sales-ops@meridian.example
+    tags: [qualification]
+
+  - id: ST-002
+    name: Negotiation and later need an approved quote
+    applies_to: at_stage
+    rule: stage.requires_quote == true implies opportunity.has_approved_quote == true
+    severity: block
+    rationale: You cannot negotiate a price Deal Desk has not approved.
+    owner: deal-desk@meridian.example
+
+  - id: ST-003
+    name: Commit forecast belongs to late stages
+    applies_to: at_stage
+    rule: opportunity.forecast == "commit" implies stage.probability_pct >= 70
+    severity: info
+    rationale: Informational; a committed deal in an early stage is reviewed in the weekly forecast call.
+    owner: sales-ops@meridian.example
+
+  - id: ST-004
+    name: Moving to the same stage is a no-op
+    applies_to: advance_stage
+    rule: from.stage_id != to.stage_id
+    severity: block
+    rationale: Almost always a typo in the request.
+
+  - id: ST-005
+    name: One stage at a time
+    applies_to: advance_stage
+    rule: to.order <= from.order + 1
+    severity: warn
+    rationale: Skipping stages hides pipeline risk; the sales manager reviews skipped deals.
+    owner: sales-ops@meridian.example
+
+  - id: ST-007
+    name: The from stage must be the deal's current stage
+    applies_to: advance_stage
+    rule: opportunity.stage_id == from.stage_id
+    severity: block
+    rationale: Prevents moving a deal from a stage it is not in; usually a stale view of the CRM.

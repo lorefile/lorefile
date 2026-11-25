@@ -1,0 +1,100 @@
+types:
+  - type: Territory
+    description: "A sales patch: a region and a segment. Every account and every rep belongs to one."
+    properties:
+      territory_id: { type: string, key: true }
+      name:         string
+      region:       { type: enum, values: [amer_east, amer_west, emea, apac] }
+      segment:      { type: enum, values: [enterprise, mid_market] }
+    instances:
+      - { territory_id: TER-AE-ENT, name: Americas East Enterprise, region: amer_east, segment: enterprise }
+      - { territory_id: TER-AE-MM,  name: Americas East Mid-market, region: amer_east, segment: mid_market }
+      - { territory_id: TER-AW-ENT, name: Americas West Enterprise, region: amer_west, segment: enterprise }
+      - { territory_id: TER-AW-MM,  name: Americas West Mid-market, region: amer_west, segment: mid_market }
+      - { territory_id: TER-EU-ENT, name: EMEA Enterprise,          region: emea,      segment: enterprise }
+      - { territory_id: TER-EU-MM,  name: EMEA Mid-market,          region: emea,      segment: mid_market }
+      - { territory_id: TER-AP,     name: APAC,                     region: apac,      segment: enterprise }
+    owner: sales-ops@meridian.example
+    tags: [people]
+
+  - type: Rep
+    description: >
+      A member of the sales team. Only active account executives and managers
+      own accounts; a rep is ramped after two full quarters.
+    properties:
+      rep_id:       { type: string, key: true, description: "e.g. REP-11" }
+      name:         string
+      territory_id: { type: string, description: "The one territory the rep covers" }
+      role:         { type: enum, values: [ae, sdr, manager, vp] }
+      status:       { type: enum, values: [active, on_leave, left] }
+      quota_id:     { type: string, description: "Current fiscal-year quota; see Quota" }
+      ramped:       { type: boolean, description: "Completed onboarding and two full quarters" }
+      start_on:     date
+    relationships:
+      covers:      { to: Territory, cardinality: many-to-one }
+      measured_by: { to: Quota, cardinality: many-to-one }
+    source:
+      connection: crm_files
+      table: reps
+      key: rep_id
+    owner: sales-ops@meridian.example
+    tags: [people, core]
+
+  - type: Quota
+    description: A rep's target for a fiscal period and what they have booked against it.
+    properties:
+      quota_id:     { type: string, key: true }
+      rep_id:       string
+      fiscal_year:  { type: string, description: "e.g. FY26" }
+      period:       { type: enum, values: [FY, H1, H2] }
+      target_usd:   { type: number, unit: USD }
+      attained_usd: { type: number, unit: USD, description: "Closed-won bookings so far" }
+    relationships:
+      for_rep: { to: Rep, cardinality: many-to-one }
+    source:
+      connection: crm_files
+      table: quotas
+      key: quota_id
+    owner: sales-ops@meridian.example
+    tags: [people]
+
+  - type: Partner
+    description: >
+      A channel partner that sources or influences deals for a referral fee.
+      Tier reflects certification and bookings; regions come from the partner
+      agreement.
+    properties:
+      partner_id:       { type: string, key: true }
+      name:             string
+      tier:             { type: enum, values: [registered, silver, gold] }
+      status:           { type: enum, values: [active, suspended] }
+      referral_fee_pct: { type: number, description: "Percent of first-year value paid on sourced deals" }
+      regions:          { type: json, description: "Regions the partner agreement covers, e.g. [emea, apac]" }
+    instances:
+      - { partner_id: PTR-01, name: Northbridge Integrators, tier: gold,       status: active,    referral_fee_pct: 12.0, regions: [amer_east, amer_west] }
+      - { partner_id: PTR-02, name: Rhine Industrial IT,     tier: silver,     status: active,    referral_fee_pct: 10.0, regions: [emea] }
+      - { partner_id: PTR-03, name: Atlas Field Services,    tier: silver,     status: suspended, referral_fee_pct: 10.0, regions: [emea, apac] }
+      - { partner_id: PTR-04, name: Pacific Plant Partners,  tier: registered, status: active,    referral_fee_pct: 8.0,  regions: [apac] }
+      - { partner_id: PTR-05, name: Vantage Consulting,      tier: gold,       status: active,    referral_fee_pct: 12.0, regions: [emea, amer_east] }
+      - { partner_id: PTR-06, name: Ironclad Reliability,    tier: registered, status: active,    referral_fee_pct: 8.0,  regions: [amer_west] }
+    owner: channel@meridian.example
+    tags: [channel]
+
+  - type: Activity
+    description: A logged touch on a deal (call, email, meeting, demo). Used for pipeline hygiene reviews.
+    properties:
+      activity_id:    { type: string, key: true }
+      opportunity_id: string
+      rep_id:         string
+      kind:           { type: enum, values: [call, email, meeting, demo] }
+      occurred_on:    date
+      outcome:        { type: enum, values: [positive, neutral, negative, no_show] }
+    relationships:
+      on_opportunity: { to: Opportunity, cardinality: many-to-one }
+      logged_by:      { to: Rep, cardinality: many-to-one }
+    source:
+      connection: crm_files
+      table: activities
+      key: activity_id
+    owner: sales-ops@meridian.example
+    tags: [pipeline]

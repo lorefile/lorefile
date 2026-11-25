@@ -1,0 +1,22 @@
+type: PaymentMethod
+description: >
+  A card or wallet a customer has saved. Lives in the payments warehouse (PCI
+  scope), so it is not readable here: agents call where_is(PaymentMethod),
+  fetch the row with their own connector and pass it inline to validate.
+properties:
+  payment_method_id: { type: string, key: true, description: "Token, e.g. PM-88213; never the card number" }
+  customer_id:       string
+  kind:              { type: enum, values: [card, paypal, store_credit, bank] }
+  brand:             { type: string, description: "visa, mastercard, amex… for cards" }
+  last4:             string
+  expires:           { type: string, description: "YYYY-MM for cards" }
+  status:            { type: enum, values: [active, expired, removed], description: "Refunds only succeed against active methods" }
+relationships:
+  belongs_to: { to: Customer, cardinality: many-to-one }
+source:
+  connection: payments_bigquery
+  table: payments.payment_methods
+  key: payment_method_token
+  columns: { payment_method_id: payment_method_token, customer_id: customer_ref, kind: method_type, brand: card_brand, last4: card_last4, expires: card_exp_yyyymm, status: method_status }
+owner: payments@lumen.example
+tags: [payments, pci]

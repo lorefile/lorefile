@@ -1,0 +1,41 @@
+constraints:
+  - id: IN-001
+    name: Trial accounts cannot be invoiced
+    applies_to: Account
+    rule: status != "trial"
+    severity: block
+    rationale: Trial accounts have no payment method on file; adding seats or anything else that bills needs the trial converted first.
+    owner: billing@northstar.example
+
+  - id: IN-002
+    name: Credits apply to open or paid invoices only
+    applies_to: Invoice
+    rule: status in ["open", "paid"]
+    severity: block
+    rationale: Draft invoices are edited instead; void and uncollectible invoices are already written off.
+    owner: finance@northstar.example
+
+  - id: IN-003
+    name: Credit cannot exceed the invoice
+    applies_to: Invoice
+    rule: credit_usd <= amount_usd
+    severity: block
+    rationale: Anything above the invoice is a refund, which goes through the payment provider with different approvals.
+    owner: finance@northstar.example
+
+  - id: IN-004
+    name: Invoice must belong to the account
+    applies_to: issue_credit
+    rule: invoice.account_id == account.account_id
+    severity: block
+    rationale: Prevents crediting the wrong customer when two accounts share a company name.
+
+  - id: IN-005
+    name: Large credits need Finance
+    applies_to: Invoice
+    rule: credit_usd <= 5000.0
+    severity: warn
+    rationale: Support Leads may credit up to $5,000; above that Finance reviews the cause.
+    owner: finance@northstar.example
+    tags: [approvals]
+

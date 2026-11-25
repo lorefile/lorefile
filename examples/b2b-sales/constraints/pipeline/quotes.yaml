@@ -1,0 +1,42 @@
+constraints:
+  - id: QT-001
+    name: Quotes over $250k need Deal Desk
+    applies_to: Quote
+    rule: amount_usd > 250000.0 implies deal_desk_approved == true
+    severity: block
+    rationale: Pricing policy PP-4; large quotes carry non-standard terms Deal Desk must review before the customer sees them.
+    owner: deal-desk@meridian.example
+    tags: [approvals]
+
+  - id: QT-002
+    name: Discount above 20% needs VP Sales
+    applies_to: Quote
+    rule: discount_pct <= 20.0
+    severity: warn
+    rationale: Reps may discount to 20% on their own authority; deeper discounts are a VP Sales decision.
+    owner: sales-leadership@meridian.example
+    tags: [approvals]
+
+  - id: QT-003
+    name: Discount floor at 35%
+    applies_to: Quote
+    rule: discount_pct <= 35.0
+    severity: block
+    rationale: Below 65% of list the deal is unprofitable over its term; the CFO has never approved an exception.
+    owner: finance@meridian.example
+    tags: [margin]
+
+  - id: QT-004
+    name: Quote must belong to the opportunity
+    applies_to: submit_quote
+    rule: quote.opportunity_id == opportunity.opportunity_id
+    severity: block
+    rationale: Prevents sending a quote built for another deal.
+
+  - id: QT-005
+    name: Only draft quotes can be submitted
+    applies_to: Quote
+    rule: status == "draft"
+    severity: block
+    rationale: Submitted quotes are locked; changes go through a new version in CPQ.
+    owner: deal-desk@meridian.example

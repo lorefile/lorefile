@@ -1,0 +1,10 @@
+connection: payments_bigquery
+kind: bigquery
+description: >
+  Payments warehouse, PCI scope. Card details never leave it, so PaymentMethod
+  rows are not readable here: an agent calls where_is(PaymentMethod), fetches
+  the one row it needs with its own BigQuery connector, and passes it inline to
+  validate. Credentials come from the environment, never from this file.
+project: ${GCP_PROJECT}
+dataset: payments
+auth: env

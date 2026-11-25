@@ -1,0 +1,20 @@
+type: Customer
+description: >
+  A person or business with an account on the storefront. Segment is set
+  nightly from order history; fraud_flag is set by Risk and only Risk clears it.
+properties:
+  customer_id:        { type: string, key: true, description: "Storefront customer number, e.g. CUS-0107" }
+  name:               string
+  email:              string
+  country:            { type: string, description: "ISO country code of the default shipping address" }
+  segment:            { type: enum, values: [new, regular, vip], description: "new = no delivered orders yet, vip = 10+ orders or $5k lifetime" }
+  since:              { type: date, description: "Account creation date" }
+  orders_count:       { type: integer, description: "Delivered orders, lifetime" }
+  lifetime_value_usd: { type: number, unit: USD }
+  fraud_flag:         { type: boolean, description: "Set by Risk after a chargeback or card-testing pattern; blocks nothing by itself but every refund rule looks at it" }
+source:
+  connection: shop_files
+  table: customers
+  key: customer_id
+owner: support@lumen.example
+tags: [customers, core]

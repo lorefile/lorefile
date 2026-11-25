@@ -1,0 +1,12 @@
+action: close_won
+description: >
+  Mark a deal as won. This is the booking that pays commission and starts
+  onboarding, so it needs the paper to be real: an accepted proposal and a
+  signed order form.
+inputs:
+  opportunity: Opportunity
+  proposal: Proposal
+checks: [CW-001, CW-002, CW-005]
+requires_approval_from: Sales Ops; Finance above $500k
+side_effects: Sets the stage to Closed Won, books the amount against the rep's quota, opens the onboarding project, triggers the partner fee if sourced.
+tags: [pipeline]

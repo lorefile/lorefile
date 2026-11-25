@@ -1,0 +1,15 @@
+relationship: sourced_by
+from: Opportunity
+to: Partner
+cardinality: many-to-one
+description: >
+  The partner that brought us the deal and earns the referral fee. Rules here
+  can see `opportunity` and `partner`. register_partner_deal creates this edge.
+properties:
+  registered_on: date
+  fee_pct:       { type: number, description: "Referral fee locked in at registration" }
+source:
+  connection: crm_files
+  table: partner_registrations
+  from_key: opportunity_id
+  to_key: partner_id

@@ -1,0 +1,27 @@
+terms:
+  - term: basket
+    means: Order
+    description: The storefront calls an unpaid order a basket; the ERP calls it an order.
+  - term: SKU
+    means: Variant
+    description: A stock-keeping unit is one sellable variant (colour, size), not the parent product.
+  - term: RMA
+    means: Return
+    description: Return merchandise authorisation; the warehouse's word for a return.
+  - term: coupon
+    means: Promotion
+  - term: discount code
+    means: Promotion
+  - term: DC
+    means: Warehouse
+    description: Distribution centre.
+  - term: hazmat
+    means: Product
+    description: Shorthand for a product flagged hazardous (lithium batteries, aerosols, fuels).
+  - term: card on file
+    means: PaymentMethod
+  - term: parcel
+    means: Shipment
+  - term: chargeback refund
+    means: refund_order
+    description: Support slang for refunding to the original card before the bank does it for us.

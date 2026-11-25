@@ -1,0 +1,8 @@
+connection: crm_api
+kind: salesforce
+description: >
+  The live CRM API. Declared so agents know where the system of record is;
+  nothing in this folder binds to it, the nightly extracts in crm_files are
+  what rules are checked against.
+instance: ${SFDC_INSTANCE_URL}
+auth: env

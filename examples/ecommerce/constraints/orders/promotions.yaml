@@ -1,0 +1,49 @@
+constraints:
+  - id: PR-001
+    name: No promotion stacking above 40% off
+    applies_to: discounted_by
+    rule: order.discount_pct + promotion.percent_off <= 40.0
+    severity: block
+    rationale: Finance margin floor FM-3; combined discounts above 40% sell below cost on most categories.
+    owner: finance@lumen.example
+    tags: [margin]
+
+  - id: PR-002
+    name: Promotion must be live
+    applies_to: Promotion
+    rule: status == "active"
+    severity: block
+    rationale: Draft, paused and expired codes are not honoured, even if the customer has a screenshot.
+    owner: marketing@lumen.example
+
+  - id: PR-003
+    name: Promotion valid on the order date
+    applies_to: discounted_by
+    rule: promotion.starts_on <= order.placed_on && order.placed_on <= promotion.ends_on
+    severity: block
+    rationale: Codes apply to orders placed inside their window; backdating is a Finance exception.
+    owner: marketing@lumen.example
+
+  - id: PR-005
+    name: First-order codes only on first orders
+    applies_to: discounted_by
+    rule: promotion.first_order_only == true implies order.is_first_order == true
+    severity: block
+    rationale: Acquisition budget is for new customers; returning customers get the loyalty codes.
+    owner: marketing@lumen.example
+
+  - id: PR-006
+    name: Promotions apply to unpaid orders only
+    applies_to: Order
+    rule: status == "placed"
+    severity: block
+    rationale: Once charged, the total is fixed; Support refunds the difference instead of re-pricing.
+    owner: payments@lumen.example
+
+  - id: PR-007
+    name: Promotion budget nearly used up
+    applies_to: Promotion
+    rule: redemptions < max_redemptions
+    severity: info
+    rationale: Informational; Marketing approved a fixed number of redemptions and tops up the budget when it runs out.
+    owner: marketing@lumen.example

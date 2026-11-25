@@ -1,0 +1,15 @@
+variant_id,product_id,name,weight_kg,price_usd,status
+SKU-110-BLK,PRD-110,Black,6.8,120.0,active
+SKU-110-BRS,PRD-110,Brass,6.8,135.0,active
+SKU-120-WHT,PRD-120,White,3.1,189.0,active
+SKU-220-STD,PRD-220,Standard,1.6,89.5,active
+SKU-330-GRN,PRD-330,Green,1.2,129.0,active
+SKU-330-ORG,PRD-330,Orange,1.2,129.0,active
+SKU-440-4PK,PRD-440,4-pack,4.5,156.0,active
+SKU-550-CLR,PRD-550,Clear 500ml,0.6,27.0,active
+SKU-660-PRO,PRD-660,Pro kit,24.0,2890.0,active
+SKU-770-SET,PRD-770,6-seat set,86.0,1450.0,active
+SKU-880-BLU,PRD-880,Blue,0.9,22.0,active
+SKU-990-GAS,PRD-990,Stove + 2 canisters,5.4,415.0,active
+SKU-100-BLK,PRD-100,Black,1.1,45.0,discontinued
+SKU-230-26,PRD-230,26cm,2.9,64.0,active

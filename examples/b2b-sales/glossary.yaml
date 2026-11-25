@@ -1,0 +1,31 @@
+terms:
+  - term: deal
+    means: Opportunity
+    description: Reps say deal, the CRM says opportunity.
+  - term: opp
+    means: Opportunity
+  - term: logo
+    means: Account
+    description: A new logo is a first deal with an account that was never a customer.
+  - term: EB
+    means: Contact
+    description: Economic buyer; the contact who owns the budget. Stored as Opportunity.economic_buyer_contact_id.
+  - term: champion
+    means: Contact
+  - term: AE
+    means: Rep
+    description: Account executive; the rep who owns accounts and closes deals.
+  - term: patch
+    means: Territory
+  - term: number
+    means: Quota
+    description: 'Did you hit your number means quota attainment.'
+  - term: order form
+    means: Opportunity
+    description: The signed order form is tracked as Opportunity.order_form_signed; the document itself lives in the contract system.
+  - term: deal reg
+    means: register_partner_deal
+    description: Channel slang for registering a partner-sourced deal.
+  - term: deal desk
+    means: submit_quote
+    description: Deal Desk reviews quotes above $250k; quotes reach them through submit_quote.

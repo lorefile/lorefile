@@ -1,0 +1,23 @@
+type: Account
+description: >
+  A company we sell to or already serve. Every account sits in exactly one
+  territory and has exactly one owning rep; tier decides how senior that rep
+  must be.
+properties:
+  account_id:   { type: string, key: true, description: "CRM account id, e.g. ACC-2003" }
+  name:         string
+  industry:     { type: enum, values: [manufacturing, utilities, logistics, mining, pharma] }
+  territory_id: { type: string, description: "Territory the account is assigned to; see Territory" }
+  owner_rep_id: { type: string, description: "The rep who owns the account; see Rep" }
+  employees:    integer
+  tier:         { type: enum, values: [strategic, enterprise, mid_market], description: "strategic = top 50 accounts, owned by ramped reps only" }
+  status:       { type: enum, values: [prospect, customer, churned] }
+  region:       { type: enum, values: [amer_east, amer_west, emea, apac] }
+relationships:
+  in_territory: { to: Territory, cardinality: many-to-one }
+source:
+  connection: crm_files
+  table: accounts
+  key: account_id
+owner: sales-ops@meridian.example
+tags: [accounts, core]

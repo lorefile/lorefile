@@ -1,0 +1,12 @@
+action: submit_quote
+description: >
+  Send a draft quote from CPQ to the customer, which locks its pricing. Quote
+  rows live in Snowflake, so the agent passes the quote it fetched as an inline
+  record.
+inputs:
+  quote: Quote
+  opportunity: Opportunity
+checks: [QT-001, QT-002, QT-003, QT-005]
+requires_approval_from: Deal Desk above $250k; VP Sales above 20% discount
+side_effects: Sets the quote to submitted in CPQ, emails the PDF to the champion, starts the validity clock.
+tags: [pipeline, pricing]

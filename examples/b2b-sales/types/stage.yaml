@@ -1,0 +1,23 @@
+type: Stage
+description: >
+  The sales process, in order. Each stage says what a deal must have before it
+  may enter: the stage rules read these flags, so changing the process is a
+  change to this list, not to the rules.
+properties:
+  stage_id:                { type: string, key: true }
+  name:                    string
+  order:                   { type: integer, description: "Position in the process, 1 = earliest" }
+  probability_pct:         { type: integer, description: "Default win probability used for weighted pipeline" }
+  requires_economic_buyer: { type: boolean, description: "A deal needs a named economic buyer to enter this stage" }
+  requires_quote:          { type: boolean, description: "A deal needs an approved quote to enter this stage" }
+  closed:                  { type: boolean, description: "Terminal stage" }
+instances:
+  - { stage_id: ST-01, name: Prospecting,   order: 1, probability_pct: 10,  requires_economic_buyer: false, requires_quote: false, closed: false }
+  - { stage_id: ST-02, name: Qualification, order: 2, probability_pct: 20,  requires_economic_buyer: false, requires_quote: false, closed: false }
+  - { stage_id: ST-03, name: Discovery,     order: 3, probability_pct: 35,  requires_economic_buyer: false, requires_quote: false, closed: false }
+  - { stage_id: ST-04, name: Proposal,      order: 4, probability_pct: 55,  requires_economic_buyer: true,  requires_quote: false, closed: false }
+  - { stage_id: ST-05, name: Negotiation,   order: 5, probability_pct: 75,  requires_economic_buyer: true,  requires_quote: true,  closed: false }
+  - { stage_id: ST-06, name: Closed Won,    order: 6, probability_pct: 100, requires_economic_buyer: true,  requires_quote: true,  closed: true }
+  - { stage_id: ST-07, name: Closed Lost,   order: 7, probability_pct: 0,   requires_economic_buyer: false, requires_quote: false, closed: true }
+owner: sales-ops@meridian.example
+tags: [pipeline, core]

@@ -1,0 +1,20 @@
+type: Contact
+description: >
+  A person at an account. The role matters more than the title: a deal cannot
+  reach Proposal without a contact in the economic_buyer role.
+properties:
+  contact_id: { type: string, key: true }
+  account_id: string
+  name:       string
+  title:      string
+  role:       { type: enum, values: [champion, economic_buyer, technical_buyer, user, blocker], description: "Buying role as qualified by the rep, not the job title" }
+  email:      string
+  status:     { type: enum, values: [active, left_company] }
+relationships:
+  works_at: { to: Account, cardinality: many-to-one }
+source:
+  connection: crm_files
+  table: contacts
+  key: contact_id
+owner: sales-ops@meridian.example
+tags: [accounts]

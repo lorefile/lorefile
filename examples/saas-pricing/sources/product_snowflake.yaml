@@ -1,0 +1,10 @@
+connection: product_snowflake
+kind: snowflake
+description: >
+  Product event warehouse: every tracked event, every login. Declared so agents
+  know where the raw usage lives; the Usage type here is the monthly roll-up.
+account: ${SNOWFLAKE_ACCOUNT}
+database: PRODUCT
+schema: METERING
+warehouse: BILLING_WH
+auth: env

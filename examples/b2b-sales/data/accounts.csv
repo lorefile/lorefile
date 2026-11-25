@@ -1,0 +1,16 @@
+account_id,name,industry,territory_id,owner_rep_id,employees,tier,status,region
+ACC-2001,Halden Steelworks,manufacturing,TER-AE-ENT,REP-11,8200,strategic,customer,amer_east
+ACC-2002,Brightwater Utilities,utilities,TER-AE-ENT,REP-11,5400,enterprise,prospect,amer_east
+ACC-2003,Cobalt Logistics,logistics,TER-AE-ENT,REP-11,3100,enterprise,prospect,amer_east
+ACC-2004,Fairmont Pharma,pharma,TER-AE-MM,REP-12,900,mid_market,customer,amer_east
+ACC-2005,Ridgeline Mining,mining,TER-AW-ENT,REP-14,12000,strategic,customer,amer_west
+ACC-2006,Sierra Power Co-op,utilities,TER-AW-MM,REP-15,650,mid_market,prospect,amer_west
+ACC-2007,Nordwind Energie,utilities,TER-EU-ENT,REP-17,7800,strategic,prospect,emea
+ACC-2008,Lisbon Port Authority,logistics,TER-EU-MM,REP-18,1200,mid_market,prospect,emea
+ACC-2009,Kaito Precision,manufacturing,TER-AP,REP-16,4300,enterprise,customer,apac
+ACC-2010,Granite Aggregates,mining,TER-AE-MM,REP-12,480,mid_market,prospect,amer_east
+ACC-2011,Delta Rail Freight,logistics,TER-AW-ENT,REP-14,9100,enterprise,prospect,amer_west
+ACC-2012,Vossberg Chemie,pharma,TER-EU-ENT,REP-17,6600,enterprise,customer,emea
+ACC-2013,Pioneer Waterworks,utilities,TER-AE-MM,REP-13,720,mid_market,prospect,amer_east
+ACC-2014,Meridian Foods,manufacturing,TER-AE-MM,REP-12,1500,mid_market,churned,amer_east
+ACC-2015,Southern Cross Mining,mining,TER-AP,REP-16,15000,strategic,prospect,apac

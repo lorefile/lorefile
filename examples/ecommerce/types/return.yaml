@@ -1,0 +1,22 @@
+type: Return
+description: >
+  A customer sending goods back (the warehouse calls it an RMA). A refund is
+  only paid once the return is received and inspected. delivered_on is copied
+  from the shipment so the return window can be checked on the return alone.
+properties:
+  return_id:           { type: string, key: true, description: "RMA number, e.g. RET-501" }
+  order_id:            string
+  requested_on:        { type: date, description: "When the customer asked for the return" }
+  delivered_on:        { type: date, description: "When the parcel was delivered (from Shipment)" }
+  reason:              { type: enum, values: [defective, wrong_item, changed_mind, damaged_in_transit] }
+  condition:           { type: enum, values: [unopened, opened, damaged], description: "Set by the warehouse on inspection" }
+  status:              { type: enum, values: [requested, approved, in_transit, received, refunded, rejected] }
+  refund_amount_usd:   { type: number, unit: USD, description: "Amount Support approved, before any restocking fee" }
+relationships:
+  for_order: { to: Order, cardinality: many-to-one }
+source:
+  connection: shop_files
+  table: returns
+  key: return_id
+owner: support@lumen.example
+tags: [orders]

@@ -1,0 +1,13 @@
+rep_id,name,territory_id,role,status,quota_id,ramped,start_on
+REP-10,Dana Whitfield,TER-AE-ENT,manager,active,QTA-10,true,2019-04-01
+REP-11,Marcus Oyelaran,TER-AE-ENT,ae,active,QTA-11,true,2021-02-15
+REP-12,Priya Raman,TER-AE-MM,ae,active,QTA-12,true,2022-09-01
+REP-13,Tomasz Nowak,TER-AE-MM,ae,active,QTA-13,false,2026-01-12
+REP-14,Sofia Alvarez,TER-AW-ENT,ae,active,QTA-14,true,2020-06-01
+REP-15,Liam O'Connor,TER-AW-MM,ae,on_leave,QTA-15,true,2021-11-08
+REP-16,Hana Sato,TER-AP,ae,active,QTA-16,true,2022-03-21
+REP-17,Jonas Becker,TER-EU-ENT,ae,active,QTA-17,true,2020-01-06
+REP-18,Amara Diallo,TER-EU-MM,ae,active,QTA-18,false,2025-10-01
+REP-19,Chris Patel,TER-AE-ENT,sdr,active,QTA-19,true,2024-05-13
+REP-20,Elin Berg,TER-EU-ENT,ae,left,QTA-20,true,2019-08-19
+REP-21,Victor Huang,TER-AW-ENT,vp,active,QTA-21,true,2018-02-01

@@ -1,0 +1,12 @@
+connection: cpq_snowflake
+kind: snowflake
+description: >
+  The configure-price-quote system's tables, replicated to Snowflake. Quotes are
+  not readable here: an agent calls where_is(Quote), fetches the quote with its
+  own connector and passes it inline to validate. Credentials come from the
+  environment, never from this file.
+account: ${SNOWFLAKE_ACCOUNT}
+database: REVOPS
+schema: CPQ
+warehouse: SALES_WH
+auth: env

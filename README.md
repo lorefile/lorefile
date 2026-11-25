@@ -102,6 +102,20 @@ Then ask: *"Can we move part BRK-220 from Acme Corp to Beta Ltd?"* Claude will c
 
 Resources: `ontology://summary`, `ontology://glossary`, `ontology://types/{Name}`, `ontology://actions/{name}`.
 
+## Examples
+
+Each folder under `examples/` is a complete ontology with CSV rows, a glossary, a warehouse source the binary cannot read (to show `where_is` and inline records), and a README whose `check` outputs were pasted from real runs.
+
+| Folder | Business | What it shows |
+|---|---|---|
+| [`supply-chain`](examples/supply-chain) | Automotive parts manufacturer buying from tiered suppliers | The reference example: safety-critical sourcing rules, `switch_supplier` with suggestions, Snowflake-only PurchaseOrder rows |
+| [`supply-chain-parquet`](examples/supply-chain-parquet) | The same manufacturer, Parquet instead of CSV | The DuckDB door: identical verdicts from Parquet files, `query` joining rules to rows |
+| [`ecommerce`](examples/ecommerce) | Online store with hazardous goods and three warehouses | Return windows with real date math, promotion stacking caps, hazmat carrier rules, PCI-scoped PaymentMethod fetched inline |
+| [`saas-pricing`](examples/saas-pricing) | Subscription software company with four plans | Seat caps, enterprise-needs-annual, CFO discount threshold, trial accounts that cannot be invoiced, Invoice rows fetched inline |
+| [`b2b-sales`](examples/b2b-sales) | Long-lead B2B sales team with channel partners | Stage exit criteria read from data, Deal Desk and VP Sales thresholds, territory ownership, Quote rows fetched inline |
+
+Serve any of them with `stella-ontology serve --dir examples/<folder>`; `.claude/launch.json` maps them to ports 7070, 7071 and 7073 to 7075.
+
 ## Start your own
 
 ```bash

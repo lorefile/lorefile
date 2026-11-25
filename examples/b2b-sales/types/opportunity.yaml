@@ -1,0 +1,31 @@
+type: Opportunity
+description: >
+  One potential deal with one account. Moves through Stages; the flags on it
+  (economic buyer named, approved quote, signed order form) are what the stage
+  rules check. region and has_approved_quote are copied from the account and
+  the CPQ system so rules can run on the opportunity alone.
+properties:
+  opportunity_id:            { type: string, key: true, description: "e.g. OPP-5004" }
+  account_id:                string
+  name:                      string
+  stage_id:                  { type: string, description: "Current stage; see Stage" }
+  amount_usd:                { type: number, unit: USD, description: "Expected first-year contract value" }
+  close_date:                { type: date, description: "Rep's committed close date" }
+  owner_rep_id:              string
+  economic_buyer_contact_id: { type: string, description: "Contact in the economic_buyer role; empty until qualified" }
+  partner_id:                { type: string, description: "Sourcing partner, empty for direct deals; see Partner" }
+  forecast:                  { type: enum, values: [pipeline, best_case, commit, closed], description: "Rep's forecast category" }
+  region:                    { type: enum, values: [amer_east, amer_west, emea, apac], description: "Copied from the account" }
+  order_form_signed:         { type: boolean, description: "Countersigned order form on file in the contract system" }
+  has_approved_quote:        { type: boolean, description: "At least one quote in approved status in CPQ" }
+  competitor:                { type: string, description: "Main competitor, if any" }
+relationships:
+  for_account:    { to: Account, cardinality: many-to-one }
+  run_by:         { to: Rep, cardinality: many-to-one, description: "Opportunity owner; usually but not always the account owner" }
+  economic_buyer: { to: Contact, cardinality: many-to-one, description: "Empty until the buyer is qualified" }
+source:
+  connection: crm_files
+  table: opportunities
+  key: opportunity_id
+owner: sales-ops@meridian.example
+tags: [pipeline, core]

@@ -1,0 +1,12 @@
+action: issue_credit
+description: >
+  Credit part or all of an invoice back to the account, typically after an
+  outage or a billing mistake. Invoice rows live in the finance warehouse, so
+  the agent passes the invoice it fetched as an inline record.
+inputs:
+  invoice: Invoice
+  account: Account
+checks: [IN-002, IN-003, IN-005]
+requires_approval_from: Finance above $5,000; Support Lead below
+side_effects: Creates a credit note in the payment provider and applies it to the next invoice.
+tags: [billing, support]

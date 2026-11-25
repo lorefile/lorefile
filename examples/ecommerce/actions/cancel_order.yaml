@@ -1,0 +1,8 @@
+action: cancel_order
+description: Cancel an order before it ships and release its reserved stock. No refund is needed if payment is still pending.
+inputs:
+  order: Order
+checks: [EC-001]
+requires_approval_from: Nobody below $1,000; Support Lead above
+side_effects: Sets status=cancelled, voids the authorisation or refunds the charge, releases reserved inventory.
+tags: [support]

@@ -1,0 +1,11 @@
+action: apply_discount
+description: Attach a discount to a subscription for the discount's duration. The subscription's mrr_usd is recalculated.
+inputs:
+  subscription: Subscription
+  discount: Discount
+effects:
+  - create: { relationship: discounted_by, from: subscription, to: discount }
+checks: [DS-001, DS-002, DS-003, DS-004, DS-005, SP-007]
+requires_approval_from: CFO above 30% off; nobody below
+side_effects: Recalculates mrr_usd, records the discount on the next invoice, notifies Finance when the CFO threshold is crossed.
+tags: [billing, sales]

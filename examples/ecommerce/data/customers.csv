@@ -1,0 +1,16 @@
+customer_id,name,email,country,segment,since,orders_count,lifetime_value_usd,fraud_flag
+CUS-0101,Ada Okafor,ada@example.com,US,vip,2021-03-14,14,6120.5,false
+CUS-0102,Ben Carter,ben@example.com,US,regular,2022-11-02,4,812.4,false
+CUS-0103,Chloe Dubois,chloe@example.com,CA,regular,2023-01-19,3,445.0,false
+CUS-0104,Dev Patel,dev@example.com,US,new,2026-02-03,0,0.0,false
+CUS-0105,Elena Rossi,elena@example.com,US,regular,2022-06-27,6,1390.75,false
+CUS-0106,Femi Adeyemi,femi@example.com,US,new,2026-03-11,0,0.0,true
+CUS-0107,Grace Kim,grace@example.com,US,regular,2023-09-08,5,1021.0,false
+CUS-0108,Hugo Martins,hugo@example.com,US,vip,2020-12-01,22,9870.2,false
+CUS-0109,Iris Nakamura,iris@example.com,US,regular,2024-04-22,2,318.9,false
+CUS-0110,Jonas Weber,jonas@example.com,US,new,2026-03-20,0,0.0,false
+CUS-0111,Kara Lindqvist,kara@example.com,US,regular,2023-05-30,7,2210.0,false
+CUS-0112,Leo Fernandes,leo@example.com,US,new,2026-04-01,0,0.0,false
+CUS-0113,Maya Singh,maya@example.com,US,regular,2024-08-15,3,560.3,false
+CUS-0114,Noah Brennan,noah@example.com,US,regular,2022-02-10,9,3105.6,false
+CUS-0115,Olivia Chen,olivia@example.com,US,vip,2021-07-07,11,4420.0,false
