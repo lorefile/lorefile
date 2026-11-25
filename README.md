@@ -283,9 +283,10 @@ DuckDB is **fenced**: once a space's views are built, the catalog may touch only
 
 `stella-ontology serve --dir ./ontology` opens a guided workspace at http://127.0.0.1:7070. It is organised around putting the ontology in place, not around the data model:
 
-- **Build**, five steps with live status: **Sources** (where the rows live), **Things** (each type with a plain-English description, its fields, links, guardrails, data and YAML), **Links** (a relationship builder and one sentence per link), **Guardrails** (rules grouped by what they apply to, a builder that writes the expression for you, and the expression itself one click away), **Actions** (what agents may do, with a try-it form that runs the same `validate` an agent runs).
+- **Build**, five steps with live status: **Sources** (where the rows live), **Entities** (each type with a plain-English description, its fields, links, guardrails, data and YAML), **Links** (a relationship builder and one sentence per link), **Guardrails** (rules grouped by what they apply to, a builder that writes the expression for you, and the expression itself one click away), **Actions** (what agents may do, with a try-it form that runs the same `validate` an agent runs).
 - **Use**: **Map** (the whole shape, with what to do next computed from the gaps), **Agents** (the MCP tools, connect commands, an inbox of changes agents proposed, and an activity log), **Data & SQL** (DuckDB over the ontology and every readable source).
-- A readiness meter in the header rises as fields get words, links get sentences and things get tables.
+- One vocabulary, three places: an **entity** on the page is a `type:` block in YAML and a type to the MCP tools (`describe`, `neighbors`). The page uses the plain word; the files and the tools keep the short one.
+- A readiness meter in the header rises as fields get words, links get sentences and entities get tables.
 
 ### Editing from the page
 

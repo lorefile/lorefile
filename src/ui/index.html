@@ -15,6 +15,7 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}bu
 button:disabled{opacity:.5;cursor:default}
 input,select,textarea{padding:8px 10px;border:1px solid var(--line2);border-radius:9px;background:var(--panel)}
 input.need,textarea.need{background:var(--need);border-color:var(--need-line)}
+input:disabled,textarea:disabled,select:disabled{opacity:.55;background:var(--chip);cursor:default}
 textarea{resize:vertical}
 #app{display:grid;grid-template-rows:52px 1fr 34px;grid-template-columns:240px 1fr;height:100vh}
 header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
@@ -122,7 +123,7 @@ function facts(){
   const noOwner = rules.filter(r => !r.owner);
   const totalFields = types.reduce((n, t) => n + t.fields, 0) || 1;
   const described = types.reduce((n, t) => n + t.described, 0);
-  const ready = Math.round(100 * ((described / totalFields) * 0.5 + (rels.length ? (rels.length - relsNoDesc.length) / rels.length : 1) * 0.3 + (types.length ? (types.length - unbound.length) / types.length : 1) * 0.2));
+  const ready = !types.length ? 0 : Math.round(100 * ((described / totalFields) * 0.5 + (rels.length ? (rels.length - relsNoDesc.length) / rels.length : 1) * 0.3 + (types.length ? (types.length - unbound.length) / types.length : 1) * 0.2));
   return { types, rels, rules, gapTypes, unbound, relsNoDesc, noOwner, ready, pending: O.proposals_pending || 0 };
 }
 const rulesFor = (name) => (O.constraints || []).filter(c => c.applies_to === name || (O.relationships || []).some(r => r.name === c.applies_to && (r.from === name || r.to === name)));
@@ -142,7 +143,7 @@ async function boot(){
 }
 function renderSpacePicker(){
   const sel = $('h-space'); if (!sel || !SPACES) return;
-  const opt = (s) => `<option value="${esc(s.id)}" ${s.id===SPACE?'selected':''} title="${esc((s.description||'').trim())}">${esc(s.name)} · ${s.types} thing${s.types===1?'':'s'}${s.ok===false?' · has errors':''}</option>`;
+  const opt = (s) => `<option value="${esc(s.id)}" ${s.id===SPACE?'selected':''} title="${esc((s.description||'').trim())}">${esc(s.name)} · ${s.types} entit${s.types===1?'y':'ies'}${s.ok===false?' · has errors':''}</option>`;
   const grp = (label, list) => list.length ? `<optgroup label="${label}">${list.map(opt).join('')}</optgroup>` : '';
   const mine = SPACES.spaces.filter(s => !s.builtin), ex = SPACES.spaces.filter(s => s.group === 'example'), packs = SPACES.spaces.filter(s => s.group === 'pack');
   sel.innerHTML = (SPACE ? '' : '<option value="" selected>Pick a space…</option>') + grp('Your spaces', mine) + grp('Examples that ship with it', ex) + grp('Packs for common MCPs', packs) + (!SPACES.single ? `<option value="__new">＋ New space…</option>` : '');
@@ -166,7 +167,7 @@ async function loadSummary(){
   try { PR = await api(B + '/api/proposals'); } catch (e) { PR = { proposals: [], activity: [] }; }
   const f = facts(); const s = O.stats;
   $('h-name').textContent = O.manifest.name + (O.manifest.version ? ' v' + O.manifest.version : '');
-  $('h-counts').textContent = `${s.types} things · ${s.relationships} links · ${s.constraints} guardrails · ${s.actions} actions`;
+  $('h-counts').textContent = `${s.types} entities · ${s.relationships} links · ${s.constraints} guardrails · ${s.actions} actions`;
   $('h-meter').style.width = f.ready + '%'; $('h-ready').textContent = f.ready + '% ready for agents';
   $('h-mode').textContent = O.editable ? (O.commit_edits ? 'edit mode · commits each change' : 'edit mode · changes stay uncommitted') : (O.space && O.space.builtin ? 'shipped ' + O.space.group + ' · read-only' : 'read-only');
   $('h-mode').className = 'pill ' + (O.editable ? '' : 'plain');
@@ -201,8 +202,8 @@ function renderNav(){
   let h = `<input id="find" placeholder="Find anything…" value="${esc(ui.search)}" oninput="searchNav(this.value)">`;
   if (q) { n.innerHTML = h + '<h4>Results</h4><div id="find-results"><div class="empty">…</div></div>'; return; }
   const build = [
-    ['sources', 'Sources', `${(O.sources||[]).length} connected · ${f.unbound.length} things without data`, f.unbound.length > 0],
-    ['things', 'Things', `${f.types.length} · ${f.gapTypes.length} need plain words`, f.gapTypes.length > 0],
+    ['sources', 'Sources', `${(O.sources||[]).length} connected · ${f.unbound.length} entities without data`, f.unbound.length > 0],
+    ['entities', 'Entities', `${f.types.length} · ${f.gapTypes.length} need plain words`, f.gapTypes.length > 0],
     ['links', 'Links', `${f.rels.length} · ${f.relsNoDesc.length} without a sentence`, f.relsNoDesc.length > 0],
     ['rules', 'Guardrails', `${f.rules.length} · ${f.noOwner.length} with no sign-off`, f.noOwner.length > 0],
     ['actions', 'Actions', `${(O.actions||[]).length} things agents may do`, false]
@@ -221,14 +222,14 @@ function searchNav(q){
   searchTimer = setTimeout(async () => {
     const hits = await api(B + '/api/search?q=' + encodeURIComponent(q) + '&limit=14');
     const el = $('find-results'); if (!el) return;
-    const kindMap = { type: 'thing', constraint: 'rule', action: 'action', relationship: 'link', term: 'word', source: 'source' };
+    const kindMap = { type: 'entity', constraint: 'rule', action: 'action', relationship: 'link', term: 'word', source: 'source' };
     el.innerHTML = hits.length ? hits.map(x => `<button class="result" onclick="openHit('${esc(x.kind)}','${esc(x.name)}')"><small>${kindMap[x.kind] || x.kind}</small><span>${esc(x.name)}</span></button>`).join('') : '<div class="empty">No matches</div>';
   }, 120);
 }
 function openHit(kind, name){
   ui.search = '';
-  if (kind === 'type') go('things', name); else if (kind === 'constraint') go('rules', name); else if (kind === 'action') go('actions', name);
-  else if (kind === 'relationship') go('links'); else if (kind === 'source') go('sources'); else if (kind === 'term') { const g = (O.glossary||[]).find(t => t.term === name); if (g) go('things', g.means); }
+  if (kind === 'type') go('entities', name); else if (kind === 'constraint') go('rules', name); else if (kind === 'action') go('actions', name);
+  else if (kind === 'relationship') go('links'); else if (kind === 'source') go('sources'); else if (kind === 'term') { const g = (O.glossary||[]).find(t => t.term === name); if (g) go('entities', g.means); }
 }
 function renderFooter(){
   const errs = O.diagnostics.filter(d => d.level === 'error').length, warns = O.diagnostics.length - errs;
@@ -239,7 +240,7 @@ function renderFooter(){
 // ---------- screens ----------
 function render(){
   const v = $('view'); v.innerHTML = '';
-  const fn = { map: renderMap, sources: renderSources, things: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace }[route.screen] || renderMap;
+  const fn = { map: renderMap, sources: renderSources, entities: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace }[route.screen] || renderMap;
   fn(v);
 }
 const main = (inner, extra) => `<div class="main">${inner}</div>${extra || ''}`;
@@ -272,15 +273,16 @@ function renderMap(v){
   const legend = O.domains.map(d => `<span><i style="background:${domainColor(d.name)}"></i>${esc(d.name)}</span>`).join('');
   const t = byName[ui.mapSel];
   let side = '';
-  if (t) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><i style="width:10px;height:10px;border-radius:50%;background:${domainColor(t.domain)}"></i><h2>${esc(t.name)}</h2></div><div style="font-size:13.5px">${esc(t.description)}</div><div style="font-size:12.5px;color:var(--muted)">${t.fields} fields · ${f.rels.filter(r => r.from===t.name||r.to===t.name).length} links · ${rulesFor(t.name).length} guardrails · ${t.has_source ? esc((t.source_kind||'inline') + ' ' + (t.source_table||'')) : 'no data bound'}</div><div class="row"><button class="primary small" onclick="go('things','${esc(t.name)}')">Open</button><button class="small" onclick="ui.ruleQuery='${esc(t.name)}';go('rules')">Its guardrails</button></div></div>`;
+  if (t) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><i style="width:10px;height:10px;border-radius:50%;background:${domainColor(t.domain)}"></i><h2>${esc(t.name)}</h2></div><div style="font-size:13.5px">${esc(t.description)}</div><div style="font-size:12.5px;color:var(--muted)">${t.fields} fields · ${f.rels.filter(r => r.from===t.name||r.to===t.name).length} links · ${rulesFor(t.name).length} guardrails · ${t.has_source ? esc((t.source_kind||'inline') + ' ' + (t.source_table||'')) : 'no data bound'}</div><div class="row"><button class="primary small" onclick="go('entities','${esc(t.name)}')">Open</button><button class="small" onclick="ui.ruleQuery='${esc(t.name)}';go('rules')">Its guardrails</button></div></div>`;
   const nudges = [];
+  if (!f.types.length) nudges.push(['No entities yet', 'Start with the nouns of the business: Customer, Order, Campaign. Each becomes a small YAML file that agents read.', 'Add the first entity', "go('entities')"]);
   if (shipped()) nudges.push([`A shipped ${O.space.group}, read-only`, 'Browse it to see how things are described, linked and guarded. Copy it to make it yours.', 'Copy into a new space', `ui.ns={name:'',from:'${esc(O.space.id)}'};go('new-space')`]);
   if (f.pending) nudges.push([`${f.pending} change${f.pending>1?'s':''} proposed by agents`, 'Something an agent learned while answering your team. Review it so the next person gets the same answer.', 'Review', "go('agents')"]);
-  if (f.gapTypes.length) nudges.push([`${f.gapTypes.length} things have fields without plain words`, f.gapTypes.slice(0, 4).map(t => `${t.name} (${t.fields - t.described})`).join(', ') + (f.gapTypes.length > 4 ? '…' : ''), 'Add words', `ui.typeTab='fields';go('things','${esc(f.gapTypes[0].name)}')`]);
+  if (f.gapTypes.length) nudges.push([`${f.gapTypes.length} entities have fields without plain words`, f.gapTypes.slice(0, 4).map(t => `${t.name} (${t.fields - t.described})`).join(', ') + (f.gapTypes.length > 4 ? '…' : ''), 'Add words', `ui.typeTab='fields';go('entities','${esc(f.gapTypes[0].name)}')`]);
   if (f.relsNoDesc.length) nudges.push([`${f.relsNoDesc.length} links have no sentence`, 'One line each, like "The carrier currently booked for the parcel".', 'Describe links', "go('links')"]);
-  if (f.unbound.length) nudges.push([`${f.unbound.map(t => t.name).join(' and ')} have no data behind them`, 'Agents can read their rules but cannot check a real row.', 'Bind a table', `ui.typeTab='data';go('things','${esc(f.unbound[0].name)}')`]);
+  if (f.unbound.length) nudges.push([`${f.unbound.map(t => t.name).join(' and ')} have no data behind them`, 'Agents can read their rules but cannot check a real row.', 'Bind a table', `ui.typeTab='data';go('entities','${esc(f.unbound[0].name)}')`]);
   if (f.noOwner.length) nudges.push([`${f.noOwner.length} guardrails have no sign-off`, f.noOwner.map(r => r.id).join(', '), 'Name an owner', `go('rules','${esc(f.noOwner[0].id)}')`]);
-  if (!nudges.length) nudges.push(['Nothing waiting', 'Every field has words, every link a sentence, every thing a table. Agents have what they need.', 'See agents', "go('agents')"]);
+  if (!nudges.length) nudges.push(['Nothing waiting', 'Every field has words, every link a sentence, every entity a table. Agents have what they need.', 'See agents', "go('agents')"]);
   side += `<h4>What to do next</h4>` + nudges.map(([t, d, cta, js]) => `<div class="card"><b style="font-size:13.5px">${esc(t)}</b><div style="font-size:12.5px;color:var(--muted)">${esc(d)}</div><button class="small" style="align-self:flex-start" onclick="${js}">${cta}</button></div>`).join('');
   v.innerHTML = `<div class="map"><div style="position:relative;width:${L.width}px;height:${L.height}px;margin:0 auto">${edges}${nodes}</div><div class="legend">${legend}</div></div><div class="aside">${side}</div>`;
 }
@@ -294,8 +296,8 @@ function newSpaceHtml(first){
   const intro = `<div class="step-label">Spaces</div><h1>${first ? 'Your first space' : 'New space'}</h1><div class="desc">A space is one ontology: one brand, one business unit, one client. The page shows one at a time; agents say which one they mean in every tool call. It becomes a folder under <code>${esc(SPACES.root)}</code>.</div>`;
   if (SPACES.single) return intro + `<div class="banner">This server was started on one ontology folder (<code>${esc(SPACES.root)}</code>), so it holds just that space. To keep several brands side by side, start it on a folder that contains them:</div><code class="block">stella-ontology serve --dir ./spaces --allow-edit</code><div class="desc">Each brand is a sub-folder there. The shipped examples stay in the picker to look at.</div>`;
   if (!SPACES.editable) return intro + `<div class="banner">Read-only. Start the server with <code>--allow-edit</code> to create spaces from this page, or make a sub-folder with an <code>ontology.yaml</code> under <code>${esc(SPACES.root)}</code> and press Reload.</div>`;
-  const opts = [['blank', 'Blank', 'Just a name and one empty domain. You add things, links and guardrails yourself.'], ['starter', 'Starter', 'A tiny Customer example with one guardrail and one action, to edit into shape.']]
-    .concat(SPACES.spaces.map(s => [s.id, `Copy of ${s.name}${s.builtin ? ` (shipped ${s.group})` : ''}`, `${(s.description || '').trim().replace(/\s+/g, ' ').slice(0, 150)} · ${s.types} things, ${s.rules} guardrails`]));
+  const opts = [['blank', 'Blank', 'Just a name and one empty domain. You add entities, links and guardrails yourself.'], ['starter', 'Starter', 'A tiny Customer example with one guardrail and one action, to edit into shape.']]
+    .concat(SPACES.spaces.map(s => [s.id, `Copy of ${s.name}${s.builtin ? ` (shipped ${s.group})` : ''}`, `${(s.description || '').trim().replace(/\s+/g, ' ').slice(0, 150)} · ${s.types} entities, ${s.rules} guardrails`]));
   return intro + `<div class="form" style="max-width:820px"><label>Name</label><input id="ns-name" placeholder="Brand Two" value="${esc(ns.name)}" oninput="ui.ns.name=this.value"><label style="align-self:start;padding-top:10px">Start from</label><div style="display:flex;flex-direction:column;gap:6px">${opts.map(([k, t, d]) => `<label class="card ${ns.from===k?'sel':''}" style="cursor:pointer"><div class="row" style="gap:8px"><input type="radio" name="ns-from" value="${esc(k)}" ${ns.from===k?'checked':''} onchange="ui.ns.from='${esc(k)}';${first ? 'renderNoSpace()' : 'render()'}"><b style="font-size:13.5px">${esc(t)}</b></div><div style="font-size:12.5px;color:var(--muted);padding-left:26px">${esc(d)}</div></label>`).join('')}</div><span></span><div class="row"><button class="primary" onclick="createSpace()">Create space</button>${SPACE ? `<button onclick="go('map')">Cancel</button>` : ''}</div></div>`;
 }
 async function createSpace(){
@@ -310,7 +312,7 @@ async function createSpace(){
 function renderSources(v){
   const f = facts();
   const cards = (O.sources||[]).map(s => { const used = f.types.filter(t => t.source_connection === s.connection).map(t => t.name); return `<div class="card"><div class="row"><span class="mono" style="font-weight:700;font-size:14px">${esc(s.connection)}</span><span class="chip">${esc(s.kind)}</span><span style="margin-left:auto;font-size:12.5px;color:var(--muted)">${s.kind==='csv'||s.kind==='parquet'||s.kind==='duckdb' ? 'readable here' : 'declared · agents fetch rows'}</span></div><div style="font-size:13px">${esc(s.description || '')}</div><div style="font-size:12.5px;color:var(--muted)">${used.length ? 'Used by ' + esc(used.join(', ')) : 'Not used by anything yet'}</div><div class="row"><button class="small" ${ro()?'disabled':''} onclick="openEditor('${esc(s.file)}','${esc(s.connection)}','source')">Edit YAML</button></div></div>`; }).join('');
-  const unbound = f.unbound.length ? `<div class="card need"><b>${esc(f.unbound.map(t => t.name).join(' and '))} have no data behind them</b><div style="font-size:13px;color:var(--muted)">They are described but no table is bound, so agents can read the rules and not the rows.</div><div class="row">${f.unbound.map(t => `<button class="small" onclick="ui.typeTab='data';go('things','${esc(t.name)}')">Bind ${esc(t.name)}</button>`).join('')}</div></div>` : '';
+  const unbound = f.unbound.length ? `<div class="card need"><b>${esc(f.unbound.map(t => t.name).join(' and '))} have no data behind them</b><div style="font-size:13px;color:var(--muted)">They are described but no table is bound, so agents can read the rules and not the rows.</div><div class="row">${f.unbound.map(t => `<button class="small" onclick="ui.typeTab='data';go('entities','${esc(t.name)}')">Bind ${esc(t.name)}</button>`).join('')}</div></div>` : '';
   const add = `<div><h4 style="padding:0">Add a source</h4><div class="desc" style="margin-bottom:8px">A source is a few lines of YAML: a name, a kind (csv, parquet, duckdb, postgres, s3, bigquery, snowflake, mcp) and where it is. Credentials come from environment variables, never from the file.</div><button class="small" ${ro()?'disabled':''} onclick="startNew('source')">+ New source</button></div>`;
   v.innerHTML = main(roBanner() + stepHead(1, 'Where the data lives', 'Rows stay in these systems. The ontology only knows what they are and where to look.') + cards + unbound + add);
 }
@@ -318,11 +320,11 @@ function renderSources(v){
 // --- things ---
 async function renderThings(v){
   const f = facts();
-  let list = `<button class="primary small" style="margin:0 4px 8px" ${ro()?'disabled':''} onclick="newTypeForm()">+ New thing</button>`;
-  for (const d of O.domains) { list += `<h4>${esc(d.name)}</h4>` + d.types.map(t => { const ft = f.types.find(x => x.name === t.name) || {}; const gap = (ft.fields||0) - (ft.described||0); return `<button class="item ${route.arg===t.name?'active':''}" onclick="go('things','${esc(t.name)}')"><span>${esc(t.name)}</span>${gap?`<span class="gap">${gap}</span>`:''}</button>`; }).join(''); }
+  let list = `<button class="primary small" style="margin:0 4px 8px" ${ro()?'disabled':''} onclick="newTypeForm()">+ New entity</button>`;
+  for (const d of O.domains) { list += `<h4>${esc(d.name)}</h4>` + d.types.map(t => { const ft = f.types.find(x => x.name === t.name) || {}; const gap = (ft.fields||0) - (ft.described||0); return `<button class="item ${route.arg===t.name?'active':''}" onclick="go('entities','${esc(t.name)}')"><span>${esc(t.name)}</span>${gap?`<span class="gap">${gap}</span>`:''}</button>`; }).join(''); }
   if (ui.newType) { v.innerHTML = `<div class="list">${list}</div>` + main(newTypeHtml()); return; }
   const name = route.arg || (f.types[0] && f.types[0].name);
-  if (!name) { v.innerHTML = `<div class="list">${list}</div>` + main('<div class="empty">No things yet. Create one on the left.</div>'); return; }
+  if (!name) { v.innerHTML = `<div class="list">${list}</div>` + main('<div class="empty">No entities yet. Create one on the left.</div>'); return; }
   const d = await describe(name);
   if (d.error) { v.innerHTML = `<div class="list">${list}</div>` + main(`<div class="empty">${esc(d.error)}</div>`); return; }
   if (ui.editor && ui.editor.file === d.file) { v.innerHTML = `<div class="list">${list}</div>` + main(editorHtml()); wireEditor(); return; }
@@ -364,10 +366,10 @@ async function dataTab(d){
 function newTypeForm(){ ui.newType = { name: '', domain: (O.domains[0] || {}).name || '', desc: '' }; render(); }
 function newTypeHtml(){
   const n = ui.newType;
-  return `<h1>A new thing</h1><div class="form"><label>Call it</label><input id="nt-name" value="${esc(n.name)}" placeholder="e.g. GiftCard" oninput="ui.newType.name=this.value"><label>Which area</label><div>${O.domains.map(d => `<span class="chip pick ${n.domain===d.name?'on':''}" onclick="ui.newType.domain='${esc(d.name)}';render()">${esc(d.name)}</span>`).join('')}</div><label>In plain words</label><textarea id="nt-desc" rows="3" placeholder="What is it, who owns it, what matters about it" oninput="ui.newType.desc=this.value">${esc(n.desc)}</textarea><span></span><div class="row"><button class="primary" onclick="saveNewType()">Create it</button><button onclick="ui.newType=null;render()">Cancel</button><span style="font-size:12.5px;color:var(--muted)">Fields, links and guardrails come next, on its own page.</span></div></div>
+  return `<h1>A new entity</h1><div class="form"><label>Call it</label><input id="nt-name" value="${esc(n.name)}" placeholder="e.g. GiftCard" oninput="ui.newType.name=this.value"><label>Which area</label><div>${O.domains.map(d => `<span class="chip pick ${n.domain===d.name?'on':''}" onclick="ui.newType.domain='${esc(d.name)}';render()">${esc(d.name)}</span>`).join('')}</div><label>In plain words</label><textarea id="nt-desc" rows="3" placeholder="What is it, who owns it, what matters about it" oninput="ui.newType.desc=this.value">${esc(n.desc)}</textarea><span></span><div class="row"><button class="primary" onclick="saveNewType()">Create it</button><button onclick="ui.newType=null;render()">Cancel</button><span style="font-size:12.5px;color:var(--muted)">Fields, links and guardrails come next, on its own page.</span></div></div>
   <div class="desc" style="margin-top:14px">Prefer the raw file? <a onclick="ui.newType=null;startNew('type')">Create from the YAML template</a>.</div>`;
 }
-async function saveNewType(){ const n = ui.newType; if (!n.name.trim()) { toast({ error: 'Give it a name first.' }); return; } const r = await patch({ op: 'add_type', name: n.name.trim(), domain: n.domain, description: n.desc }); if (r && r.written) { ui.newType = null; ui.typeTab = 'fields'; go('things', r.name || n.name.trim()); } }
+async function saveNewType(){ const n = ui.newType; if (!n.name.trim()) { toast({ error: 'Give it a name first.' }); return; } const r = await patch({ op: 'add_type', name: n.name.trim(), domain: n.domain, description: n.desc }); if (r && r.written) { ui.newType = null; ui.typeTab = 'fields'; go('entities', r.name || n.name.trim()); } }
 
 // --- links ---
 function renderLinks(v){
@@ -376,7 +378,7 @@ function renderLinks(v){
   const opts = (sel) => names.map(n => `<option ${n===sel?'selected':''}>${esc(n)}</option>`).join('');
   const builder = `<div class="card"><b>Add a link</b><div class="row"><select ${ro()?'disabled':''} onchange="ui.lf.from=this.value;render()">${opts(ui.lf.from)}</select><input class="mono" style="width:160px" placeholder="placed_by" value="${esc(ui.lf.name)}" ${ro()?'disabled':''} oninput="ui.lf.name=this.value"><select ${ro()?'disabled':''} onchange="ui.lf.to=this.value;render()">${opts(ui.lf.to)}</select>${['many-to-one','one-to-many','many-to-many','one-to-one'].map(c => `<span class="chip pick ${ui.lf.card===c?'on':''}" onclick="ui.lf.card='${c}';render()">${c}</span>`).join('')}</div><div class="row"><input style="flex:1 1 320px" placeholder="In plain words: what does this link mean?" value="${esc(ui.lf.desc)}" ${ro()?'disabled':''} oninput="ui.lf.desc=this.value"><button class="primary" ${ro()?'disabled':''} onclick="addLink()">Add link</button></div><div style="font-size:12px;color:var(--muted)">Will be written in <span class="mono">types/${esc(snake(ui.lf.from))}.yaml</span> as <span class="mono">${esc(snake(ui.lf.name)||'name')}: { to: ${esc(ui.lf.to)}, cardinality: ${ui.lf.card} }</span></div></div>`;
   const groups = f.types.filter(t => f.rels.some(r => r.from === t.name)).map(t => `<h4 style="padding:0">${esc(t.name)}</h4>` + f.rels.filter(r => r.from === t.name).map(r => linkRow(r.from, r.name, r.to, r.cardinality, r.description)).join('')).join('');
-  v.innerHTML = main(roBanner() + stepHead(3, 'How things connect', `${f.rels.length} links. ${f.relsNoDesc.length} have no sentence yet; the highlighted boxes want one.`) + builder + groups);
+  v.innerHTML = main(roBanner() + stepHead(3, 'How entities connect', `${f.rels.length} links. ${f.relsNoDesc.length} have no sentence yet; the highlighted boxes want one.`) + builder + groups);
 }
 async function addLink(){ const r = await patch({ op: 'add_relationship', type: ui.lf.from, name: ui.lf.name, to: ui.lf.to, cardinality: ui.lf.card, description: ui.lf.desc }); if (r && r.written) { ui.lf.name = ''; ui.lf.desc = ''; render(); } }
 
@@ -402,14 +404,14 @@ async function renderRules(v){
   const ruleText = ui.rf.rule || composed;
   side += `<h4 style="padding:0">Add a guardrail</h4>
     <label style="font-size:12px;color:var(--muted)">Say it in one sentence</label><input value="${esc(ui.rf.name)}" placeholder="e.g. Only unshipped orders can be cancelled" ${ro()?'disabled':''} oninput="ui.rf.name=this.value">
-    <label style="font-size:12px;color:var(--muted)">About which thing</label><select ${ro()?'disabled':''} onchange="ui.rf.applies=this.value;ui.rf.field='';ui.rf.rule='';render()"><optgroup label="Things">${things.map(n => `<option ${ui.rf.applies===n?'selected':''}>${esc(n)}</option>`).join('')}</optgroup><optgroup label="Links">${links.map(n => `<option ${ui.rf.applies===n?'selected':''}>${esc(n)}</option>`).join('')}</optgroup><optgroup label="Actions">${acts.map(n => `<option ${ui.rf.applies===n?'selected':''}>${esc(n)}</option>`).join('')}</optgroup></select>
+    <label style="font-size:12px;color:var(--muted)">About which entity</label><select ${ro()?'disabled':''} onchange="ui.rf.applies=this.value;ui.rf.field='';ui.rf.rule='';render()"><optgroup label="Things">${things.map(n => `<option ${ui.rf.applies===n?'selected':''}>${esc(n)}</option>`).join('')}</optgroup><optgroup label="Links">${links.map(n => `<option ${ui.rf.applies===n?'selected':''}>${esc(n)}</option>`).join('')}</optgroup><optgroup label="Actions">${acts.map(n => `<option ${ui.rf.applies===n?'selected':''}>${esc(n)}</option>`).join('')}</optgroup></select>
     ${isType ? `<div class="row"><select class="mono" ${ro()?'disabled':''} onchange="ui.rf.field=this.value;ui.rf.rule='';render()">${fields.map(n => `<option ${ui.rf.field===n?'selected':''}>${esc(n)}</option>`).join('')}</select><select ${ro()?'disabled':''} onchange="ui.rf.op=this.value;ui.rf.rule='';render()">${[['==','must be'],['!=','must not be'],['>=','at least'],['<=','at most'],['>','more than'],['<','less than']].map(([o,l]) => `<option value="${o}" ${ui.rf.op===o?'selected':''}>${l}</option>`).join('')}</select><input class="mono" style="width:110px" placeholder="value" value="${esc(ui.rf.value)}" ${ro()?'disabled':''} oninput="ui.rf.value=this.value;ui.rf.rule='';document.getElementById('rf-rule').value=composeRule()"></div>` : `<div style="font-size:12px;color:var(--muted)">${esc(vars)}</div>`}
     <label style="font-size:12px;color:var(--muted)">Will be written as (CEL; edit it if you like)</label><input id="rf-rule" class="mono" value="${esc(ruleText)}" ${ro()?'disabled':''} oninput="ui.rf.rule=this.value">
     <div class="row">${[['block','Stop it'],['warn','Allow, but warn'],['info','Just a note']].map(([k,l]) => `<span class="chip pick ${ui.rf.sev===k?'on':''}" onclick="ui.rf.sev='${k}';render()">${l}</span>`).join('')}</div>
     <label style="font-size:12px;color:var(--muted)">Why it exists</label><input value="${esc(ui.rf.why)}" placeholder="The policy or the incident behind it" ${ro()?'disabled':''} oninput="ui.rf.why=this.value">
     <label style="font-size:12px;color:var(--muted)">Who signs off (an email or a team)</label><input value="${esc(ui.rf.who)}" placeholder="e.g. payments@acme.example" ${ro()?'disabled':''} oninput="ui.rf.who=this.value">
     <div class="row"><button class="primary" ${ro()?'disabled':''} onclick="addRule()">Add guardrail</button><button class="small" ${ro()?'disabled':''} onclick="startNew('constraint')">YAML instead</button></div>`;
-  v.innerHTML = main(roBanner() + stepHead(4, 'Guardrails', 'What agents check before they act. Each one is a sentence first and an expression second.') + `<div class="row">${filters}<input style="margin-left:auto;width:240px" placeholder="Filter by thing or words…" value="${esc(ui.ruleQuery)}" oninput="ui.ruleQuery=this.value;render()"></div>` + (groups || '<div class="empty">No guardrails match.</div>'), `<div class="aside">${side}</div>`);
+  v.innerHTML = main(roBanner() + stepHead(4, 'Guardrails', 'What agents check before they act. Each one is a sentence first and an expression second.') + `<div class="row">${filters}<input style="margin-left:auto;width:240px" placeholder="Filter by entity or words…" value="${esc(ui.ruleQuery)}" oninput="ui.ruleQuery=this.value;render()"></div>` + (groups || '<div class="empty">No guardrails match.</div>'), `<div class="aside">${side}</div>`);
 }
 function composeRule(){ const v = ui.rf.value; const lit = v === '' ? '…' : (isNaN(Number(v)) && !['true','false'].includes(v) ? JSON.stringify(v) : v); return `${ui.rf.field} ${ui.rf.op} ${lit}`; }
 async function addRule(){
@@ -487,7 +489,7 @@ async function renderData(v){
   const skipped = TABLES ? Object.entries(TABLES.skipped||{}).map(([k, w]) => `<div style="font-size:12.5px;color:var(--muted)">✗ <b>${esc(k)}</b>: ${esc(w)}</div>`).join('') + Object.entries(TABLES.not_readable||{}).map(([k, w]) => `<div style="font-size:12.5px;color:var(--muted)">– <b>${esc(k)}</b>: ${esc(w)} is not read here</div>`).join('') : '';
   let out = '';
   if (ui.sqlOut) { const r = ui.sqlOut; out = r.error ? `<div class="verdict fail">${esc(r.error)}</div>` : `<div style="overflow:auto"><table><tr>${r.columns.map(c => `<th title="${esc(c.type)}">${esc(c.name)}</th>`).join('')}</tr>${r.rows.map(row => `<tr>${r.columns.map(c => `<td class="mono">${row[c.name]===null||row[c.name]===undefined?'<span style="color:var(--muted)">∅</span>':esc(typeof row[c.name]==='object'?JSON.stringify(row[c.name]):row[c.name])}</td>`).join('')}</tr>`).join('')}</table></div><div style="font-size:12px;color:var(--muted)">${r.row_count} row${r.row_count===1?'':'s'}${r.truncated?` (truncated at ${r.limit})`:''} · ${r.elapsed_ms} ms · DuckDB, read-only</div>`; }
-  v.innerHTML = main(`<h1>Data &amp; SQL</h1><div class="desc">One SQL door across the ontology and every readable source. Read-only. The ontology is in <span class="mono">nodes, properties, edges, constraints, actions, sources</span>; every readable thing is a view named after it.</div><div>${sources}</div><div>${chips}</div>${skipped}<textarea id="sql-in" class="mono" rows="4" spellcheck="false">${esc(ui.sql)}</textarea><div class="row"><button class="primary" onclick="runSql()">Run</button><span style="font-size:12.5px;color:var(--muted)">⌘/Ctrl+Enter runs</span></div>${out}`);
+  v.innerHTML = main(`<h1>Data &amp; SQL</h1><div class="desc">One SQL door across the ontology and every readable source. Read-only. The ontology is in <span class="mono">nodes, properties, edges, constraints, actions, sources</span>; every readable entity is a view named after it.</div><div>${sources}</div><div>${chips}</div>${skipped}<textarea id="sql-in" class="mono" rows="4" spellcheck="false">${esc(ui.sql)}</textarea><div class="row"><button class="primary" onclick="runSql()">Run</button><span style="font-size:12.5px;color:var(--muted)">⌘/Ctrl+Enter runs</span></div>${out}`);
   const t = $('sql-in'); t.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runSql(); });
 }
 function useSql(q){ ui.sql = q; runSql(); }
@@ -500,7 +502,7 @@ function renderDiagnostics(v){ v.innerHTML = main(`<h1>Diagnostics</h1>` + (O.di
 async function openEditor(file, name, kind){
   const text = await fetch(B + '/api/yaml?file=' + encodeURIComponent(file)).then(r => r.text());
   ui.editor = { file, name, kind, text, isNew: false };
-  if (route.screen !== 'things' && route.screen !== 'actions') { $('view').innerHTML = main(editorHtml()); wireEditor(); } else render();
+  if (route.screen !== 'entities' && route.screen !== 'actions') { $('view').innerHTML = main(editorHtml()); wireEditor(); } else render();
 }
 async function startNew(kind){
   if (ro()) { toast({ error: 'read-only: start with --allow-edit' }); return; }
@@ -521,7 +523,7 @@ function wireEditor(){ const t = $('ed-text'); if (!t) return; t.addEventListene
 function newNameChanged(v){ ui.editor.name = v.trim(); if (!ui.editor.touched) { fillTemplate(); $('ed-text').value = ui.editor.text; } const p = $('new-path'); if (p) p.textContent = `${kindFolder[ui.editor.kind]}/${snake(ui.editor.name||'<name>')}.yaml`; }
 function showDiags(r){ const el = $('ed-diags'); if (!el) return; let h = r.error ? `<div class="d error">✗ ${esc(r.error)}</div>` : (!r.ok ? `<div class="d error">✗ Not saved: fix the ${r.errors} error${r.errors===1?'':'s'} below. Nothing was written.</div>` : ''); for (const d of (r.diagnostics||[])) h += `<div class="d ${d.level}">${d.level==='error'?'✗':'⚠'} ${esc(d.code)} ${esc(d.message)}${d.file?` <span style="opacity:.7">[${esc(d.file)}]</span>`:''}</div>`; el.innerHTML = h; }
 async function saveEdit(){ const r = await post(B + '/api/edit', { file: ui.editor.file, content: $('ed-text').value }); if (!r.written) { showDiags(r); return; } ui.editor = null; await afterWrite(r); }
-async function saveNew(){ const e = ui.editor; if (!e.name) { showDiags({ error: 'Give it a name first.' }); return; } const body = { kind: e.kind, name: e.name, content: $('ed-text').value }; if (e.kind === 'constraint' && e.constraintFile) body.file = e.constraintFile; const r = await post(B + '/api/create', body); if (!r.written) { showDiags(r); return; } ui.editor = null; await afterWrite(r); const dest = { type: ['things', r.name || e.name], constraint: ['rules', r.name || e.name], action: ['actions', r.name || e.name], relationship: ['links', ''], source: ['sources', ''] }[e.kind]; if (dest) go(dest[0], dest[1]); }
+async function saveNew(){ const e = ui.editor; if (!e.name) { showDiags({ error: 'Give it a name first.' }); return; } const body = { kind: e.kind, name: e.name, content: $('ed-text').value }; if (e.kind === 'constraint' && e.constraintFile) body.file = e.constraintFile; const r = await post(B + '/api/create', body); if (!r.written) { showDiags(r); return; } ui.editor = null; await afterWrite(r); const dest = { type: ['entities', r.name || e.name], constraint: ['rules', r.name || e.name], action: ['actions', r.name || e.name], relationship: ['links', ''], source: ['sources', ''] }[e.kind]; if (dest) go(dest[0], dest[1]); }
 function cancelEdit(){ ui.editor = null; render(); }
 async function deleteFile(){ const file = ui.editor.file; if (!confirm(`Delete ${file}?\n\nThe ontology is compiled without it first: anything that still refers to what it declares blocks the delete.`)) return; const r = await fetch(B + '/api/file?file=' + encodeURIComponent(file), { method: 'DELETE' }).then(x => x.json()); if (!r.written) { showDiags(r); return; } ui.editor = null; await afterWrite({ ...r, summary: 'Deleted ' + file }); go(route.screen); }
 

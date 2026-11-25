@@ -256,12 +256,16 @@ pub fn check(root: &Path, rel: &str, change: &Change) -> anyhow::Result<(Ontolog
 
 /// Which diagnostics to show for a change: every error, everything on the
 /// changed file, and anything that was not there before the change.
+/// The diagnostics a change is judged by: anything new, plus anything about
+/// the file itself. A problem that was already there and lives elsewhere (an
+/// empty space's "no types yet", a broken file you have not touched) is not
+/// this change's fault and must not stop it; it stays visible in the footer.
 pub fn relevant(before: &Report, after: &Report, rel: &str) -> Vec<Diag> {
     let existed = |d: &Diag| before.diags.iter().any(|b| b.code == d.code && b.message == d.message && b.file == d.file);
     let mut out: Vec<Diag> = after
         .diags
         .iter()
-        .filter(|d| d.level == Level::Error || d.file == rel || !existed(d))
+        .filter(|d| d.file == rel || !existed(d))
         .cloned()
         .collect();
     out.sort_by_key(|d| if d.level == Level::Error { 0 } else { 1 });
@@ -324,7 +328,8 @@ pub fn apply(root: &Path, cfg: EditConfig, before: &Report, file: &str, change: 
         }
     };
     out.diagnostics = relevant(before, &after, &rel);
-    out.ok = after.ok();
+    // clean means: this change adds no error of its own (see `relevant`)
+    out.ok = !out.diagnostics.iter().any(|d| d.level == Level::Error);
     if !out.ok || !cfg.allow {
         return out;
     }
@@ -659,6 +664,19 @@ mod tests {
         assert_eq!(describe_content("a.yaml", "action: ship\n"), ("action".into(), "ship".into()));
         assert_eq!(describe_content("ontology.yaml", "name: acme\n"), ("manifest".into(), "acme".into()));
         assert_eq!(describe_content("x.yaml", "nonsense: 1\n"), ("file".into(), "x.yaml".into()));
+    }
+
+    #[test]
+    fn a_pre_existing_error_elsewhere_does_not_block_an_unrelated_save() {
+        let dir = scratch("preexisting");
+        std::fs::create_dir_all(dir.join("types")).unwrap();
+        std::fs::write(dir.join("ontology.yaml"), "name: empty\ndomains:\n  - name: Core\n    types: []\n").unwrap();
+        let (_, before) = check(&dir, "ontology.yaml", &Change::Write(std::fs::read_to_string(dir.join("ontology.yaml")).unwrap())).unwrap();
+        assert!(!before.ok(), "an empty space has the no-types error");
+        let out = apply(&dir, EditConfig { allow: true, commit: false }, &before, "sources/files.yaml", Change::Write("connection: files\nkind: csv\npath: data\n".into()), "test", None, "");
+        assert!(out.written, "{:?}", out.diagnostics);
+        let out = apply(&dir, EditConfig { allow: true, commit: false }, &before, "types/bad.yaml", Change::Write("type: Bad\nproperties: { id: { type: string, key: true } }\nrelationships:\n  - { name: has, to: Nope }\n".into()), "test", None, "");
+        assert!(!out.written, "a new error of its own is still refused");
     }
 
     #[test]

@@ -32,15 +32,15 @@ The page shows one space at a time and has a picker at the top:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ [brand-one · 12 things ▾]  brand-one v0.1.0   12 things · 13 links │
+│ [brand-one · 12 entities ▾]  brand-one v0.1.0   12 entities · 13 links │
 │   Your spaces                                                      │
-│     brand-one · 12 things                                          │
-│     brand-two · 4 things                                           │
+│     brand-one · 12 entities                                          │
+│     brand-two · 4 entities                                           │
 │   Examples that ship with it                                       │
-│     ecommerce · 12 things        ← read-only, to see how it is done │
-│     supply-chain · 10 things                                        │
+│     ecommerce · 12 entities        ← read-only, to see how it is done │
+│     supply-chain · 10 entities                                        │
 │   Packs for common MCPs                                             │
-│     meta-ads · 12 things                                            │
+│     meta-ads · 12 entities                                            │
 │   ＋ New space…                 ← blank, starter, or a copy of any   │
 └──────────────────────────────────────────────────────────────────┘
 ```
