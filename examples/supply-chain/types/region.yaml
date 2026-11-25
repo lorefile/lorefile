@@ -1,0 +1,11 @@
+type: Region
+description: Reference list of sourcing regions with the Risk team's current risk level.
+properties:
+  code:       { type: string, key: true }
+  name:       string
+  risk_level: { type: enum, values: [low, medium, high] }
+instances:
+  - { code: AMER, name: Americas, risk_level: low }
+  - { code: EMEA, name: Europe, Middle East & Africa, risk_level: low }
+  - { code: APAC, name: Asia Pacific, risk_level: medium }
+  - { code: LATAM, name: Latin America, risk_level: medium }

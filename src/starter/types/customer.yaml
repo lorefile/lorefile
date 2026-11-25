@@ -1,0 +1,25 @@
+types:
+  - type: Customer
+    description: A person or company that has signed up with us.
+    properties:
+      customer_id: { type: string, key: true, description: "Internal id, e.g. C-001" }
+      name: string
+      status: { type: enum, values: [trial, active, vip, churned], description: "Lifecycle stage" }
+      country: string
+    relationships:
+      owns: { to: Account, cardinality: one-to-many, description: "A customer can hold several accounts" }
+    owner: success@example.com
+    instances:
+      - { customer_id: C-001, name: Ada Lovelace, status: vip, country: GB }
+      - { customer_id: C-002, name: Grace Hopper, status: active, country: US }
+      - { customer_id: C-003, name: Alan Turing, status: trial, country: GB }
+
+  - type: Account
+    description: A balance-holding account owned by exactly one customer.
+    properties:
+      account_id: { type: string, key: true }
+      balance: { type: number, unit: USD, description: "Current balance; must be zero before closing" }
+      open: { type: boolean, description: "False once closed" }
+    instances:
+      - { account_id: A-100, balance: 0, open: true }
+      - { account_id: A-101, balance: 250.5, open: true }

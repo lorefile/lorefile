@@ -1,0 +1,16 @@
+name: acme-supply-chain
+version: 0.1.0
+description: >
+  Acme Automotive buys parts from suppliers and assembles brake and steering
+  systems at three plants. This ontology is what our AI agents read before they
+  touch procurement data or propose a change.
+domains:
+  - name: Supply chain
+    description: Who supplies what, from where, and how fast.
+    types: [Supplier, Part, Assembly, Facility, Region]
+  - name: Quality & compliance
+    description: Audits, certifications, and incidents.
+    types: [Auditor, Certification, Incident]
+  - name: Commercial
+    description: Contracts and purchase orders.
+    types: [Contract, PurchaseOrder]

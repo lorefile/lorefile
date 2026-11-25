@@ -1,0 +1,15 @@
+constraints:
+  - id: SC-050
+    name: Stock must cover supplier lead time
+    applies_to: supplies
+    rule: supplier.lead_time_days <= part.stock_days + 7
+    severity: warn
+    rationale: If lead time exceeds inventory on hand (plus a week of buffer) a single late shipment stops the line.
+    owner: planning@acme.example
+
+  - id: SC-051
+    name: Very long lead times
+    applies_to: Supplier
+    rule: lead_time_days <= 60
+    severity: info
+    rationale: Informational flag for the planning review.

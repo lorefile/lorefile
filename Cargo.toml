@@ -1,0 +1,41 @@
+[package]
+name = "stella-ontology"
+version = "0.1.0"
+edition = "2021"
+description = "Lightweight, file-based, AI-agent-first ontology graph: YAML in, MCP/CLI/UI out."
+license = "Apache-2.0"
+# Homebrew rustc 1.87 is the floor; resolver 3 makes cargo pick dependency
+# versions that compile on it (uuid is pinned in Cargo.lock for the same reason).
+rust-version = "1.87"
+resolver = "3"
+
+[[bin]]
+name = "stella-ontology"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+indexmap = { version = "2", features = ["serde"] }
+walkdir = "2"
+csv = "1"
+regex = "1"
+cel = "0.16"
+tiny_http = "0.12"
+# The data door. `bundled` compiles DuckDB from source (no system install);
+# `parquet` and `json` link those extensions statically so they need no download.
+duckdb = { version = "1.10506", features = ["bundled", "parquet", "json"], optional = true }
+
+[features]
+default = ["duckdb"]
+# Turn off with `cargo build --no-default-features` for a small CSV-only binary.
+duckdb = ["dep:duckdb"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

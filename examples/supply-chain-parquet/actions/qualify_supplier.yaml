@@ -1,0 +1,7 @@
+action: qualify_supplier
+description: Promote a supplier to approved status for new awards after an audit.
+inputs:
+  supplier: Supplier
+checks: [QS-001, SC-042, SC-043, SC-044, SC-061]
+requires_approval_from: Quality Lead
+side_effects: Sets status=approved, schedules the next audit.

@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stella Ontology</title>
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1a1a1a;--muted:#6b6b6b;--line:#e4e4e0;--accent:#2b5cff;--block:#c62828;--warn:#b26a00;--info:#2e7d32;--chip:#eef0f4;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#111214;--panel:#1a1b1e;--ink:#ececec;--muted:#9a9a9a;--line:#2a2b2f;--accent:#6f8dff;--block:#ff6b6b;--warn:#f0b35a;--info:#7bd389;--chip:#24262b}}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.45 var(--sans)}
+a{color:var(--accent);text-decoration:none;cursor:pointer}
+#app{display:grid;grid-template-rows:48px 1fr 32px;grid-template-columns:260px 1fr 320px;height:100vh}
+header{grid-column:1/4;display:flex;align-items:center;gap:14px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header .name{font-weight:650}header .counts{color:var(--muted)}header .spacer{flex:1}
+button{font:inherit;padding:5px 10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;cursor:pointer}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+nav{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px}
+nav input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+nav h4{margin:14px 0 4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+nav .item{display:block;padding:4px 8px;border-radius:5px;color:var(--ink)}nav .item:hover{background:var(--chip)}nav .item.active{background:var(--accent);color:#fff}
+nav .item small{color:var(--muted);margin-left:6px}nav .item.active small{color:#dfe6ff}
+main{overflow:auto;padding:20px 26px}
+aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px}
+aside h4,main h4{margin:14px 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+footer{grid-column:1/4;display:flex;align-items:center;gap:14px;padding:0 16px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12.5px}
+h1{margin:0 0 4px;font-size:22px}h1 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
+.desc{color:var(--muted);max-width:70ch;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;margin:6px 0 10px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500;font-size:12px}
+code,.mono{font-family:var(--mono);font-size:12.5px}
+.chip{display:inline-block;background:var(--chip);border-radius:999px;padding:1px 8px;font-size:12px;margin:0 4px 4px 0}
+.sev{display:inline-block;min-width:44px;text-align:center;border-radius:4px;padding:0 6px;font-size:11px;font-weight:600;color:#fff}
+.sev.block{background:var(--block)}.sev.warn{background:var(--warn)}.sev.info{background:var(--info)}
+.rule{padding:8px 0;border-bottom:1px solid var(--line)}.rule .id{font-weight:600}.rule .why{color:var(--muted);font-size:12.5px;margin-top:2px}
+.tabs{display:flex;gap:4px;margin:14px 0 10px;border-bottom:1px solid var(--line)}.tabs a{padding:6px 10px;color:var(--muted);border-bottom:2px solid transparent}.tabs a.active{color:var(--ink);border-color:var(--accent)}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-family:var(--mono);font-size:12.5px}
+svg text{font:12px var(--sans);fill:var(--ink)}svg .edge{stroke:var(--muted);stroke-width:1.2}svg .lbl{fill:var(--muted);font-size:10.5px}
+svg .node rect{fill:var(--panel);stroke:var(--line);rx:8}svg .node.root rect{stroke:var(--accent);stroke-width:2}
+.form{display:grid;grid-template-columns:140px 1fr;gap:8px 10px;align-items:center;max-width:620px;margin:8px 0}
+.form input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.verdict{padding:10px 12px;border-radius:8px;margin:10px 0;font-weight:600}.verdict.pass{background:#e6f4ea;color:#1e5631}.verdict.warn{background:#fff3df;color:#7a4b00}.verdict.fail{background:#fde8e8;color:#8a1c1c}
+@media (prefers-color-scheme:dark){.verdict.pass{background:#17301d;color:#a7e3b5}.verdict.warn{background:#3a2a0d;color:#f3cf8a}.verdict.fail{background:#3a1515;color:#ffb3b3}}
+.res{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.res .msg{color:var(--muted)}
+.diag{font-family:var(--mono);font-size:12px;padding:2px 0}
+.empty{color:var(--muted);padding:40px 0;text-align:center}
+textarea.sql{width:100%;min-height:96px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-family:var(--mono);font-size:12.5px;resize:vertical}
+.sqlbar{display:flex;gap:8px;align-items:center;margin:8px 0 14px;color:var(--muted);font-size:12.5px}
+.sqlerr{background:#fde8e8;color:#8a1c1c;padding:8px 10px;border-radius:8px;font-family:var(--mono);font-size:12.5px;white-space:pre-wrap}
+@media (prefers-color-scheme:dark){.sqlerr{background:#3a1515;color:#ffb3b3}}
+.sqlwrap{overflow:auto;max-height:60vh}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <span class="name" id="h-name">…</span>
+    <span class="counts" id="h-counts"></span>
+    <span class="spacer"></span>
+    <span id="h-dir" class="mono" style="color:var(--muted)"></span>
+    <button onclick="renderSql()">SQL</button>
+    <button onclick="reload()">Reload</button>
+    <a href="/api/summary.md" target="_blank"><button>Summary.md</button></a>
+  </header>
+  <nav id="nav"></nav>
+  <main id="main"><div class="empty">Pick something on the left.</div></main>
+  <aside id="aside"></aside>
+  <footer id="footer"></footer>
+</div>
+<script>
+let O = null, sel = null, tab = 'overview', depth = 1;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api = async (p, opt) => { const r = await fetch(p, opt); return r.json(); };
+
+async function boot(){
+  O = await api('/api/summary');
+  $('h-name').textContent = O.manifest.name + (O.manifest.version ? ' v' + O.manifest.version : '');
+  const s = O.stats;
+  $('h-counts').textContent = `${s.types} types · ${s.relationships} relationships · ${s.constraints} rules · ${s.actions} actions · ${s.sources} sources`;
+  $('h-dir').textContent = O.dir;
+  renderNav(); renderFooter();
+  const hash = decodeURIComponent(location.hash.slice(1));
+  if (hash) select(hash); else if (O.domains[0]?.types[0]) select(O.domains[0].types[0].name);
+}
+async function reload(){ await api('/api/reload', {method:'POST'}); await boot(); if (sel) select(sel); }
+
+function renderNav(q){
+  const n = $('nav'); let h = `<input placeholder="Search types, rules, actions…" value="${esc(q||'')}" oninput="search(this.value)">`;
+  if (q) { n.innerHTML = h + '<h4>Results</h4><div id="results">…</div>'; return; }
+  for (const d of O.domains) {
+    h += `<h4>${esc(d.name)}</h4>` + d.types.map(t => item(t.name, t.name)).join('');
+  }
+  h += `<h4>Rules <small>${O.constraints.length}</small></h4>` + O.constraints.slice(0, 400).map(c => item(c.id, `<span class="sev ${c.severity}" style="min-width:36px;margin-right:6px">${c.severity}</span>${esc(c.id)}`)).join('');
+  h += `<h4>Actions</h4>` + O.actions.map(a => item(a.name, a.name)).join('');
+  h += `<h4>Sources</h4>` + O.sources.map(s => item(s.connection, `${esc(s.connection)}<small>${esc(s.kind)}</small>`)).join('');
+  if (O.glossary.length) h += `<h4>Glossary</h4>` + O.glossary.map(g => `<a class="item" onclick="select('${esc(g.means)}')">${esc(g.term)}<small>→ ${esc(g.means)}</small></a>`).join('');
+  n.innerHTML = h;
+}
+const item = (name, label) => `<a class="item ${sel===name?'active':''}" data-name="${esc(name)}" onclick="select('${esc(name)}')">${label}</a>`;
+
+let searchTimer;
+function search(q){
+  clearTimeout(searchTimer);
+  if (!q.trim()) { renderNav(); return; }
+  renderNav(q);
+  searchTimer = setTimeout(async () => {
+    const hits = await api('/api/search?q=' + encodeURIComponent(q));
+    $('results').innerHTML = hits.length ? hits.map(h => `<a class="item" onclick="select('${esc(h.name)}')"><small style="margin:0 6px 0 0">${h.kind}</small>${esc(h.name)}<div style="color:var(--muted);font-size:12px">${esc(h.snippet)}</div></a>`).join('') : '<div class="empty">No matches</div>';
+  }, 120);
+}
+
+async function select(name){
+  sel = name; tab = tab || 'overview'; location.hash = encodeURIComponent(name);
+  document.querySelectorAll('nav .item').forEach(e => e.classList.toggle('active', e.dataset.name === name));
+  const d = await api('/api/describe?name=' + encodeURIComponent(name));
+  if (d.error) { $('main').innerHTML = `<div class="empty">${esc(d.error)}</div>`; $('aside').innerHTML=''; return; }
+  if (d.kind === 'type') renderType(d); else if (d.kind === 'action') renderAction(d); else if (d.kind === 'constraint') renderRule(d); else if (d.kind === 'source') renderSource(d); else renderGeneric(d);
+}
+
+const sevChip = (s) => `<span class="sev ${s}">${s}</span>`;
+function rulesHtml(cs, title='Rules'){
+  if (!cs?.length) return `<h4>${title}</h4><div style="color:var(--muted)">None</div>`;
+  return `<h4>${title} <small>${cs.length}</small></h4>` + cs.map(c => `<div class="rule">${sevChip(c.severity)} <a class="id" onclick="select('${esc(c.id)}')">${esc(c.id)}</a> ${esc(c.name)}<div class="mono" style="margin-top:3px">${esc(c.rule)}</div>${c.rationale?`<div class="why">${esc(c.rationale)}</div>`:''}</div>`).join('');
+}
+
+async function renderType(d){
+  const tabs = ['overview','graph','data','yaml'].map(t => `<a class="${tab===t?'active':''}" onclick="tab='${t}';select('${esc(d.name)}')">${t[0].toUpperCase()+t.slice(1)}</a>`).join('');
+  let body = '';
+  if (tab === 'overview') {
+    body += `<h4>Properties <small>${d.properties.length}</small></h4><table><tr><th>name</th><th>type</th><th>description</th></tr>` +
+      d.properties.map(p => `<tr><td class="mono">${esc(p.name)}${p.key?' <span class="chip">key</span>':''}</td><td class="mono">${esc(p.type)}${p.values?` ${esc(JSON.stringify(p.values))}`:''}${p.unit?` (${esc(p.unit)})`:''}</td><td>${esc(p.description)}</td></tr>`).join('') + '</table>';
+    body += `<h4>Relationships</h4><table>` +
+      d.relationships.map(r => `<tr><td><b>${esc(d.name)}</b> ─<span class="mono">${esc(r.name)}</span>→ <a onclick="select('${esc(r.to)}')">${esc(r.to)}</a></td><td class="mono">${esc(r.cardinality)}</td><td style="color:var(--muted)">${esc(r.description)}</td></tr>`).join('') +
+      d.incoming.map(r => `<tr><td><a onclick="select('${esc(r.from)}')">${esc(r.from)}</a> ─<span class="mono">${esc(r.name)}</span>→ <b>${esc(d.name)}</b></td><td class="mono">${esc(r.cardinality)}</td><td style="color:var(--muted)">${esc(r.description)}</td></tr>`).join('') + '</table>';
+    if (d.actions.length) body += `<h4>Actions involving ${esc(d.name)}</h4>` + d.actions.map(a => `<a class="chip" onclick="select('${esc(a)}')">${esc(a)}</a>`).join('');
+  } else if (tab === 'graph') {
+    const sg = await api(`/api/neighbors?name=${encodeURIComponent(d.name)}&depth=${depth}`);
+    body += `<div style="margin-bottom:8px">Depth <button onclick="depth=1;select('${esc(d.name)}')">1</button> <button onclick="depth=2;select('${esc(d.name)}')">2</button> <button onclick="depth=3;select('${esc(d.name)}')">3</button></div>` + graphSvg(sg);
+  } else if (tab === 'data') {
+    const w = await api('/api/where?name=' + encodeURIComponent(d.name));
+    body += `<pre>${esc(JSON.stringify(w, null, 2))}</pre>`;
+    if (w.readable_here) {
+      const rows = await api(`/api/instances?name=${encodeURIComponent(d.name)}&limit=50`);
+      const cols = rows.rows.length ? Object.keys(rows.rows[0]) : [];
+      body += `<h4>Rows <small>${rows.total}</small></h4><table><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>` + rows.rows.map(r => `<tr>${cols.map(c=>`<td class="mono">${esc(typeof r[c]==='object'?JSON.stringify(r[c]):r[c])}</td>`).join('')}</tr>`).join('') + '</table>';
+    }
+  } else if (tab === 'yaml') {
+    const y = await fetch('/api/yaml?file=' + encodeURIComponent(d.file)).then(r => r.text());
+    body += `<div style="color:var(--muted);margin-bottom:6px" class="mono">${esc(d.file)}</div><pre>${esc(y)}</pre>`;
+  }
+  $('main').innerHTML = `<h1>${esc(d.name)}<small>type${d.domain?' · '+esc(d.domain):''}</small></h1><div class="desc">${esc(d.description)}</div>${d.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}<div class="tabs">${tabs}</div>${body}`;
+  let side = rulesHtml(d.constraints, 'Rules on ' + d.name);
+  side += '<h4>Data</h4>';
+  side += d.source ? `<div><b>${esc(d.source.connection)}</b> <span class="chip">${esc(d.source.kind)}</span></div><div class="mono">${esc(d.source.table)}</div><div style="color:var(--muted)">key ${esc(d.source.key||d.key||'')}</div>` : `<div style="color:var(--muted)">${d.inline_instances?`${d.inline_instances} inline rows`:'No data binding (concept only)'}</div>`;
+  if (d.owner) side += `<h4>Owner</h4><div>${esc(d.owner)}</div>`;
+  side += `<h4>File</h4><div class="mono">${esc(d.file)}</div>`;
+  $('aside').innerHTML = side;
+}
+
+function graphSvg(sg){
+  const W = Math.max(480, ($('main').clientWidth || 760) - 60), H = Math.max(420, Math.min(560, W * 0.7)), cx = W/2, cy = H/2;
+  const nodes = sg.nodes; const pos = {};
+  const byDepth = {}; nodes.forEach(n => (byDepth[n.depth] ||= []).push(n));
+  for (const [dep, arr] of Object.entries(byDepth)) {
+    const r = dep === '0' ? 0 : Math.min((H/2 - 40) * (dep / Math.max(1, Object.keys(byDepth).length - 1)), H/2 - 40);
+    arr.forEach((n, i) => { const a = (2*Math.PI*i)/arr.length - Math.PI/2; pos[n.name] = { x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) }; });
+  }
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:100%">`;
+  for (const e of sg.edges) {
+    const a = pos[e.from], b = pos[e.to]; if (!a || !b) continue;
+    const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    s += `<line class="edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" marker-end="url(#arr)"/><text class="lbl" x="${mx}" y="${my-4}" text-anchor="middle">${esc(e.relationship)}</text>`;
+  }
+  s += `<defs><marker id="arr" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--muted)"/></marker></defs>`;
+  for (const n of nodes) {
+    const p = pos[n.name], w = Math.max(70, n.name.length*7.5+20);
+    s += `<g class="node ${n.depth===0?'root':''}" onclick="select('${esc(n.name)}')" style="cursor:pointer"><rect x="${p.x-w/2}" y="${p.y-14}" width="${w}" height="28"/><text x="${p.x}" y="${p.y+4}" text-anchor="middle">${esc(n.name)}</text></g>`;
+  }
+  return s + '</svg>';
+}
+
+function renderAction(d){
+  const inputs = Object.entries(d.inputs);
+  const effects = d.effects.map(e => e.create ? `creates <span class="mono">${esc(e.create.relationship)}</span>: ${esc(e.create.from)} → ${esc(e.create.to)}` : e.remove ? `removes <span class="mono">${esc(e.remove.relationship)}</span>: ${esc(e.remove.from)} → ${esc(e.remove.to)}` : '').join('<br>');
+  $('main').innerHTML = `<h1>${esc(d.name)}<small>action</small></h1><div class="desc">${esc(d.description)}</div>
+    <h4>Inputs</h4><table>${inputs.map(([k,v]) => `<tr><td class="mono">${esc(k)}</td><td><a onclick="select('${esc(v)}')">${esc(v)}</a></td></tr>`).join('')}</table>
+    ${effects ? `<h4>Effects</h4><div>${effects}</div>` : ''}
+    ${d.requires_approval_from ? `<h4>Approval</h4><div>${esc(d.requires_approval_from)}</div>` : ''}
+    ${d.side_effects ? `<h4>Side effects</h4><div>${esc(d.side_effects)}</div>` : ''}
+    <h4>Try it — what an agent's validate() call does</h4>
+    <div class="form">${inputs.map(([k,v]) => `<label class="mono">${esc(k)} <small style="color:var(--muted)">${esc(v)}</small></label><input id="in-${esc(k)}" placeholder="${esc(v)} key, or inline JSON like {&quot;tier&quot;:3}">`).join('')}</div>
+    <button class="primary" onclick="runCheck('${esc(d.name)}')">Validate</button>
+    <div id="check-out"></div>`;
+  $('aside').innerHTML = rulesHtml(d.checks, 'Checks') + `<h4>File</h4><div class="mono">${esc(d.file)}</div>`;
+}
+
+async function runCheck(action){
+  const inputs = {};
+  document.querySelectorAll('[id^="in-"]').forEach(el => { const k = el.id.slice(3); let v = el.value.trim(); if (!v) return; if (v.startsWith('{')) { try { v = JSON.parse(v); } catch(e){} } inputs[k] = v; });
+  const r = await api('/api/check', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action, inputs }) });
+  const text = r.content?.[0]?.text || '';
+  let rep; try { rep = JSON.parse(text); } catch(e) { $('check-out').innerHTML = `<div class="verdict fail">${esc(text)}</div>`; return; }
+  let h = `<div class="verdict ${rep.verdict}">${esc(rep.summary)}</div>`;
+  h += rep.results.map(x => `<div class="res"><span>${x.passed?'✓':(x.severity==='block'?'✗':'⚠')}</span>${sevChip(x.severity)}<b>${esc(x.id)}</b><span>${esc(x.name)}</span><span class="msg">${esc(x.message)}${x.error?' · '+esc(x.error):''}</span></div>`).join('');
+  if (rep.suggestions?.length) h += `<h4>Would pass instead</h4>` + rep.suggestions.map(s => `<div><span class="mono">${esc(s.input)}</span> → ${esc(s.label)}</div>`).join('');
+  if (rep.requires_approval_from) h += `<h4>Approval</h4><div>${esc(rep.requires_approval_from)}</div>`;
+  if (rep.notes?.length) h += `<h4>Notes</h4>` + rep.notes.map(n => `<div style="color:var(--muted)">${esc(n)}</div>`).join('');
+  $('check-out').innerHTML = h;
+}
+
+function renderRule(d){
+  $('main').innerHTML = `<h1>${esc(d.id)}<small>rule</small></h1><div style="margin:6px 0">${sevChip(d.severity)} <b>${esc(d.name)}</b></div><div class="desc">${esc(d.description)}</div>
+    <h4>Rule</h4><pre>${esc(d.rule)}</pre>
+    <h4>Applies to</h4><div><a onclick="select('${esc(d.applies_to)}')">${esc(d.applies_to)}</a> <span class="chip">${esc(d.applies_to_kind||'')}</span></div>
+    ${d.rationale ? `<h4>Why</h4><div>${esc(d.rationale)}</div>` : ''}
+    ${d.sql ? `<h4>SQL predicate (phase 2)</h4><pre>${esc(d.sql)}</pre>` : ''}`;
+  $('aside').innerHTML = `${d.owner?`<h4>Owner</h4><div>${esc(d.owner)}</div>`:''}${d.tags?.length?`<h4>Tags</h4>${d.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}`:''}<h4>File</h4><div class="mono">${esc(d.file)}</div>`;
+}
+function renderSource(d){
+  $('main').innerHTML = `<h1>${esc(d.connection)}<small>source · ${esc(d.kind)}</small></h1><div class="desc">${esc(d.description)}</div><pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
+  $('aside').innerHTML = `<h4>Used by</h4>${(d.used_by||[]).map(t=>`<a class="chip" onclick="select('${esc(t)}')">${esc(t)}</a>`).join('')||'<div style="color:var(--muted)">No types</div>'}`;
+}
+function renderGeneric(d){
+  const r = d.matches ? d.matches[0] : d;
+  $('main').innerHTML = `<h1>${esc(r.name)}<small>${esc(r.kind)}</small></h1><div class="desc">${esc(r.description)}</div><div><a onclick="select('${esc(r.from)}')">${esc(r.from)}</a> ─${esc(r.name)}→ <a onclick="select('${esc(r.to)}')">${esc(r.to)}</a> <span class="chip">${esc(r.cardinality)}</span></div><h4>CEL variables in rules</h4>${(r.cel_variables||[]).map(v=>`<span class="chip mono">${esc(v)}</span>`).join('')}<pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
+  $('aside').innerHTML = rulesHtml(r.constraints, 'Rules');
+}
+
+let lastSql = "select n.name, n.source_kind, n.readable_here, count(c.id) as rules\nfrom nodes n left join constraints c on c.applies_to = n.name\ngroup by all order by rules desc";
+function renderSql(){
+  sel = null; document.querySelectorAll('nav .item').forEach(e => e.classList.remove('active'));
+  $('main').innerHTML = `<h1>SQL<small>read-only · DuckDB · max 500 rows</small></h1>
+    <div class="desc">One SELECT or WITH statement. The ontology is in <code>nodes</code>, <code>properties</code>, <code>edges</code>, <code>constraints</code>, <code>actions</code>, <code>sources</code>; every readable type or relationship is a view named after it.</div>
+    <textarea class="sql" id="sql-in" spellcheck="false">${esc(lastSql)}</textarea>
+    <div class="sqlbar"><button class="primary" onclick="runSql()">Run</button><span>⌘/Ctrl+Enter runs</span><span class="spacer" style="flex:1"></span><span id="sql-meta"></span></div>
+    <div id="sql-out"></div>`;
+  $('sql-in').addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') runSql(); });
+  api('/api/tables').then(t => {
+    const views = (t.views||[]).map(v => `<a class="chip mono" title="${esc(v.source)}" onclick="useSql('select * from ${esc(v.view)} limit 20')">${esc(v.view)}</a>`).join('');
+    const tables = (t.tables||[]).map(n => `<a class="chip mono" onclick="useSql('select * from ${n} limit 20')">${n}</a>`).join('');
+    const skipped = Object.entries(t.skipped||{}).map(([k,v]) => `<div style="color:var(--muted);font-size:12.5px">✗ <b>${esc(k)}</b>: ${esc(v)}</div>`).join('') +
+      Object.entries(t.not_readable||{}).map(([k,v]) => `<div style="color:var(--muted);font-size:12.5px">– <b>${esc(k)}</b>: ${esc(v)} is not read here</div>`).join('');
+    $('aside').innerHTML = `<h4>Ontology tables</h4>${tables}<h4>Data views</h4>${views || '<div style="color:var(--muted)">None readable here</div>'}${skipped ? '<h4>Not attached</h4>' + skipped : ''}<h4>Engine</h4><div class="mono">DuckDB ${esc(t.duckdb||'')}</div>`;
+  }).catch(() => { $('aside').innerHTML = '<div style="color:var(--muted)">SQL is unavailable in this build.</div>'; });
+}
+function useSql(q){ lastSql = q; $('sql-in').value = q; runSql(); }
+async function runSql(){
+  const sql = $('sql-in').value; lastSql = sql;
+  $('sql-meta').textContent = 'running…';
+  const r = await api('/api/query', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sql }) });
+  if (r.error) { $('sql-out').innerHTML = `<div class="sqlerr">${esc(r.error)}</div>`; $('sql-meta').textContent = ''; return; }
+  const cols = r.columns.map(c => c.name);
+  const cell = v => v === null || v === undefined ? '<span style="color:var(--muted)">∅</span>' : esc(typeof v === 'object' ? JSON.stringify(v) : v);
+  $('sql-out').innerHTML = `<div class="sqlwrap"><table><tr>${r.columns.map(c=>`<th title="${esc(c.type)}">${esc(c.name)}</th>`).join('')}</tr>` +
+    r.rows.map(row => `<tr>${cols.map(c=>`<td class="mono">${cell(row[c])}</td>`).join('')}</tr>`).join('') + '</table></div>' +
+    (r.warnings?.length ? r.warnings.map(w => `<div style="color:var(--muted);font-size:12.5px">note: ${esc(w)}</div>`).join('') : '');
+  $('sql-meta').textContent = `${r.row_count} row${r.row_count===1?'':'s'}${r.truncated?` (truncated at ${r.limit})`:''} · ${r.elapsed_ms} ms`;
+}
+
+function renderFooter(){
+  const errs = O.diagnostics.filter(d => d.level==='error').length, warns = O.diagnostics.length - errs;
+  $('footer').innerHTML = `<span>${O.ok ? '✓ valid' : '✗ invalid'}</span><span>${errs} errors · ${warns} warnings</span><a onclick="toggleDiag()">${O.diagnostics.length?'show':''}</a><span class="spacer" style="flex:1"></span><span>MCP: <code>stella-ontology mcp --dir ${esc(O.dir)}</code></span>`;
+}
+function toggleDiag(){
+  $('main').innerHTML = `<h1>Diagnostics</h1>` + (O.diagnostics.map(d => `<div class="diag">${d.level==='error'?'✗':'⚠'} ${esc(d.code)} ${esc(d.message)} <span style="color:var(--muted)">${esc(d.file)}</span></div>`).join('') || '<div class="empty">Clean</div>');
+  $('aside').innerHTML = '';
+}
+window.addEventListener('hashchange', () => { const h = decodeURIComponent(location.hash.slice(1)); if (h && h !== sel) select(h); });
+boot();
+</script>
+</body>
+</html>

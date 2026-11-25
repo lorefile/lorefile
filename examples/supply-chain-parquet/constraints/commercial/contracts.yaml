@@ -1,0 +1,36 @@
+constraints:
+  - id: CT-001
+    name: Only draft contracts can be approved
+    applies_to: Contract
+    rule: status == "draft"
+    severity: block
+    rationale: Active or expired contracts are amended through a new draft, never re-approved.
+    owner: legal@acme.example
+
+  - id: CT-002
+    name: Contract dates must make sense
+    applies_to: Contract
+    rule: end_date > start_date
+    severity: block
+    rationale: Data quality guard.
+
+  - id: CT-003
+    name: Contract must belong to the named supplier
+    applies_to: approve_contract
+    rule: contract.supplier_id == supplier.supplier_id
+    severity: block
+    rationale: Prevents approving a contract against the wrong vendor record.
+
+  - id: CT-004
+    name: Large contracts need a tier-1 supplier
+    applies_to: approve_contract
+    rule: contract.value_usd > 5000000.0 implies supplier.tier == 1
+    severity: warn
+    rationale: Contracts above $5M with non-strategic suppliers go to the sourcing board.
+
+  - id: PO-001
+    name: Only open orders can be expedited
+    applies_to: PurchaseOrder
+    rule: status == "open"
+    severity: block
+    rationale: Shipped, received, or cancelled orders cannot be expedited.

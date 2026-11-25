@@ -1,0 +1,13 @@
+type: Assembly
+description: A finished sub-system we build from parts, e.g. a front brake module for a vehicle program.
+properties:
+  assembly_id: { type: string, key: true }
+  name:        string
+  program:     { type: string, description: "Vehicle program code the assembly ships into" }
+relationships:
+  built_at: { to: Facility, cardinality: many-to-one, description: "Plant that assembles it" }
+instances:
+  - { assembly_id: ASM-01, name: Front brake module, program: X7 }
+  - { assembly_id: ASM-02, name: Rear brake module, program: X7 }
+  - { assembly_id: ASM-03, name: Steering column, program: X7 }
+  - { assembly_id: ASM-04, name: Front brake module, program: Z2 }

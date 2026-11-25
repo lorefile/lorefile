@@ -1,0 +1,7 @@
+terms:
+  - term: client
+    means: Customer
+  - term: user
+    means: Customer
+  - term: wallet
+    means: Account

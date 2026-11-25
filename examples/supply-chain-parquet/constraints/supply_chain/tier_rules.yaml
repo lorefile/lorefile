@@ -1,0 +1,34 @@
+constraints:
+  - id: SC-041
+    name: Safety-critical parts need tier-1 suppliers
+    applies_to: supplies
+    rule: part.safety_critical == true implies supplier.tier == 1
+    severity: block
+    rationale: >
+      ISO 26262 and customer contract clause 14.2 require audited, strategic
+      suppliers for any component whose failure could cause injury.
+    owner: quality@acme.example
+    tags: [safety, sourcing]
+
+  - id: SC-042
+    name: Tier-1 lead time ceiling
+    applies_to: Supplier
+    rule: tier == 1 implies lead_time_days <= 30
+    severity: warn
+    rationale: Strategic suppliers are expected to hold regional stock; longer lead times signal a planning problem.
+    owner: planning@acme.example
+
+  - id: SC-043
+    name: Suspended suppliers get no new business
+    applies_to: Supplier
+    rule: status != "suspended"
+    severity: block
+    rationale: Suspension is a Quality decision and must be lifted by Quality before any sourcing change.
+    owner: quality@acme.example
+
+  - id: SC-044
+    name: Probation requires good delivery
+    applies_to: Supplier
+    rule: status == "probation" implies on_time_rate >= 0.9
+    severity: warn
+    rationale: A supplier on probation that is also missing deliveries should be escalated, not given more volume.

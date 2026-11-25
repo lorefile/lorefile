@@ -1,0 +1,8 @@
+connection: snowflake_prod
+kind: snowflake
+description: Production warehouse. Credentials come from the environment, never from this file.
+account: ${SNOWFLAKE_ACCOUNT}
+database: PROD
+schema: ERP
+warehouse: ANALYTICS_WH
+auth: env

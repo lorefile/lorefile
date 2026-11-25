@@ -1,0 +1,7 @@
+action: close_account
+description: Close a customer's account. Agents must validate first.
+inputs:
+  account: Account
+checks: [ACC-001, ACC-002]
+requires_approval_from: Support Lead
+side_effects: Sets open=false, emails the customer a closing statement.

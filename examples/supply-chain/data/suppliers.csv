@@ -1,0 +1,25 @@
+supplier_id,name,tier,country,region,country_risk,lead_time_days,on_time_rate,approved_until,status,annual_spend_usd,iatf_certified
+V-10001,Acme Corp,1,US,AMER,low,18,0.97,2027-06-30,approved,18500000,true
+V-10105,Gamma Inc,1,DE,EMEA,low,22,0.95,2027-03-31,approved,12200000,true
+V-10210,Delta Co,1,MX,AMER,low,25,0.93,2026-12-31,approved,9800000,true
+V-10422,Beta Ltd,3,VN,APAC,medium,35,0.88,2027-01-31,approved,1200000,false
+V-10310,Epsilon GmbH,2,DE,EMEA,low,20,0.91,2027-09-30,approved,6400000,true
+V-10388,Zeta Metals,2,IN,APAC,medium,40,0.86,2026-11-30,probation,3100000,true
+V-10455,Eta Castings,1,CN,APAC,high,45,0.9,2027-02-28,approved,15000000,true
+V-10501,Theta Fasteners,3,TR,EMEA,medium,28,0.82,2026-10-31,suspended,900000,false
+V-10512,Iota Electronics,2,TW,APAC,medium,30,0.94,2027-05-31,approved,7200000,true
+V-10533,Kappa Precision,1,JP,APAC,low,26,0.98,2027-08-31,approved,11000000,true
+V-10560,Lambda Steel,2,BR,LATAM,medium,38,0.89,2027-04-30,approved,4300000,false
+V-10588,Mu Rubber,3,TH,APAC,medium,33,0.9,2026-12-15,approved,800000,false
+V-10602,Nu Forgings,1,PL,EMEA,low,24,0.92,2027-07-31,approved,8700000,true
+V-10617,Xi Components,2,US,AMER,low,15,0.96,2027-01-15,approved,5600000,true
+V-10640,Omicron Plastics,3,MY,APAC,medium,31,0.87,2026-11-30,probation,650000,false
+V-10655,Pi Bearings,1,SE,EMEA,low,21,0.99,2027-10-31,approved,27500000,true
+V-10671,Rho Sensors,2,KR,APAC,low,27,0.93,2027-06-30,approved,6900000,true
+V-10688,Sigma Wire,3,EG,EMEA,high,36,0.84,2026-09-30,approved,420000,false
+V-10701,Tau Machining,2,CZ,EMEA,low,23,0.9,2027-02-28,approved,3800000,true
+V-10722,Upsilon Alloys,1,CA,AMER,low,19,0.95,2027-12-31,approved,14100000,true
+V-10740,Phi Coatings,3,ID,APAC,medium,42,0.8,2026-12-31,probation,510000,false
+V-10755,Chi Logistics,2,NL,EMEA,low,12,0.97,2027-05-31,approved,2100000,false
+V-10770,Psi Hydraulics,1,IT,EMEA,low,29,0.91,2027-03-31,approved,9900000,true
+V-10790,Omega Castings,2,ZA,EMEA,medium,44,0.83,2026-10-15,approved,1900000,true

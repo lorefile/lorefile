@@ -1,0 +1,8 @@
+action: approve_contract
+description: Approve a draft contract with a supplier.
+inputs:
+  contract: Contract
+  supplier: Supplier
+checks: [CT-001, CT-002, SC-043]
+requires_approval_from: Legal and the budget owner
+side_effects: Sets contract status=active, locks pricing in the ERP.

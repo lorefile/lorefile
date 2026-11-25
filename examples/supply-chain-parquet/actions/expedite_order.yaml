@@ -1,0 +1,9 @@
+action: expedite_order
+description: >
+  Ask the supplier to ship a purchase order early at a premium. PurchaseOrder
+  rows live in Snowflake, so an agent passes the row it fetched as an inline record.
+inputs:
+  order: PurchaseOrder
+checks: [PO-001]
+requires_approval_from: Plant manager if premium > $5k
+side_effects: Sends an expedite request to the supplier portal.

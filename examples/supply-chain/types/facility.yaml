@@ -1,0 +1,12 @@
+type: Facility
+description: One of our assembly plants.
+properties:
+  facility_id: { type: string, key: true }
+  name:        string
+  country:     string
+relationships:
+  located_in: { to: Region, cardinality: many-to-one }
+instances:
+  - { facility_id: PLT-DET, name: Detroit plant, country: US }
+  - { facility_id: PLT-STU, name: Stuttgart plant, country: DE }
+  - { facility_id: PLT-PUN, name: Pune plant, country: IN }

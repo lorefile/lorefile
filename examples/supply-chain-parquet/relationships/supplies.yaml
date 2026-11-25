@@ -1,0 +1,16 @@
+relationship: supplies
+from: Supplier
+to: Part
+cardinality: many-to-many
+description: >
+  The supplier is an approved source for the part. Rules on this relationship
+  can see `supplier` and `part` (or `from` and `to`).
+properties:
+  unit_price_usd: { type: number, unit: USD }
+  since:          date
+  share_pct:      { type: number, description: "Share of this part's volume this supplier gets" }
+source:
+  connection: parquet_files   # data/supplier_parts.parquet, read by DuckDB
+  table: supplier_parts
+  from_key: supplier_id
+  to_key: part_id

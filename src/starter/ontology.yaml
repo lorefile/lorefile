@@ -1,0 +1,8 @@
+name: starter
+version: 0.1.0
+description: >
+  A tiny starter ontology. Replace it with your business. Every object has a
+  description so AI agents understand it without extra prompting.
+domains:
+  - name: Customers
+    types: [Customer, Account]

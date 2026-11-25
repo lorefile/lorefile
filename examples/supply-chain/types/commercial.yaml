@@ -1,0 +1,40 @@
+types:
+  - type: Contract
+    description: A supply agreement with one supplier.
+    properties:
+      contract_id: { type: string, key: true }
+      supplier_id: string
+      start_date:  date
+      end_date:    date
+      value_usd:   { type: number, unit: USD }
+      status:      { type: enum, values: [draft, active, expired] }
+    relationships:
+      with: { to: Supplier, cardinality: many-to-one }
+    source:
+      connection: erp_files
+      table: contracts
+      key: contract_id
+    owner: legal@acme.example
+
+  - type: PurchaseOrder
+    description: >
+      A single order line to a supplier. Lives in the warehouse only; agents use
+      where_is() to find the table and query it with their own connector.
+    properties:
+      po_id:       { type: string, key: true }
+      supplier_id: string
+      part_id:     string
+      qty:         integer
+      unit_price:  { type: number, unit: USD }
+      ordered_on:  date
+      expected_on: date
+      status:      { type: enum, values: [open, shipped, received, cancelled] }
+    relationships:
+      ordered_from: { to: Supplier, cardinality: many-to-one }
+      for_part:     { to: Part, cardinality: many-to-one }
+    source:
+      connection: snowflake_prod
+      table: ERP.PURCHASE_ORDERS
+      key: PO_ID
+      columns: { po_id: PO_ID, supplier_id: VENDOR_ID, part_id: PART_NO, qty: QTY, unit_price: UNIT_PRICE_USD, ordered_on: ORDER_DT, expected_on: PROMISE_DT, status: STATUS }
+    owner: procurement@acme.example

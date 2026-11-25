@@ -1,0 +1,9 @@
+incident_id,supplier_id,severity,opened_on,status
+INC-2301,V-10422,major,2026-02-11,closed
+INC-2302,V-10501,critical,2026-03-02,open
+INC-2303,V-10388,minor,2026-04-18,closed
+INC-2304,V-10455,major,2026-05-09,open
+INC-2305,V-10640,minor,2026-06-21,open
+INC-2306,V-10001,minor,2026-07-03,closed
+INC-2307,V-10790,major,2026-08-14,open
+INC-2308,V-10740,major,2026-09-30,open

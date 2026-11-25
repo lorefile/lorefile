@@ -1,0 +1,23 @@
+constraints:
+  - id: SC-080
+    name: Switching to the same supplier is a no-op
+    applies_to: switch_supplier
+    rule: from.supplier_id != to.supplier_id
+    severity: block
+    rationale: Almost always a typo in the request.
+
+  - id: SC-081
+    name: Do not make lead time much worse
+    applies_to: switch_supplier
+    rule: to.lead_time_days <= from.lead_time_days + 14
+    severity: warn
+    rationale: Planning needs to re-plan safety stock if lead time grows by more than two weeks.
+    owner: planning@acme.example
+
+  - id: QS-001
+    name: Minimum delivery performance to qualify
+    applies_to: Supplier
+    rule: on_time_rate >= 0.85
+    severity: block
+    rationale: Below 85% on-time we do not qualify suppliers for new parts; fix delivery first.
+    owner: quality@acme.example

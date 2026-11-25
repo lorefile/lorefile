@@ -1,0 +1,20 @@
+type: Part
+description: >
+  A purchased component with a part number. Safety-critical parts (brakes,
+  steering) carry stricter sourcing rules under ISO 26262.
+properties:
+  part_id:         { type: string, key: true, description: "Part number, e.g. BRK-220" }
+  name:            string
+  category:        { type: enum, values: [brake, steering, electronics, fastener, raw_material] }
+  safety_critical: { type: boolean, description: "True if failure could cause injury; drives tier rules" }
+  unit_cost_usd:   { type: number, unit: USD }
+  min_suppliers:   { type: integer, description: "Dual-sourcing target: how many approved suppliers this part should have" }
+  stock_days:      { type: integer, description: "Days of inventory on hand at target production rate" }
+relationships:
+  used_in: { to: Assembly, cardinality: many-to-many, description: "Assemblies whose bill of materials includes this part" }
+source:
+  connection: erp_files
+  table: parts
+  key: part_id
+owner: engineering@acme.example
+tags: [supply-chain, core]

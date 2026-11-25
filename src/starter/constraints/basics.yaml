@@ -1,0 +1,15 @@
+constraints:
+  - id: ACC-001
+    name: Accounts must be empty before closing
+    applies_to: Account
+    rule: balance == 0.0
+    severity: block
+    rationale: Closing an account with funds would strand customer money.
+    owner: finance@example.com
+
+  - id: ACC-002
+    name: Account must currently be open
+    applies_to: Account
+    rule: open == true
+    severity: warn
+    rationale: Closing an already-closed account is a no-op; probably a mistake.

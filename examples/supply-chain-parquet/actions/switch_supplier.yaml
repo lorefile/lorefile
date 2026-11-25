@@ -1,0 +1,15 @@
+action: switch_supplier
+description: >
+  Move a Part from one approved Supplier to another. The most common change an
+  agent is asked to make, and the one with the most rules attached.
+inputs:
+  part: Part
+  from: Supplier
+  to: Supplier
+effects:
+  - remove: { relationship: supplies, from: from, to: part }
+  - create: { relationship: supplies, from: to, to: part }
+checks: [SC-041, SC-042, SC-043, SC-044, SC-050, SC-060, SC-062, SC-063]
+requires_approval_from: Procurement Lead (policy PR-007)
+side_effects: Updates ERP.SUPPLIER_PARTS, re-plans safety stock, notifies Planning and Quality.
+tags: [sourcing]

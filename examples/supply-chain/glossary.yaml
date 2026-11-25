@@ -1,0 +1,18 @@
+terms:
+  - term: vendor
+    means: Supplier
+    description: Finance and the ERP say "vendor"; procurement says "supplier". Same thing.
+  - term: SKU
+    means: Part
+  - term: component
+    means: Part
+  - term: plant
+    means: Facility
+  - term: BOM
+    means: Assembly
+    description: A bill of materials is the list of parts in an assembly.
+  - term: PO
+    means: PurchaseOrder
+  - term: resourcing
+    means: switch_supplier
+    description: Procurement slang for moving a part to a different supplier.

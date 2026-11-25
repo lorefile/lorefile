@@ -1,0 +1,4 @@
+/target
+.stella/
+*.log
+.DS_Store

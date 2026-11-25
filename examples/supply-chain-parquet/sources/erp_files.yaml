@@ -1,0 +1,7 @@
+connection: erp_files
+kind: csv
+path: data
+description: >
+  Nightly CSV extracts from the ERP, still used here by Contract and Incident.
+  Supplier and Part moved to parquet_files; the warehouse (snowflake_prod) is
+  the source of truth.

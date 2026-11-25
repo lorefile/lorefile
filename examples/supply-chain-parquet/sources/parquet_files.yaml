@@ -1,0 +1,8 @@
+connection: parquet_files
+kind: parquet
+path: data
+description: >
+  Parquet extracts of the same ERP tables as erp_files (one file per table,
+  e.g. data/suppliers.parquet). Read inside the binary by DuckDB, so agents can
+  check rules and run SQL against real rows. Supplier, Part and the supplies
+  edge table read from here; Contract and Incident still read erp_files (CSV).

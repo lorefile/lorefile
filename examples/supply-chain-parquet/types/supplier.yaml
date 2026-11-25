@@ -1,0 +1,28 @@
+type: Supplier
+description: >
+  A company we buy parts or services from. Every supplier has a tier that
+  reflects how critical they are and how deeply we have audited them:
+  tier 1 is strategic and audited yearly, tier 3 is spot-buy only.
+properties:
+  supplier_id:      { type: string,  key: true, description: "ERP vendor number, e.g. V-10422" }
+  name:             string
+  tier:             { type: enum, values: [1, 2, 3], description: "1 = strategic and audited, 2 = preferred, 3 = spot buy" }
+  country:          { type: string, description: "ISO country code of the shipping site" }
+  region:           { type: string, description: "Region code; see Region" }
+  country_risk:     { type: enum, values: [low, medium, high], description: "Geopolitical and logistics risk of the country, set by Risk team quarterly" }
+  lead_time_days:   { type: integer, description: "Average days from PO to dock over the last 12 months" }
+  on_time_rate:     { type: number, description: "Share of deliveries on time, 0 to 1" }
+  approved_until:   { type: date, description: "Supplier approval expiry (ISO date)" }
+  status:           { type: enum, values: [approved, probation, suspended], description: "Approval status set by Quality" }
+  annual_spend_usd: { type: number, unit: USD, description: "Trailing 12-month spend" }
+  iatf_certified:   { type: boolean, description: "Holds a valid IATF 16949 automotive quality certificate" }
+relationships:
+  located_in: { to: Region, cardinality: many-to-one, description: "Shipping region" }
+  audited_by: { to: Auditor, cardinality: many-to-many, description: "Third parties that audit this supplier" }
+  holds:      { to: Certification, cardinality: many-to-many, description: "Certifications on file" }
+source:
+  connection: parquet_files   # data/suppliers.parquet, read by DuckDB
+  table: suppliers
+  key: supplier_id
+owner: procurement@acme.example
+tags: [supply-chain, core]

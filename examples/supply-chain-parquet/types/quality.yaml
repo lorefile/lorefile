@@ -1,0 +1,38 @@
+types:
+  - type: Auditor
+    description: An accredited third party that audits suppliers on our behalf.
+    properties:
+      auditor_id:    { type: string, key: true }
+      name:          string
+      accreditation: { type: string, description: "Accreditation body, e.g. IATF, UKAS" }
+    instances:
+      - { auditor_id: AUD-01, name: TÜV SÜD, accreditation: IATF }
+      - { auditor_id: AUD-02, name: Bureau Veritas, accreditation: UKAS }
+      - { auditor_id: AUD-03, name: DQS, accreditation: IATF }
+
+  - type: Certification
+    description: A quality or environmental certificate a supplier can hold.
+    properties:
+      cert_id:           { type: string, key: true }
+      name:              string
+      required_for_tier: { type: integer, description: "Suppliers at this tier or better must hold it" }
+    instances:
+      - { cert_id: IATF16949, name: IATF 16949 automotive quality, required_for_tier: 1 }
+      - { cert_id: ISO9001, name: ISO 9001 quality management, required_for_tier: 2 }
+      - { cert_id: ISO14001, name: ISO 14001 environmental, required_for_tier: 1 }
+
+  - type: Incident
+    description: A quality or delivery incident raised against a supplier.
+    properties:
+      incident_id: { type: string, key: true }
+      supplier_id: { type: string, description: "Supplier the incident was raised against" }
+      severity:    { type: enum, values: [minor, major, critical] }
+      opened_on:   date
+      status:      { type: enum, values: [open, closed] }
+    relationships:
+      raised_against: { to: Supplier, cardinality: many-to-one }
+    source:
+      connection: erp_files
+      table: incidents
+      key: incident_id
+    owner: quality@acme.example

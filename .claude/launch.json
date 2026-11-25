@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ontology-ui",
+      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/supply-chain",
+        "--port",
+        "7070"
+      ],
+      "port": 7070
+    },
+    {
+      "name": "ontology-ui-parquet",
+      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/supply-chain-parquet",
+        "--port",
+        "7071"
+      ],
+      "port": 7071
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+name: acme-supply-chain-parquet
+version: 0.1.0
+description: >
+  Acme Automotive buys parts from suppliers and assembles brake and steering
+  systems at three plants. This ontology is what our AI agents read before they
+  touch procurement data or propose a change. Same ontology as supply-chain, but
+  Supplier, Part and the supplies edge table are read from Parquet through DuckDB
+  (the Phase 2 data door) while the rest still comes from CSV.
+domains:
+  - name: Supply chain
+    description: Who supplies what, from where, and how fast.
+    types: [Supplier, Part, Assembly, Facility, Region]
+  - name: Quality & compliance
+    description: Audits, certifications, and incidents.
+    types: [Auditor, Certification, Incident]
+  - name: Commercial
+    description: Contracts and purchase orders.
+    types: [Contract, PurchaseOrder]
