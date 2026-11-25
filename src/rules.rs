@@ -356,11 +356,14 @@ pub fn check_action(ont: &Ontology, data: &DataLayer, action_name: &str, raw: &I
         }
     }
 
-    let failed: Vec<String> = results.iter().filter(|r| !r.passed).map(|r| format!("{} ({})", r.id, r.severity)).collect();
+    let failed_at = |sev: Severity| -> Vec<String> { results.iter().filter(|r| !r.passed && r.severity == sev).map(|r| r.id.clone()).collect() };
+    let (blocks, warns, infos) = (failed_at(Severity::Block), failed_at(Severity::Warn), failed_at(Severity::Info));
+    let tail = |label: &str, ids: &Vec<String>| if ids.is_empty() { String::new() } else { format!("; {} {}: {}", ids.len(), label, ids.join(", ")) };
     let summary = match verdict {
-        "pass" => format!("{} may proceed: all {} rules hold.", action.name, results.len()),
-        "warn" => format!("{} may proceed with warnings: {}.", action.name, failed.join(", ")),
-        _ => format!("{} is blocked by {}.", action.name, failed.join(", ")),
+        "pass" if infos.is_empty() => format!("{} may proceed: all {} rules hold.", action.name, results.len()),
+        "pass" => format!("{} may proceed{}.", action.name, tail("note(s)", &infos)),
+        "warn" => format!("{} may proceed with warnings: {}{}.", action.name, warns.join(", "), tail("note(s)", &infos)),
+        _ => format!("{} is blocked by {}{}{}.", action.name, blocks.join(", "), tail("warning(s)", &warns), tail("note(s)", &infos)),
     };
 
     Ok(CheckReport {
