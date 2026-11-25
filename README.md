@@ -2,6 +2,8 @@
 
 A lightweight, file-based, **AI-agent-first** ontology graph.
 
+> New here? Read [EXPLAINER.md](EXPLAINER.md) first: what this is, how the pieces fit, and a before/after story in plain English.
+
 You describe your business in a folder of YAML files: types, relationships, rules, actions, and where the data lives. One small Rust binary compiles that folder into an in-memory graph and opens three doors into it:
 
 - **MCP server** for Claude, ChatGPT, Cursor, and your own agents

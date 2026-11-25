@@ -56,6 +56,7 @@ textarea.sql{width:100%;min-height:96px;padding:8px 10px;border:1px solid var(--
     <span class="counts" id="h-counts"></span>
     <span class="spacer"></span>
     <span id="h-dir" class="mono" style="color:var(--muted)"></span>
+    <button onclick="renderMcp()">MCP</button>
     <button onclick="renderSql()">SQL</button>
     <button onclick="reload()">Reload</button>
     <a href="/api/summary.md" target="_blank"><button>Summary.md</button></a>
@@ -90,9 +91,10 @@ function renderNav(q){
     h += `<h4>${esc(d.name)}</h4>` + d.types.map(t => item(t.name, t.name)).join('');
   }
   h += `<h4>Rules <small>${O.constraints.length}</small></h4>` + O.constraints.slice(0, 400).map(c => item(c.id, `<span class="sev ${c.severity}" style="min-width:36px;margin-right:6px">${c.severity}</span>${esc(c.id)}`)).join('');
-  h += `<h4>Actions</h4>` + O.actions.map(a => item(a.name, a.name)).join('');
+  h += `<h4>Actions</h4>` + O.actions.map(a => { const n = a.action || a.name; return item(n, n); }).join('');
   h += `<h4>Sources</h4>` + O.sources.map(s => item(s.connection, `${esc(s.connection)}<small>${esc(s.kind)}</small>`)).join('');
   if (O.glossary.length) h += `<h4>Glossary</h4>` + O.glossary.map(g => `<a class="item" onclick="select('${esc(g.means)}')">${esc(g.term)}<small>→ ${esc(g.means)}</small></a>`).join('');
+  h += `<h4>Agents</h4><a class="item" onclick="renderMcp()">MCP tools<small>what Claude sees</small></a><a class="item" onclick="renderSql()">SQL<small>DuckDB</small></a>`;
   n.innerHTML = h;
 }
 const item = (name, label) => `<a class="item ${sel===name?'active':''}" data-name="${esc(name)}" onclick="select('${esc(name)}')">${label}</a>`;
@@ -254,6 +256,37 @@ async function runSql(){
     r.rows.map(row => `<tr>${cols.map(c=>`<td class="mono">${cell(row[c])}</td>`).join('')}</tr>`).join('') + '</table></div>' +
     (r.warnings?.length ? r.warnings.map(w => `<div style="color:var(--muted);font-size:12.5px">note: ${esc(w)}</div>`).join('') : '');
   $('sql-meta').textContent = `${r.row_count} row${r.row_count===1?'':'s'}${r.truncated?` (truncated at ${r.limit})`:''} · ${r.elapsed_ms} ms`;
+}
+
+async function renderMcp(){
+  sel = null; document.querySelectorAll('nav .item').forEach(e => e.classList.remove('active'));
+  const tools = await api('/api/tools');
+  const dir = O.dir;
+  const cc = `claude mcp add stella-ontology -- stella-ontology mcp --dir ${dir}`;
+  const desk = JSON.stringify({ mcpServers: { "stella-ontology": { command: "stella-ontology", args: ["mcp", "--dir", dir] } } }, null, 2);
+  const opts = tools.map(t => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('');
+  const schema = t => Object.entries(t.inputSchema?.properties || {}).map(([k,v]) => `<span class="chip mono" title="${esc(v.description||'')}">${esc(k)}${(t.inputSchema.required||[]).includes(k)?'':'?'}: ${esc(v.type||'any')}</span>`).join('');
+  $('main').innerHTML = `<h1>MCP<small>what an agent sees · ${tools.length} tools</small></h1>
+    <div class="desc">Claude, ChatGPT, Cursor and your own agents connect to this ontology through the Model Context Protocol. Every tool below is the same function this page uses. The server is read-only: agents learn the business here and fetch rows through their own data connectors.</div>
+    <h4>Connect Claude Code</h4><pre>${esc(cc)}</pre>
+    <h4>Connect Claude Desktop (claude_desktop_config.json)</h4><pre>${esc(desk)}</pre>
+    <h4>Tools</h4>
+    ${tools.map(t => `<div class="rule"><span class="id mono">${esc(t.name)}</span><div style="margin:3px 0 4px">${esc(t.description)}</div>${schema(t)}</div>`).join('')}
+    <h4>Try a tool, exactly as an agent would</h4>
+    <div class="form"><label>tool</label><select id="tool-name" onchange="toolTemplate()">${opts}</select><label>arguments (JSON)</label><textarea id="tool-args" class="sql" style="min-height:70px" spellcheck="false">{"query": "lead time"}</textarea></div>
+    <button class="primary" onclick="runTool()">Call</button>
+    <pre id="tool-out" style="margin-top:10px;display:none"></pre>`;
+  $('aside').innerHTML = `<h4>Resources</h4><div class="mono" style="font-size:12px;line-height:1.7">ontology://summary<br>ontology://glossary<br>ontology://types/{Name}<br>ontology://actions/{name}</div>
+    <h4>How do I add or change things?</h4><div style="font-size:13px;line-height:1.5">This page is a viewer. The files in <span class="mono">${esc(dir)}</span> are the source of truth: edit a YAML file (or ask Claude Code to, since they are plain files), press <b>Reload</b>, and the compiler reports any mistake in the footer. Editing from this page and agent-proposed changes are on the roadmap; both will write the same files so every change stays a reviewable diff.</div>
+    <h4>Transport</h4><div style="font-size:13px">stdio today (local agents). HTTP for ChatGPT and hosted agents is Phase 3.</div>`;
+  toolTemplate();
+}
+const toolExamples = { search: {query: "lead time"}, describe: {name: "Supplier"}, neighbors: {name: "Supplier", depth: 1}, path: {from: "Incident", to: "Facility"}, constraints_for: {name: "switch_supplier"}, validate: {action: "switch_supplier", inputs: {part: "BRK-220", from: "V-10001", to: "V-10422"}}, where_is: {type: "PurchaseOrder"}, instances: {type: "Supplier", limit: 3}, summary: {}, query: {sql: "select name, tier from Supplier limit 5"}, tables: {} };
+function toolTemplate(){ const n = $('tool-name').value; if (toolExamples[n]) $('tool-args').value = JSON.stringify(toolExamples[n], null, 2); }
+async function runTool(){
+  let args = {}; try { args = JSON.parse($('tool-args').value || '{}'); } catch(e) { $('tool-out').style.display='block'; $('tool-out').textContent = 'arguments are not valid JSON: ' + e.message; return; }
+  const r = await api('/api/tool', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: $('tool-name').value, arguments: args }) });
+  $('tool-out').style.display='block'; $('tool-out').textContent = (r.isError ? '[error] ' : '') + (r.content?.[0]?.text || JSON.stringify(r, null, 2));
 }
 
 function renderFooter(){

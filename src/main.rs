@@ -87,6 +87,9 @@ enum Cmd {
     Serve {
         #[arg(long, default_value_t = 7070)]
         port: u16,
+        /// Address to bind. Use 0.0.0.0 inside a container.
+        #[arg(long, default_value = "127.0.0.1")]
+        host: String,
     },
     /// Write a small starter ontology into a folder.
     Init { path: Option<PathBuf> },
@@ -303,9 +306,9 @@ fn main() -> Result<()> {
             print_report(&ont, &report);
             mcp::run_stdio(ont)?;
         }
-        Cmd::Serve { port } => {
+        Cmd::Serve { port, host } => {
             print_report(&ont, &report);
-            serve::run(dir, port)?;
+            serve::run(dir, &host, port)?;
         }
         Cmd::Init { .. } => unreachable!(),
     }

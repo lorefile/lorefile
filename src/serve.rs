@@ -149,10 +149,10 @@ fn overview(st: &State) -> Json {
     })
 }
 
-pub fn run(dir: PathBuf, port: u16) -> Result<()> {
+pub fn run(dir: PathBuf, host: &str, port: u16) -> Result<()> {
     let (ont, report) = load_ontology(&dir)?;
     let state = RwLock::new(State::new(dir.clone(), ont, report));
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("{}:{}", host, port);
     let server = Server::http(&addr).map_err(|e| anyhow::anyhow!("cannot bind {}: {}", addr, e))?;
     eprintln!("UI      → http://{}", addr);
     eprintln!("API     → http://{}/api/summary", addr);
