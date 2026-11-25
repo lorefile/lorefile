@@ -1,0 +1,5 @@
+relationship: {{name}}
+from: {{applies_to}}
+to: {{applies_to}}
+cardinality: many-to-many
+description: What it means for `from` to be linked to `to`.

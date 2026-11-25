@@ -1,0 +1,8 @@
+id: {{name}}
+name: One line that says what the rule guarantees
+description: What it checks and when it matters.
+applies_to: {{applies_to}}
+rule: "true"  # a CEL expression over the properties of {{applies_to}}, e.g. tier == 1 implies lead_time_days <= 30
+severity: warn
+rationale: Why this rule exists. Agents show this to the user when the rule fails.
+owner: team@example.com

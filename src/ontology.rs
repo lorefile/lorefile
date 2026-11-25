@@ -174,7 +174,7 @@ impl Ontology {
                 description: r.description,
                 properties: r.properties.iter().map(|(k, v)| (k.clone(), v.normalize())).collect(),
                 source: r.source,
-                file: String::new(),
+                file: r.file,
             };
             if ont.relationships.iter().any(|x| x.from == rel.from && x.name == rel.name) {
                 ont.duplicates.push((Kind::Relationship, rel.qualified(), String::new()));
@@ -639,6 +639,7 @@ impl Ontology {
             let mut j = serde_json::to_value(c).unwrap_or(Json::Null);
             j["kind"] = json!("constraint");
             j["applies_to_kind"] = json!(self.kind_of(&c.applies_to));
+            j["file"] = json!(c.file);
             return Some(j);
         }
         if let Some(s) = self.sources.get(name) {
@@ -651,6 +652,7 @@ impl Ontology {
             let mut j = serde_json::to_value(s).unwrap_or(Json::Null);
             j["kind"] = json!("source");
             j["used_by"] = json!(used_by);
+            j["file"] = json!(s.file);
             return Some(j);
         }
         None

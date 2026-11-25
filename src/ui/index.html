@@ -14,6 +14,7 @@ header{grid-column:1/4;display:flex;align-items:center;gap:14px;padding:0 16px;b
 header .name{font-weight:650}header .counts{color:var(--muted)}header .spacer{flex:1}
 button{font:inherit;padding:5px 10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:6px;cursor:pointer}
 button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.danger{color:var(--block)}
 nav{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:10px}
 nav input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
 nav h4{margin:14px 0 4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
@@ -22,12 +23,15 @@ nav .item small{color:var(--muted);margin-left:6px}nav .item.active small{color:
 main{overflow:auto;padding:20px 26px}
 aside{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px}
 aside h4,main h4{margin:14px 0 6px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-footer{grid-column:1/4;display:flex;align-items:center;gap:14px;padding:0 16px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12.5px}
+footer{grid-column:1/4;display:flex;align-items:center;gap:14px;padding:0 16px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden}
+footer .uncommitted{color:var(--warn)}
 h1{margin:0 0 4px;font-size:22px}h1 small{font-weight:400;color:var(--muted);font-size:13px;margin-left:8px}
+.titlebar{display:flex;align-items:flex-start;gap:12px}.titlebar h1{flex:1}
 .desc{color:var(--muted);max-width:70ch;margin-bottom:12px}
 table{border-collapse:collapse;width:100%;margin:6px 0 10px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:500;font-size:12px}
 code,.mono{font-family:var(--mono);font-size:12.5px}
 .chip{display:inline-block;background:var(--chip);border-radius:999px;padding:1px 8px;font-size:12px;margin:0 4px 4px 0}
+.pill{display:inline-block;background:var(--chip);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--muted)}
 .sev{display:inline-block;min-width:44px;text-align:center;border-radius:4px;padding:0 6px;font-size:11px;font-weight:600;color:#fff}
 .sev.block{background:var(--block)}.sev.warn{background:var(--warn)}.sev.info{background:var(--info)}
 .rule{padding:8px 0;border-bottom:1px solid var(--line)}.rule .id{font-weight:600}.rule .why{color:var(--muted);font-size:12.5px;margin-top:2px}
@@ -36,7 +40,7 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 svg text{font:12px var(--sans);fill:var(--ink)}svg .edge{stroke:var(--muted);stroke-width:1.2}svg .lbl{fill:var(--muted);font-size:10.5px}
 svg .node rect{fill:var(--panel);stroke:var(--line);rx:8}svg .node.root rect{stroke:var(--accent);stroke-width:2}
 .form{display:grid;grid-template-columns:140px 1fr;gap:8px 10px;align-items:center;max-width:620px;margin:8px 0}
-.form input{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit}
+.form input,.form select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);font:inherit;min-width:0;width:100%}
 .verdict{padding:10px 12px;border-radius:8px;margin:10px 0;font-weight:600}.verdict.pass{background:#e6f4ea;color:#1e5631}.verdict.warn{background:#fff3df;color:#7a4b00}.verdict.fail{background:#fde8e8;color:#8a1c1c}
 @media (prefers-color-scheme:dark){.verdict.pass{background:#17301d;color:#a7e3b5}.verdict.warn{background:#3a2a0d;color:#f3cf8a}.verdict.fail{background:#3a1515;color:#ffb3b3}}
 .res{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}.res .msg{color:var(--muted)}
@@ -47,6 +51,18 @@ textarea.sql{width:100%;min-height:96px;padding:8px 10px;border:1px solid var(--
 .sqlerr{background:#fde8e8;color:#8a1c1c;padding:8px 10px;border-radius:8px;font-family:var(--mono);font-size:12.5px;white-space:pre-wrap}
 @media (prefers-color-scheme:dark){.sqlerr{background:#3a1515;color:#ffb3b3}}
 .sqlwrap{overflow:auto;max-height:60vh}
+/* editing */
+body:not(.editable) .edit-only{display:none !important}
+textarea.yaml{width:100%;min-height:380px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font-family:var(--mono);font-size:12.5px;line-height:1.5;resize:vertical;tab-size:2}
+textarea.yaml:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.editbar{display:flex;gap:8px;align-items:center;margin:8px 0 14px;color:var(--muted);font-size:12.5px}
+.diags{margin:8px 0}.diags .d{padding:6px 10px;border-radius:6px;margin:4px 0;font-size:12.5px;font-family:var(--mono);white-space:pre-wrap}
+.d.error{background:#fde8e8;color:#8a1c1c}.d.warning{background:#fff3df;color:#7a4b00}.d.okmsg{background:#e6f4ea;color:#1e5631;font-family:var(--sans)}
+@media (prefers-color-scheme:dark){.d.error{background:#3a1515;color:#ffb3b3}.d.warning{background:#3a2a0d;color:#f3cf8a}.d.okmsg{background:#17301d;color:#a7e3b5}}
+.newbar{display:flex;gap:8px;align-items:center;margin:8px 0 2px}
+.menu{position:relative}.menu .pop{position:absolute;top:calc(100% + 4px);left:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.14);padding:4px;z-index:10;min-width:170px}
+.menu .pop a{display:block;padding:6px 10px;border-radius:5px;color:var(--ink)}.menu .pop a:hover{background:var(--chip)}.menu .pop a small{color:var(--muted);margin-left:6px}
+.keys{font-family:var(--mono);font-size:12px;color:var(--muted);line-height:1.7}
 </style>
 </head>
 <body>
@@ -54,6 +70,7 @@ textarea.sql{width:100%;min-height:96px;padding:8px 10px;border:1px solid var(--
   <header>
     <span class="name" id="h-name">…</span>
     <span class="counts" id="h-counts"></span>
+    <span id="h-mode"></span>
     <span class="spacer"></span>
     <span id="h-dir" class="mono" style="color:var(--muted)"></span>
     <button onclick="renderMcp()">MCP</button>
@@ -68,24 +85,38 @@ textarea.sql{width:100%;min-height:96px;padding:8px 10px;border:1px solid var(--
 </div>
 <script>
 let O = null, sel = null, tab = 'overview', depth = 1;
+let cur = null;        // the object the centre column shows (from /api/describe)
+let editing = null;    // {mode:'edit', file, name, kind} | {mode:'new', kind, name, applies_to, file, touched}
+let banner = null;     // last successful write, shown once on the next render
+let templates = null;  // from /api/templates, edit mode only
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const api = async (p, opt) => { const r = await fetch(p, opt); return r.json(); };
+const post = (p, body) => api(p, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
 
 async function boot(){
-  O = await api('/api/summary');
-  $('h-name').textContent = O.manifest.name + (O.manifest.version ? ' v' + O.manifest.version : '');
-  const s = O.stats;
-  $('h-counts').textContent = `${s.types} types · ${s.relationships} relationships · ${s.constraints} rules · ${s.actions} actions · ${s.sources} sources`;
-  $('h-dir').textContent = O.dir;
-  renderNav(); renderFooter();
+  await loadSummary();
   const hash = decodeURIComponent(location.hash.slice(1));
   if (hash) select(hash); else if (O.domains[0]?.types[0]) select(O.domains[0].types[0].name);
 }
-async function reload(){ await api('/api/reload', {method:'POST'}); await boot(); if (sel) select(sel); }
+async function loadSummary(){
+  O = await api('/api/summary');
+  document.body.classList.toggle('editable', !!O.editable);
+  $('h-name').textContent = O.manifest.name + (O.manifest.version ? ' v' + O.manifest.version : '');
+  const s = O.stats;
+  $('h-counts').textContent = `${s.types} types · ${s.relationships} relationships · ${s.constraints} rules · ${s.actions} actions · ${s.sources} sources`;
+  $('h-mode').innerHTML = O.editable ? `<span class="pill" title="Started with --allow-edit: the page writes YAML files">edit mode${O.commit_edits ? ' · commits' : ''}</span>` : '';
+  $('h-dir').textContent = O.dir;
+  if (O.editable && !templates) templates = await api('/api/templates');
+  renderNav(); renderFooter();
+}
+async function reload(){ await api('/api/reload', {method:'POST'}); await loadSummary(); if (sel) select(sel); }
 
 function renderNav(q){
   const n = $('nav'); let h = `<input placeholder="Search types, rules, actions…" value="${esc(q||'')}" oninput="search(this.value)">`;
+  if (O.editable) h += `<div class="newbar edit-only"><div class="menu"><button class="primary" onclick="toggleNew(event)">+ New</button><div class="pop" id="new-pop" hidden>` +
+    [['type','Type','types/<name>.yaml'],['constraint','Rule','constraints/…'],['action','Action','actions/<name>.yaml'],['relationship','Relationship','relationships/…'],['source','Source','sources/…']]
+      .map(([k,l,f]) => `<a onclick="startNew('${k}')">${l}<small>${esc(f)}</small></a>`).join('') + `</div></div></div>`;
   if (q) { n.innerHTML = h + '<h4>Results</h4><div id="results">…</div>'; return; }
   for (const d of O.domains) {
     h += `<h4>${esc(d.name)}</h4>` + d.types.map(t => item(t.name, t.name)).join('');
@@ -98,6 +129,8 @@ function renderNav(q){
   n.innerHTML = h;
 }
 const item = (name, label) => `<a class="item ${sel===name?'active':''}" data-name="${esc(name)}" onclick="select('${esc(name)}')">${label}</a>`;
+function toggleNew(e){ e.stopPropagation(); const p = $('new-pop'); if (p) p.hidden = !p.hidden; }
+document.addEventListener('click', () => { const p = $('new-pop'); if (p) p.hidden = true; });
 
 let searchTimer;
 function search(q){
@@ -111,11 +144,14 @@ function search(q){
 }
 
 async function select(name){
+  if (editing && !(editing.mode === 'edit' && editing.name === name)) editing = null;  // navigating away cancels
   sel = name; tab = tab || 'overview'; location.hash = encodeURIComponent(name);
   document.querySelectorAll('nav .item').forEach(e => e.classList.toggle('active', e.dataset.name === name));
   const d = await api('/api/describe?name=' + encodeURIComponent(name));
-  if (d.error) { $('main').innerHTML = `<div class="empty">${esc(d.error)}</div>`; $('aside').innerHTML=''; return; }
-  if (d.kind === 'type') renderType(d); else if (d.kind === 'action') renderAction(d); else if (d.kind === 'constraint') renderRule(d); else if (d.kind === 'source') renderSource(d); else renderGeneric(d);
+  if (d.error) { cur = null; $('main').innerHTML = bannerHtml() + `<div class="empty">${esc(d.error)}</div>`; $('aside').innerHTML=''; return false; }
+  cur = d;
+  if (d.kind === 'type') await renderType(d); else if (d.kind === 'action') renderAction(d); else if (d.kind === 'constraint') renderRule(d); else if (d.kind === 'source') renderSource(d); else renderGeneric(d);
+  return true;
 }
 
 const sevChip = (s) => `<span class="sev ${s}">${s}</span>`;
@@ -123,10 +159,17 @@ function rulesHtml(cs, title='Rules'){
   if (!cs?.length) return `<h4>${title}</h4><div style="color:var(--muted)">None</div>`;
   return `<h4>${title} <small>${cs.length}</small></h4>` + cs.map(c => `<div class="rule">${sevChip(c.severity)} <a class="id" onclick="select('${esc(c.id)}')">${esc(c.id)}</a> ${esc(c.name)}<div class="mono" style="margin-top:3px">${esc(c.rule)}</div>${c.rationale?`<div class="why">${esc(c.rationale)}</div>`:''}</div>`).join('');
 }
+// title row with the Edit button (hidden unless the server runs with --allow-edit)
+const fileOf = (d) => (d?.matches ? d.matches[0] : d)?.file || '';
+function titleHtml(title, sub, d){
+  const f = fileOf(d);
+  const btn = (!O.editable || editing?.mode === 'edit') ? '' : `<button class="edit-only" ${f ? `onclick="startEdit()" title="Edit ${esc(f)}"` : 'disabled title="No file to edit"'}>Edit</button>`;
+  return `<div class="titlebar"><h1>${title}<small>${sub}</small></h1>${btn}</div>`;
+}
 
 async function renderType(d){
   const tabs = ['overview','graph','data','yaml'].map(t => `<a class="${tab===t?'active':''}" onclick="tab='${t}';select('${esc(d.name)}')">${t[0].toUpperCase()+t.slice(1)}</a>`).join('');
-  let body = '';
+  let body = '', inEditor = false;
   if (tab === 'overview') {
     body += `<h4>Properties <small>${d.properties.length}</small></h4><table><tr><th>name</th><th>type</th><th>description</th></tr>` +
       d.properties.map(p => `<tr><td class="mono">${esc(p.name)}${p.key?' <span class="chip">key</span>':''}</td><td class="mono">${esc(p.type)}${p.values?` ${esc(JSON.stringify(p.values))}`:''}${p.unit?` (${esc(p.unit)})`:''}</td><td>${esc(p.description)}</td></tr>`).join('') + '</table>';
@@ -146,16 +189,18 @@ async function renderType(d){
       body += `<h4>Rows <small>${rows.total}</small></h4><table><tr>${cols.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>` + rows.rows.map(r => `<tr>${cols.map(c=>`<td class="mono">${esc(typeof r[c]==='object'?JSON.stringify(r[c]):r[c])}</td>`).join('')}</tr>`).join('') + '</table>';
     }
   } else if (tab === 'yaml') {
-    const y = await fetch('/api/yaml?file=' + encodeURIComponent(d.file)).then(r => r.text());
-    body += `<div style="color:var(--muted);margin-bottom:6px" class="mono">${esc(d.file)}</div><pre>${esc(y)}</pre>`;
+    const y = await loadYaml(d.file);
+    if (editing?.mode === 'edit' && editing.file === d.file) { body += editorHtml(y); inEditor = true; }
+    else body += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><span class="mono" style="color:var(--muted)">${esc(d.file)}</span>${O.editable ? '<button class="edit-only" onclick="startEdit()">Edit</button>' : ''}</div><pre>${esc(y)}</pre>`;
   }
-  $('main').innerHTML = `<h1>${esc(d.name)}<small>type${d.domain?' · '+esc(d.domain):''}</small></h1><div class="desc">${esc(d.description)}</div>${d.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}<div class="tabs">${tabs}</div>${body}`;
+  $('main').innerHTML = bannerHtml() + titleHtml(esc(d.name), `type${d.domain?' · '+esc(d.domain):''}`, d) + `<div class="desc">${esc(d.description)}</div>${d.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}<div class="tabs">${tabs}</div>${body}`;
+  if (inEditor) wireEditor(saveEdit);
   let side = rulesHtml(d.constraints, 'Rules on ' + d.name);
   side += '<h4>Data</h4>';
   side += d.source ? `<div><b>${esc(d.source.connection)}</b> <span class="chip">${esc(d.source.kind)}</span></div><div class="mono">${esc(d.source.tool ? 'tool ' + d.source.tool : d.source.table)}</div><div style="color:var(--muted)">key ${esc(d.source.key||d.key||'')}</div>` : `<div style="color:var(--muted)">${d.inline_instances?`${d.inline_instances} inline rows`:'No data binding (concept only)'}</div>`;
   if (d.owner) side += `<h4>Owner</h4><div>${esc(d.owner)}</div>`;
   side += `<h4>File</h4><div class="mono">${esc(d.file)}</div>`;
-  $('aside').innerHTML = side;
+  $('aside').innerHTML = inEditor ? editHelp('type') + side : side;
 }
 
 function graphSvg(sg){
@@ -183,7 +228,7 @@ function graphSvg(sg){
 function renderAction(d){
   const inputs = Object.entries(d.inputs);
   const effects = d.effects.map(e => e.create ? `creates <span class="mono">${esc(e.create.relationship)}</span>: ${esc(e.create.from)} → ${esc(e.create.to)}` : e.remove ? `removes <span class="mono">${esc(e.remove.relationship)}</span>: ${esc(e.remove.from)} → ${esc(e.remove.to)}` : '').join('<br>');
-  $('main').innerHTML = `<h1>${esc(d.name)}<small>action</small></h1><div class="desc">${esc(d.description)}</div>
+  $('main').innerHTML = bannerHtml() + titleHtml(esc(d.name), 'action', d) + `<div class="desc">${esc(d.description)}</div>
     <h4>Inputs</h4><table>${inputs.map(([k,v]) => `<tr><td class="mono">${esc(k)}</td><td><a onclick="select('${esc(v)}')">${esc(v)}</a></td></tr>`).join('')}</table>
     ${effects ? `<h4>Effects</h4><div>${effects}</div>` : ''}
     ${d.requires_approval_from ? `<h4>Approval</h4><div>${esc(d.requires_approval_from)}</div>` : ''}
@@ -198,7 +243,7 @@ function renderAction(d){
 async function runCheck(action){
   const inputs = {};
   document.querySelectorAll('[id^="in-"]').forEach(el => { const k = el.id.slice(3); let v = el.value.trim(); if (!v) return; if (v.startsWith('{')) { try { v = JSON.parse(v); } catch(e){} } inputs[k] = v; });
-  const r = await api('/api/check', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action, inputs }) });
+  const r = await post('/api/check', { action, inputs });
   const text = r.content?.[0]?.text || '';
   let rep; try { rep = JSON.parse(text); } catch(e) { $('check-out').innerHTML = `<div class="verdict fail">${esc(text)}</div>`; return; }
   let h = `<div class="verdict ${rep.verdict}">${esc(rep.summary)}</div>`;
@@ -210,7 +255,7 @@ async function runCheck(action){
 }
 
 function renderRule(d){
-  $('main').innerHTML = `<h1>${esc(d.id)}<small>rule</small></h1><div style="margin:6px 0">${sevChip(d.severity)} <b>${esc(d.name)}</b></div><div class="desc">${esc(d.description)}</div>
+  $('main').innerHTML = bannerHtml() + titleHtml(esc(d.id), 'rule', d) + `<div style="margin:6px 0">${sevChip(d.severity)} <b>${esc(d.name)}</b></div><div class="desc">${esc(d.description)}</div>
     <h4>Rule</h4><pre>${esc(d.rule)}</pre>
     <h4>Applies to</h4><div><a onclick="select('${esc(d.applies_to)}')">${esc(d.applies_to)}</a> <span class="chip">${esc(d.applies_to_kind||'')}</span></div>
     ${d.rationale ? `<h4>Why</h4><div>${esc(d.rationale)}</div>` : ''}
@@ -218,18 +263,138 @@ function renderRule(d){
   $('aside').innerHTML = `${d.owner?`<h4>Owner</h4><div>${esc(d.owner)}</div>`:''}${d.tags?.length?`<h4>Tags</h4>${d.tags.map(t=>`<span class="chip">${esc(t)}</span>`).join('')}`:''}<h4>File</h4><div class="mono">${esc(d.file)}</div>`;
 }
 function renderSource(d){
-  $('main').innerHTML = `<h1>${esc(d.connection)}<small>source · ${esc(d.kind)}</small></h1><div class="desc">${esc(d.description)}</div><pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
-  $('aside').innerHTML = `<h4>Used by</h4>${(d.used_by||[]).map(t=>`<a class="chip" onclick="select('${esc(t)}')">${esc(t)}</a>`).join('')||'<div style="color:var(--muted)">No types</div>'}`;
+  $('main').innerHTML = bannerHtml() + titleHtml(esc(d.connection), `source · ${esc(d.kind)}`, d) + `<div class="desc">${esc(d.description)}</div><pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
+  $('aside').innerHTML = `<h4>Used by</h4>${(d.used_by||[]).map(t=>`<a class="chip" onclick="select('${esc(t)}')">${esc(t)}</a>`).join('')||'<div style="color:var(--muted)">No types</div>'}<h4>File</h4><div class="mono">${esc(d.file)}</div>`;
 }
 function renderGeneric(d){
   const r = d.matches ? d.matches[0] : d;
-  $('main').innerHTML = `<h1>${esc(r.name)}<small>${esc(r.kind)}</small></h1><div class="desc">${esc(r.description)}</div><div><a onclick="select('${esc(r.from)}')">${esc(r.from)}</a> ─${esc(r.name)}→ <a onclick="select('${esc(r.to)}')">${esc(r.to)}</a> <span class="chip">${esc(r.cardinality)}</span></div><h4>CEL variables in rules</h4>${(r.cel_variables||[]).map(v=>`<span class="chip mono">${esc(v)}</span>`).join('')}<pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
-  $('aside').innerHTML = rulesHtml(r.constraints, 'Rules');
+  $('main').innerHTML = bannerHtml() + titleHtml(esc(r.name), esc(r.kind), d) + `<div class="desc">${esc(r.description)}</div><div><a onclick="select('${esc(r.from)}')">${esc(r.from)}</a> ─${esc(r.name)}→ <a onclick="select('${esc(r.to)}')">${esc(r.to)}</a> <span class="chip">${esc(r.cardinality)}</span></div><h4>CEL variables in rules</h4>${(r.cel_variables||[]).map(v=>`<span class="chip mono">${esc(v)}</span>`).join('')}<pre>${esc(JSON.stringify(d, null, 2))}</pre>`;
+  $('aside').innerHTML = rulesHtml(r.constraints, 'Rules') + `<h4>File</h4><div class="mono">${esc(r.file)}</div>`;
+}
+
+// ---- editing (only reachable when /api/summary says editable) ----
+const loadYaml = (file) => fetch('/api/yaml?file=' + encodeURIComponent(file)).then(r => r.text());
+const KIND_LABEL = { type:'type', constraint:'rule', action:'action', relationship:'relationship', source:'source' };
+const KEYS = {
+  type: 'type · description · domain · properties · relationships · source · owner · tags · instances',
+  constraint: 'id · name · description · applies_to · rule · severity (block|warn|info) · rationale · owner · tags',
+  action: 'action · description · inputs · effects · checks · requires_approval_from · side_effects · tags',
+  relationship: 'relationship · from · to · cardinality · description · properties · source',
+  source: 'connection · kind · path · description · any connection settings (secrets stay in env vars)',
+};
+function editHelp(kind){
+  return `<h4>What happens on save</h4><div style="color:var(--muted);font-size:12.5px">The whole ontology is compiled with your text in place of the file. Errors (E…) block the save and are shown above the editor; warnings (W…) are allowed. ${O.commit_edits ? 'Each save is committed.' : 'The file is written and left uncommitted for review.'}</div>` +
+    (KEYS[kind] ? `<h4>Keys</h4><div class="keys">${esc(KEYS[kind])}</div>` : '') +
+    `<h4>Validation codes</h4><div class="keys">E003 unknown type in relationship<br>E004 rule applies_to unknown<br>E005–E007 action refers to unknown thing<br>E008 unknown connection<br>E009 rule does not parse</div>`;
+}
+function editorHtml(text, isNew){
+  return `<div class="mono" style="color:var(--muted);margin-bottom:6px">${esc(editing.file || '')}</div>
+    <div id="ed-diags" class="diags"></div>
+    <textarea class="yaml" id="ed-text" spellcheck="false"${isNew ? ' oninput="editing.touched=true"' : ''}>${esc(text)}</textarea>
+    <div class="editbar"><button class="primary" onclick="${isNew ? 'saveNew()' : 'saveEdit()'}">Save</button><button onclick="cancelEdit()">Cancel</button><span>⌘/Ctrl+S saves · checked by the compiler before anything is written</span><span style="flex:1"></span>${isNew ? '' : '<button class="danger" onclick="deleteFile()">Delete file</button>'}</div>`;
+}
+function wireEditor(saveFn){
+  const t = $('ed-text'); if (!t) return;
+  t.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 's') { e.preventDefault(); saveFn(); }
+    if (e.key === 'Tab') { e.preventDefault(); const s = t.selectionStart, en = t.selectionEnd; t.value = t.value.slice(0, s) + '  ' + t.value.slice(en); t.selectionStart = t.selectionEnd = s + 2; if (editing) editing.touched = true; }
+  });
+}
+function diagsHtml(r){
+  let h = '';
+  if (r.error) h += `<div class="d error">✗ ${esc(r.error)}</div>`;
+  else if (!r.ok) h += `<div class="d error">✗ Not saved: fix the ${r.errors} error${r.errors===1?'':'s'} below. Nothing was written.</div>`;
+  for (const d of (r.diagnostics || [])) h += `<div class="d ${d.level}">${d.level==='error'?'✗':'⚠'} ${esc(d.code)} ${esc(d.message)}${d.file?` <span style="opacity:.7">[${esc(d.file)}]</span>`:''}</div>`;
+  return h;
+}
+function showDiags(r){ const el = $('ed-diags'); if (!el) return; el.innerHTML = diagsHtml(r); el.scrollIntoView({ block:'nearest' }); }
+function bannerHtml(){
+  if (!banner) return '';
+  const r = banner; banner = null;
+  const what = r.deleted ? `Deleted ${r.file}` : `Saved ${r.file}`;
+  const git = r.commit ? ` · committed ${r.commit}` : (r.git_error ? ` · git: ${r.git_error}` : (r.git ? ' · uncommitted — review it with git diff' : ''));
+  let h = `<div class="diags"><div class="d okmsg">✓ ${esc(what)}${esc(git)}</div>`;
+  for (const d of (r.diagnostics || [])) h += `<div class="d ${d.level}">⚠ ${esc(d.code)} ${esc(d.message)}${d.file?` <span style="opacity:.7">[${esc(d.file)}]</span>`:''}</div>`;
+  return h + '</div>';
+}
+
+async function startEdit(){
+  const file = fileOf(cur); if (!file) return;
+  editing = { mode:'edit', file, name: sel, kind: cur.kind === 'relationships' ? 'relationship' : cur.kind };
+  if (cur.kind === 'type') { tab = 'yaml'; select(sel); return; }
+  const text = await loadYaml(file);
+  $('main').innerHTML = bannerHtml() + `<div class="titlebar"><h1>${esc(editing.name)}<small>${esc(editing.kind)} · editing</small></h1></div>` + editorHtml(text, false);
+  $('aside').innerHTML = editHelp(editing.kind);
+  wireEditor(saveEdit);
+  $('ed-text').focus();
+}
+async function saveEdit(){
+  const r = await post('/api/edit', { file: editing.file, content: $('ed-text').value });
+  if (!r.written) { showDiags(r); return; }
+  await afterWrite(r, editing.name);
+}
+async function afterWrite(r, name){
+  banner = r; editing = null;
+  await loadSummary();
+  if (await select(name)) return;
+  // the thing was renamed or lives under another name now: try what the server saw
+  if (r.name && !r.name.includes(',')) { banner = r; select(r.name); }
+}
+function cancelEdit(){
+  editing = null;
+  if (sel) select(sel); else if (O.domains[0]?.types[0]) select(O.domains[0].types[0].name);
+}
+async function deleteFile(){
+  const file = editing.file;
+  if (!confirm(`Delete ${file}?\n\nThe ontology is compiled without it first: anything that still refers to what it declares blocks the delete.`)) return;
+  const r = await fetch('/api/file?file=' + encodeURIComponent(file), { method:'DELETE' }).then(x => x.json());
+  if (!r.written) { showDiags(r); return; }
+  r.deleted = true; banner = r; editing = null; sel = null; location.hash = '';
+  await loadSummary();
+  if (O.domains[0]?.types[0]) select(O.domains[0].types[0].name);
+  else { $('main').innerHTML = bannerHtml() + '<div class="empty">Pick something on the left.</div>'; $('aside').innerHTML = ''; }
+}
+
+// "+ New": a pre-filled template from the server (src/starter/templates) and one POST /api/create
+const snake = (s) => String(s).replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[-\s]+/g, '_').toLowerCase();
+function startNew(kind){
+  const p = $('new-pop'); if (p) p.hidden = true;
+  const type0 = cur?.kind === 'type' ? cur.name : (O.domains[0]?.types[0]?.name || 'Customer');
+  editing = { mode:'new', kind, name:'', applies_to: type0, file:'', touched:false };
+  sel = null; document.querySelectorAll('nav .item').forEach(e => e.classList.remove('active'));
+  const ph = { type:'PurchaseOrder', constraint:'SC-099', action:'ship_order', relationship:'ships_to', source:'warehouse_pg' }[kind];
+  let fileRow = '';
+  if (kind === 'constraint') {
+    const files = O.constraint_files || [];
+    fileRow = `<label>File</label><select id="new-file" onchange="editing.file=this.value">${files.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')}<option value="">new file: constraints/&lt;id&gt;.yaml</option></select>`;
+    editing.file = files[0] || '';
+  }
+  $('main').innerHTML = `<div class="titlebar"><h1>New ${KIND_LABEL[kind]}</h1></div>
+    <div class="desc">Fill in the template and save. ${kind === 'constraint' ? 'The rule is appended to the chosen file; the rest of that file is left exactly as it is.' : `The file goes to <code id="new-path">${esc(newPath())}</code>, named after what you type.`}</div>
+    <div class="form"><label>Name</label><input id="new-name" placeholder="${ph}" oninput="newNameChanged(this.value)">${fileRow}</div>` + editorHtml('', true);
+  $('aside').innerHTML = editHelp(kind);
+  fillTemplate(); wireEditor(saveNew); $('new-name').focus();
+}
+const newPath = () => `${{type:'types',action:'actions',relationship:'relationships',source:'sources',constraint:'constraints'}[editing.kind]}/${snake(editing.name || '<name>').replace(/[^a-z0-9_<>-]/g, '_')}.yaml`;
+function newNameChanged(v){ editing.name = v.trim(); if (!editing.touched) fillTemplate(); const p = $('new-path'); if (p) p.textContent = newPath(); }
+function fillTemplate(){
+  const name = editing.name || { type:'NewType', constraint:'NEW-001', action:'new_action', relationship:'relates_to', source:'new_source' }[editing.kind];
+  const t = (templates?.[editing.kind] || '').replaceAll('{{name}}', name).replaceAll('{{snake}}', snake(name)).replaceAll('{{applies_to}}', editing.applies_to).replaceAll('{{input}}', snake(editing.applies_to));
+  $('ed-text').value = t;
+}
+async function saveNew(){
+  const name = $('new-name').value.trim();
+  if (!name) { showDiags({ error:'Give it a name first.' }); $('new-name').focus(); return; }
+  const body = { kind: editing.kind, name, content: $('ed-text').value };
+  if (editing.kind === 'constraint' && editing.file) body.file = editing.file;
+  const r = await post('/api/create', body);
+  if (!r.written) { showDiags(r); return; }
+  await afterWrite(r, name);
 }
 
 let lastSql = "select n.name, n.source_kind, n.readable_here, count(c.id) as rules\nfrom nodes n left join constraints c on c.applies_to = n.name\ngroup by all order by rules desc";
 function renderSql(){
-  sel = null; document.querySelectorAll('nav .item').forEach(e => e.classList.remove('active'));
+  sel = null; editing = null; document.querySelectorAll('nav .item').forEach(e => e.classList.remove('active'));
   $('main').innerHTML = `<h1>SQL<small>read-only · DuckDB · max 500 rows</small></h1>
     <div class="desc">One SELECT or WITH statement. The ontology is in <code>nodes</code>, <code>properties</code>, <code>edges</code>, <code>constraints</code>, <code>actions</code>, <code>sources</code>; every readable type or relationship is a view named after it.</div>
     <textarea class="sql" id="sql-in" spellcheck="false">${esc(lastSql)}</textarea>
@@ -248,7 +413,7 @@ function useSql(q){ lastSql = q; $('sql-in').value = q; runSql(); }
 async function runSql(){
   const sql = $('sql-in').value; lastSql = sql;
   $('sql-meta').textContent = 'running…';
-  const r = await api('/api/query', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ sql }) });
+  const r = await post('/api/query', { sql });
   if (r.error) { $('sql-out').innerHTML = `<div class="sqlerr">${esc(r.error)}</div>`; $('sql-meta').textContent = ''; return; }
   const cols = r.columns.map(c => c.name);
   const cell = v => v === null || v === undefined ? '<span style="color:var(--muted)">∅</span>' : esc(typeof v === 'object' ? JSON.stringify(v) : v);
@@ -291,7 +456,13 @@ async function runTool(){
 
 function renderFooter(){
   const errs = O.diagnostics.filter(d => d.level==='error').length, warns = O.diagnostics.length - errs;
-  $('footer').innerHTML = `<span>${O.ok ? '✓ valid' : '✗ invalid'}</span><span>${errs} errors · ${warns} warnings</span><a onclick="toggleDiag()">${O.diagnostics.length?'show':''}</a><span class="spacer" style="flex:1"></span><span>MCP: <code>stella-ontology mcp --dir ${esc(O.dir)}</code></span>`;
+  let git = '';
+  if (O.git) {
+    const u = O.git.uncommitted || [];
+    git = `<span title="The ontology folder is inside a git repository">git ${esc(O.git.branch || '')}</span>` +
+      (u.length ? `<span class="uncommitted" title="${esc(u.join('\n'))}">${u.length <= 3 ? 'uncommitted change in ' + u.map(esc).join(', ') : u.length + ' uncommitted changes'}</span>` : '');
+  }
+  $('footer').innerHTML = `<span>${O.ok ? '✓ valid' : '✗ invalid'}</span><span>${errs} errors · ${warns} warnings</span><a onclick="toggleDiag()">${O.diagnostics.length?'show':''}</a>${git}<span class="spacer" style="flex:1"></span><span>MCP: <code>stella-ontology mcp --dir ${esc(O.dir)}</code></span>`;
 }
 function toggleDiag(){
   $('main').innerHTML = `<h1>Diagnostics</h1>` + (O.diagnostics.map(d => `<div class="diag">${d.level==='error'?'✗':'⚠'} ${esc(d.code)} ${esc(d.message)} <span style="color:var(--muted)">${esc(d.file)}</span></div>`).join('') || '<div class="empty">Clean</div>');
