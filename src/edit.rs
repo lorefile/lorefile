@@ -1743,7 +1743,7 @@ fn in_words(err: &str, host: &str) -> String {
     let has = |needles: &[&str]| needles.iter().any(|n| e.contains(n));
     if e == "timed out" {
         format!("git took longer than 90 seconds to reach {}, so it was stopped. Check the address and the network.", host)
-    } else if has(&["could not read username", "could not read password", "authentication failed", "permission denied (publickey", "terminal prompts disabled", "invalid username or password", "access denied", "permission to", "403"]) {
+    } else if has(&["could not read username", "could not read password", "authentication failed", "permission denied (publickey", "terminal prompts disabled", "invalid username or password", "access denied", "permission to", "error: 403"]) {
         format!("git could not sign in to {}. Push once from a terminal to set up access, or use an SSH address.", host)
     } else if has(&["host key verification failed"]) {
         format!("git does not know {} yet. Connect once from a terminal (for GitHub: ssh -T git@github.com) and accept its key, then try again.", host)
@@ -2172,6 +2172,9 @@ mod tests {
         assert_eq!(remote_label("file:///srv/onto.git"), ("this computer".into(), "/srv/onto.git".into()));
         assert_eq!(identity("agent via MCP"), ("agent via MCP".into(), "agent-via-mcp@localhost".into()));
         assert!(in_words("fatal: could not read Username for 'https://github.com': terminal prompts disabled", "github.com").starts_with("git could not sign in to github.com"));
+        // "403" in a folder name (a process id, a year) is not git's HTTP 403
+        assert!(in_words("fatal: '/tmp/lorefile-http-spaces-7105-24031/nowhere.git' does not appear to be a git repository", "this computer").starts_with("There is no repository"));
+        assert!(in_words("fatal: unable to access 'https://github.com/you/x.git/': The requested URL returned error: 403", "github.com").starts_with("git could not sign in to github.com"));
         assert!(in_words("git@github.com: Permission denied (publickey).", "github.com").contains("SSH address"));
     }
 

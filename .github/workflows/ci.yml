@@ -6,6 +6,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      # one toolchain failing does not cancel the other, so both results show
+      fail-fast: false
       matrix:
         toolchain: ["1.87", stable]
     steps:
