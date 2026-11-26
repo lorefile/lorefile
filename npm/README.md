@@ -120,4 +120,4 @@ Behind a proxy that Node cannot get through, download the archive for your compu
 
 ## Licence
 
-Apache-2.0. Each release archive carries the licences of the software compiled into it, DuckDB's included. Built by the team at Stella.
+Apache-2.0. Each release archive carries the licences of the software compiled into it, DuckDB's included. Built by the team at [Stella](https://stellaheystella.com).

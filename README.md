@@ -754,4 +754,4 @@ A note for the maintainer: what has to happen once before `npx lorefile`, the Do
 
 Apache-2.0, see [LICENSE](LICENSE). Use it, change it, host it, sell what you build on it; keep the notice ([NOTICE](NOTICE)). Why Apache-2.0 and not MIT, AGPL or a source-available licence is in [PRODUCTION.md](PRODUCTION.md#6-licence).
 
-Built by the team at Stella.
+Built by the team at [Stella](https://stellaheystella.com).
