@@ -1,0 +1,1747 @@
+# A slice of schema.org, release 30.1: the classes Organization, Person, Order and
+# Product, every property schema.org lists for them (schema:domainIncludes), and the
+# DataType classes those properties range over. Each block is copied unchanged from
+# https://schema.org/version/latest/schemaorg-current-https.ttl (fetched 2026-11-26);
+# only the blocks for other terms were left out.
+#
+# Schema.org is licensed under the Creative Commons Attribution-ShareAlike License,
+# version 3.0 (https://creativecommons.org/licenses/by-sa/3.0/), by its sponsors
+# (Google, Microsoft, Yahoo and Yandex); see https://schema.org/docs/terms.html.
+# This file is a test fixture for `lorefile import --from-rdf` and is not part of the
+# published crate.
+
+@prefix cmns-cls: <https://www.omg.org/spec/Commons/Classifiers/> .
+@prefix cmns-col: <https://www.omg.org/spec/Commons/Collections/> .
+@prefix cmns-dt: <https://www.omg.org/spec/Commons/DatesAndTimes/> .
+@prefix cmns-id: <https://www.omg.org/spec/Commons/Identifiers/> .
+@prefix cmns-loc: <https://www.omg.org/spec/Commons/Locations/> .
+@prefix cmns-txt: <https://www.omg.org/spec/Commons/Text/> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix fibo-be-le-lp: <https://spec.edmcouncil.org/fibo/ontology/BE/LegalEntities/LegalPersons/> .
+@prefix fibo-be-oac-cctl: <https://spec.edmcouncil.org/fibo/ontology/BE/OwnershipAndControl/CorporateControl/> .
+@prefix fibo-fbc-dae-dbt: <https://spec.edmcouncil.org/fibo/ontology/FBC/DebtAndEquities/Debt/> .
+@prefix fibo-fbc-pas-fpas: <https://spec.edmcouncil.org/fibo/ontology/FBC/ProductsAndServices/FinancialProductsAndServices/> .
+@prefix fibo-fnd-arr-doc: <https://spec.edmcouncil.org/fibo/ontology/FND/Arrangements/Documents/> .
+@prefix fibo-fnd-org-org: <https://spec.edmcouncil.org/fibo/ontology/FND/Organizations/Organizations/> .
+@prefix fibo-fnd-pas-pas: <https://spec.edmcouncil.org/fibo/ontology/FND/ProductsAndServices/ProductsAndServices/> .
+@prefix fibo-fnd-plc-adr: <https://spec.edmcouncil.org/fibo/ontology/FND/Places/Addresses/> .
+@prefix fibo-fnd-pty-pty: <https://spec.edmcouncil.org/fibo/ontology/FND/Parties/Parties/> .
+@prefix fibo-fnd-rel-rel: <https://spec.edmcouncil.org/fibo/ontology/FND/Relations/Relations/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix gleif-L1: <https://www.gleif.org/ontology/L1/> .
+@prefix gs1: <https://ref.gs1.org/voc/> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix schema: <https://schema.org/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix unece: <http://unece.org/vocab#> .
+
+schema:Boolean a rdfs:Class,
+        schema:DataType ;
+    rdfs:label "Boolean" ;
+    rdfs:comment "Boolean: True or False." .
+
+schema:DataType a rdfs:Class ;
+    rdfs:label "DataType" ;
+    rdfs:comment "The basic data types such as Integers, Strings, etc." ;
+    rdfs:subClassOf rdfs:Class .
+
+schema:Date a rdfs:Class,
+        schema:DataType ;
+    rdfs:label "Date" ;
+    rdfs:comment "A date value in [ISO 8601 date format](http://en.wikipedia.org/wiki/ISO_8601)." ;
+    owl:equivalentClass cmns-dt:Date .
+
+schema:DateTime a rdfs:Class,
+        schema:DataType ;
+    rdfs:label "DateTime" ;
+    rdfs:comment "A combination of date and time of day in the form [-]CCYY-MM-DDThh:mm:ss[Z|(+|-)hh:mm] (see Chapter 5.4 of ISO 8601)." ;
+    owl:equivalentClass cmns-dt:DateTime .
+
+schema:Float a rdfs:Class ;
+    rdfs:label "Float" ;
+    rdfs:comment "Data type: Floating number." ;
+    rdfs:subClassOf schema:Number .
+
+schema:Integer a rdfs:Class ;
+    rdfs:label "Integer" ;
+    rdfs:comment "Data type: Integer." ;
+    rdfs:subClassOf schema:Number .
+
+schema:Number a rdfs:Class,
+        schema:DataType ;
+    rdfs:label "Number" ;
+    rdfs:comment "Data type: Number.\\n\\nUsage guidelines:\\n\\n* Use values from 0123456789 (Unicode 'DIGIT ZERO' (U+0030) to 'DIGIT NINE' (U+0039)) rather than superficially similar Unicode symbols.\\n* Use '.' (Unicode 'FULL STOP' (U+002E)) rather than ',' to indicate a decimal point. Avoid using these symbols as a readability separator." .
+
+schema:Order a rdfs:Class ;
+    rdfs:label "Order" ;
+    rdfs:comment "An order is a confirmation of a transaction (a receipt), which can contain multiple line items, each represented by an Offer that has been accepted by the customer." ;
+    rdfs:subClassOf schema:Intangible,
+        fibo-fnd-arr-doc:LegalDocument ;
+    owl:equivalentClass unece:Order .
+
+schema:Organization a rdfs:Class ;
+    rdfs:label "Organization" ;
+    rdfs:comment "An organization such as a school, NGO, corporation, club, etc." ;
+    rdfs:subClassOf schema:Thing ;
+    owl:equivalentClass gs1:Organization,
+        fibo-fnd-org-org:Organization .
+
+schema:Person a rdfs:Class ;
+    rdfs:label "Person" ;
+    rdfs:comment "A person (alive, dead, undead, or fictional)." ;
+    rdfs:subClassOf schema:Thing ;
+    owl:equivalentClass foaf:Person ;
+    schema:contributor <https://schema.org/docs/collab/rNews> .
+
+schema:Product a rdfs:Class ;
+    rdfs:label "Product" ;
+    rdfs:comment "Any offered product or service. For example: a pair of shoes; a concert ticket; the rental of a car; a haircut; or an episode of a TV show streamed online." ;
+    rdfs:subClassOf schema:Thing ;
+    owl:equivalentClass unece:TradeProduct,
+        fibo-fnd-pas-pas:Product ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> .
+
+schema:Text a rdfs:Class,
+        schema:DataType ;
+    rdfs:label "Text" ;
+    rdfs:comment "Data type: Text." .
+
+schema:Time a rdfs:Class,
+        schema:DataType ;
+    rdfs:label "Time" ;
+    rdfs:comment "A point in time recurring on multiple days in the form hh:mm:ss[Z|(+|-)hh:mm] (see [XML schema for details](http://www.w3.org/TR/xmlschema-2/#time))." .
+
+schema:URL a rdfs:Class ;
+    rdfs:label "URL" ;
+    rdfs:comment "Data type: URL." ;
+    rdfs:subClassOf schema:Text .
+
+schema:acceptedOffer a rdf:Property ;
+    rdfs:label "acceptedOffer" ;
+    rdfs:comment "The offer(s) -- e.g., product, quantity and price combinations -- included in the order." ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Offer .
+
+schema:acceptedPaymentMethod a rdf:Property ;
+    rdfs:label "acceptedPaymentMethod" ;
+    rdfs:comment "The payment method(s) that are accepted in general by an organization, or for some specific demand or offer." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Demand,
+        schema:Offer,
+        schema:Organization ;
+    schema:rangeIncludes schema:LoanOrCredit,
+        schema:PaymentMethod,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3537> .
+
+schema:actionableFeedbackPolicy a rdf:Property ;
+    rdfs:label "actionableFeedbackPolicy" ;
+    rdfs:comment "For a [[NewsMediaOrganization]] or other news-related [[Organization]], a statement about public engagement activities (for news media, the newsroom’s), including involving the public - digitally or otherwise -- in coverage decisions, reporting and activities after publication." ;
+    rdfs:subPropertyOf schema:publishingPrinciples ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:NewsMediaOrganization,
+        schema:Organization ;
+    schema:rangeIncludes schema:CreativeWork,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1525> .
+
+schema:additionalName a rdf:Property ;
+    rdfs:label "additionalName" ;
+    rdfs:comment "An additional name for a Person, can be used for a middle name." ;
+    rdfs:subPropertyOf schema:alternateName ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:additionalProperty a rdf:Property ;
+    rdfs:label "additionalProperty" ;
+    rdfs:comment """A property-value pair representing an additional characteristic of the entity, e.g. a product feature or another characteristic for which there is no matching property in schema.org.\\n\\nNote: Publishers should be aware that applications designed to use specific schema.org properties (e.g. https://schema.org/width, https://schema.org/color, https://schema.org/gtin13, ...) will typically expect such data to be provided using those properties, rather than using the generic property/value mechanism.
+""" ;
+    schema:domainIncludes schema:MerchantReturnPolicy,
+        schema:Offer,
+        schema:Place,
+        schema:Product,
+        schema:QualitativeValue,
+        schema:QuantitativeValue ;
+    schema:rangeIncludes schema:PropertyValue .
+
+schema:address a rdf:Property ;
+    rdfs:label "address" ;
+    rdfs:comment "Physical address of the item." ;
+    owl:equivalentProperty gs1:address ;
+    schema:domainIncludes schema:GeoCoordinates,
+        schema:GeoShape,
+        schema:Organization,
+        schema:Person,
+        schema:Place ;
+    schema:rangeIncludes schema:PostalAddress,
+        schema:Text .
+
+schema:affiliation a rdf:Property ;
+    rdfs:label "affiliation" ;
+    rdfs:comment "An organization that this person is affiliated with. For example, a school/university, a club, or a team." ;
+    rdfs:subPropertyOf schema:memberOf ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Organization .
+
+schema:agentInteractionStatistic a rdf:Property ;
+    rdfs:label "agentInteractionStatistic" ;
+    rdfs:comment "The number of completed interactions for this entity, in a particular role (the 'agent'), in a particular action (indicated in the statistic), and in a particular context (i.e. interactionService)." ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:InteractionCounter ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2858> .
+
+schema:aggregateRating a rdf:Property ;
+    rdfs:label "aggregateRating" ;
+    rdfs:comment "The overall rating, based on a collection of reviews or ratings, of the item." ;
+    schema:domainIncludes schema:Brand,
+        schema:CreativeWork,
+        schema:Event,
+        schema:Offer,
+        schema:Organization,
+        schema:Place,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:AggregateRating .
+
+schema:authorizedRepresentative a rdf:Property ;
+    rdfs:label "authorizedRepresentative" ;
+    rdfs:comment "An organization or person officially appointed to act on behalf of the manufacturer in a specific region or context." ;
+    schema:domainIncludes schema:Organization,
+        schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/DPP> .
+
+schema:awards a rdf:Property ;
+    rdfs:label "awards" ;
+    rdfs:comment "Awards won by or for this item." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Organization,
+        schema:Person,
+        schema:Product ;
+    schema:rangeIncludes schema:Text ;
+    schema:supersededBy schema:award .
+
+schema:billingAddress a rdf:Property ;
+    rdfs:label "billingAddress" ;
+    rdfs:comment "The billing address for the order." ;
+    owl:equivalentProperty unece:BillingAddress ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:PostalAddress .
+
+schema:birthDate a rdf:Property ;
+    rdfs:label "birthDate" ;
+    rdfs:comment "Date of birth." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Date .
+
+schema:birthPlace a rdf:Property ;
+    rdfs:label "birthPlace" ;
+    rdfs:comment "The place where the person was born." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Place .
+
+schema:brand a rdf:Property ;
+    rdfs:label "brand" ;
+    rdfs:comment "The brand(s) associated with a product or service, or the brand(s) maintained by an organization or business person." ;
+    rdfs:subPropertyOf fibo-fnd-rel-rel:hasDesignation ;
+    owl:equivalentProperty unece:brandName ;
+    schema:domainIncludes schema:Organization,
+        schema:Person,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Brand,
+        schema:Organization .
+
+schema:callSign a rdf:Property ;
+    rdfs:label "callSign" ;
+    rdfs:comment "A [callsign](https://en.wikipedia.org/wiki/Call_sign), as used in broadcasting and radio communications to identify people, radio and TV stations, or vehicles." ;
+    rdfs:subPropertyOf schema:identifier ;
+    schema:domainIncludes schema:BroadcastService,
+        schema:Person,
+        schema:Vehicle ;
+    schema:rangeIncludes schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2109> .
+
+schema:children a rdf:Property ;
+    rdfs:label "children" ;
+    rdfs:comment "A child of the person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person .
+
+schema:colleagues a rdf:Property ;
+    rdfs:label "colleagues" ;
+    rdfs:comment "A colleague of the person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person ;
+    schema:supersededBy schema:colleague .
+
+schema:color a rdf:Property ;
+    rdfs:label "color" ;
+    rdfs:comment "The color of the product." ;
+    owl:equivalentProperty unece:colourDescription ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:colorSwatch a rdf:Property ;
+    rdfs:label "colorSwatch" ;
+    rdfs:comment "A color swatch image, visualizing the color of a [[Product]]. Should match the textual description specified in the [[color]] property. This can be a URL or a fully described ImageObject." ;
+    rdfs:subPropertyOf schema:image ;
+    schema:domainIncludes schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:ImageObject,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3423> .
+
+schema:companyRegistration a rdf:Property ;
+    rdfs:label "companyRegistration" ;
+    rdfs:comment "The official registration information of a business including the organization that issued it such as Company House or Chamber of Commerce in form of a Certification." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Certification .
+
+schema:confirmationNumber a rdf:Property ;
+    rdfs:label "confirmationNumber" ;
+    rdfs:comment "A number that confirms the given order or payment has been received." ;
+    rdfs:subPropertyOf schema:identifier ;
+    schema:domainIncludes schema:Invoice,
+        schema:Order ;
+    schema:rangeIncludes schema:Text .
+
+schema:consumerNotice a rdf:Property ;
+    rdfs:label "consumerNotice" ;
+    rdfs:comment "A consumer notice, such as a safety warning or mandatory information, related to the product." ;
+    schema:domainIncludes schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:Text,
+        schema:TextObject,
+        schema:URL,
+        schema:WebContent ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/4878> .
+
+schema:contactPoints a rdf:Property ;
+    rdfs:label "contactPoints" ;
+    rdfs:comment "A contact point for a person or organization." ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:ContactPoint ;
+    schema:supersededBy schema:contactPoint .
+
+schema:correctionsPolicy a rdf:Property ;
+    rdfs:label "correctionsPolicy" ;
+    rdfs:comment "For an [[Organization]] (e.g. [[NewsMediaOrganization]]), a statement describing (in news media, the newsroom’s) disclosure and correction policy for errors." ;
+    rdfs:subPropertyOf schema:publishingPrinciples ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:NewsMediaOrganization,
+        schema:Organization ;
+    schema:rangeIncludes schema:CreativeWork,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1525> .
+
+schema:countryOfAssembly a rdf:Property ;
+    rdfs:label "countryOfAssembly" ;
+    rdfs:comment "The place where the product was assembled." ;
+    owl:equivalentProperty unece:finalAssemblyCountry ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/991> .
+
+schema:countryOfLastProcessing a rdf:Property ;
+    rdfs:label "countryOfLastProcessing" ;
+    rdfs:comment "The place where the item (typically [[Product]]) was last processed and tested before importation." ;
+    owl:equivalentProperty unece:ProcessingCountry ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/991> .
+
+schema:customer a rdf:Property ;
+    rdfs:label "customer" ;
+    rdfs:comment "Party placing the order or paying the invoice." ;
+    schema:domainIncludes schema:Invoice,
+        schema:Order ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person .
+
+schema:deathDate a rdf:Property ;
+    rdfs:label "deathDate" ;
+    rdfs:comment "Date of death." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Date .
+
+schema:deathPlace a rdf:Property ;
+    rdfs:label "deathPlace" ;
+    rdfs:comment "The place where the person died." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Place .
+
+schema:department a rdf:Property ;
+    rdfs:label "department" ;
+    rdfs:comment "A relationship between an organization and a department of that organization, also described as an organization (allowing different urls, logos, opening hours). For example: a store with a pharmacy, or a bakery with a cafe." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Organization .
+
+schema:depth a rdf:Property ;
+    rdfs:label "depth" ;
+    rdfs:comment "The depth of the item." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:OfferShippingDetails,
+        schema:Product,
+        schema:ShippingConditions,
+        schema:VisualArtwork ;
+    schema:rangeIncludes schema:Distance,
+        schema:QuantitativeValue ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3617> .
+
+schema:discount a rdf:Property ;
+    rdfs:label "discount" ;
+    rdfs:comment "Any discount applied (to an Order)." ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Number,
+        schema:Text .
+
+schema:discountCode a rdf:Property ;
+    rdfs:label "discountCode" ;
+    rdfs:comment "Code used to redeem a discount." ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Text .
+
+schema:discountCurrency a rdf:Property ;
+    rdfs:label "discountCurrency" ;
+    rdfs:comment "The currency of the discount.\\n\\nUse standard formats: [ISO 4217 currency format](http://en.wikipedia.org/wiki/ISO_4217), e.g. \"USD\"; [Ticker symbol](https://en.wikipedia.org/wiki/List_of_cryptocurrencies) for cryptocurrencies, e.g. \"BTC\"; well known names for [Local Exchange Trading Systems](https://en.wikipedia.org/wiki/Local_exchange_trading_system) (LETS) and other currency types, e.g. \"Ithaca HOUR\"." ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Text .
+
+schema:displayLocation a rdf:Property ;
+    rdfs:label "displayLocation" ;
+    rdfs:comment "The location at which an item can be viewed or experienced in-person." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:Place ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/4513> .
+
+schema:dissolutionDate a rdf:Property ;
+    rdfs:label "dissolutionDate" ;
+    rdfs:comment "The date that this organization was dissolved." ;
+    owl:equivalentProperty gs1:organizationTerminationDate ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Date .
+
+schema:diversityPolicy a rdf:Property ;
+    rdfs:label "diversityPolicy" ;
+    rdfs:comment "Statement on diversity policy by an [[Organization]] e.g. a [[NewsMediaOrganization]]. For a [[NewsMediaOrganization]], a statement describing the newsroom’s diversity policy on both staffing and sources, typically providing staffing data." ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:NewsMediaOrganization,
+        schema:Organization ;
+    schema:rangeIncludes schema:CreativeWork,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1525> .
+
+schema:diversityStaffingReport a rdf:Property ;
+    rdfs:label "diversityStaffingReport" ;
+    rdfs:comment "For an [[Organization]] (often but not necessarily a [[NewsMediaOrganization]]), a report on staffing diversity issues. In a news context this might be for example ASNE or RTDNA (US) reports, or self-reported." ;
+    rdfs:subPropertyOf schema:publishingPrinciples ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:NewsMediaOrganization,
+        schema:Organization ;
+    schema:rangeIncludes schema:Article,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1525> .
+
+schema:duns a rdf:Property ;
+    rdfs:label "duns" ;
+    rdfs:comment "The Dun & Bradstreet DUNS number for identifying an organization or business person." ;
+    rdfs:subPropertyOf schema:identifier ;
+    owl:equivalentProperty unece:dUNSId ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:email a rdf:Property ;
+    rdfs:label "email" ;
+    rdfs:comment "Email address." ;
+    owl:equivalentProperty gs1:email ;
+    schema:domainIncludes schema:ContactPoint,
+        schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:employees a rdf:Property ;
+    rdfs:label "employees" ;
+    rdfs:comment "People working for this organization." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Person ;
+    schema:supersededBy schema:employee .
+
+schema:ethicsPolicy a rdf:Property ;
+    rdfs:label "ethicsPolicy" ;
+    rdfs:comment "Statement about ethics policy, e.g. of a [[NewsMediaOrganization]] regarding journalistic and publishing practices, or of a [[Restaurant]], a page describing food source policies. In the case of a [[NewsMediaOrganization]], an ethicsPolicy is typically a statement describing the personal, organizational, and corporate standards of behavior expected by the organization." ;
+    schema:domainIncludes schema:NewsMediaOrganization,
+        schema:Organization ;
+    schema:rangeIncludes schema:CreativeWork,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1525> .
+
+schema:events a rdf:Property ;
+    rdfs:label "events" ;
+    rdfs:comment "Upcoming or past events associated with this place or organization." ;
+    schema:domainIncludes schema:Organization,
+        schema:Place ;
+    schema:rangeIncludes schema:Event ;
+    schema:supersededBy schema:event .
+
+schema:familyName a rdf:Property ;
+    rdfs:label "familyName" ;
+    rdfs:comment "Family name. In the U.S., the last name of a Person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:faxNumber a rdf:Property ;
+    rdfs:label "faxNumber" ;
+    rdfs:comment "The fax number." ;
+    owl:equivalentProperty gs1:faxNumber ;
+    schema:domainIncludes schema:ContactPoint,
+        schema:Organization,
+        schema:Person,
+        schema:Place ;
+    schema:rangeIncludes schema:Text .
+
+schema:follows a rdf:Property ;
+    rdfs:label "follows" ;
+    rdfs:comment "The most generic uni-directional social relation." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person .
+
+schema:founders a rdf:Property ;
+    rdfs:label "founders" ;
+    rdfs:comment "A person who founded this organization." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Person ;
+    schema:supersededBy schema:founder .
+
+schema:foundingDate a rdf:Property ;
+    rdfs:label "foundingDate" ;
+    rdfs:comment "The date that this organization was founded." ;
+    owl:equivalentProperty gs1:organizationFormationDate ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Date .
+
+schema:foundingLocation a rdf:Property ;
+    rdfs:label "foundingLocation" ;
+    rdfs:comment "The place where the Organization was founded." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Place .
+
+schema:funder a rdf:Property ;
+    rdfs:label "funder" ;
+    rdfs:comment "A person or organization that supports (sponsors) something through some kind of financial contribution." ;
+    rdfs:subPropertyOf schema:sponsor ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Event,
+        schema:Grant,
+        schema:MonetaryGrant,
+        schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person .
+
+schema:gender a rdf:Property ;
+    rdfs:label "gender" ;
+    rdfs:comment "Gender of something, typically a [[Person]], but possibly also fictional characters, animals, etc. While https://schema.org/Male and https://schema.org/Female may be used, text strings are also acceptable for people who are not a binary gender. The [[gender]] property can also be used in an extended sense to cover e.g. the gender of sports teams. As with the gender of individuals, we do not try to enumerate all possibilities. A mixed-gender [[SportsTeam]] can be indicated with a text value of \"Mixed\"." ;
+    schema:domainIncludes schema:Person,
+        schema:SportsTeam ;
+    schema:rangeIncludes schema:GenderType,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2341> .
+
+schema:givenName a rdf:Property ;
+    rdfs:label "givenName" ;
+    rdfs:comment "Given name. In the U.S., the first name of a Person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:globalLocationNumber a rdf:Property ;
+    rdfs:label "globalLocationNumber" ;
+    rdfs:comment "The [Global Location Number](http://www.gs1.org/gln) (GLN, sometimes also referred to as International Location Number or ILN) of the respective organization, person, or place. The GLN is a 13-digit number used to identify parties and physical locations." ;
+    rdfs:subPropertyOf schema:identifier ;
+    owl:equivalentProperty unece:gLNId,
+        gs1:globalLocationNumber ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person,
+        schema:Place ;
+    schema:rangeIncludes schema:Text .
+
+schema:gtin12 a rdf:Property ;
+    rdfs:label "gtin12" ;
+    rdfs:comment "The GTIN-12 code of the product, or the product to which the offer refers. The GTIN-12 is the 12-digit GS1 Identification Key composed of a U.P.C. Company Prefix, Item Reference, and Check Digit used to identify trade items. See [GS1 GTIN Summary](http://www.gs1.org/barcodes/technical/idkeys/gtin) for more details." ;
+    rdfs:subPropertyOf schema:gtin,
+        schema:identifier ;
+    schema:domainIncludes schema:Demand,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:gtin13 a rdf:Property ;
+    rdfs:label "gtin13" ;
+    rdfs:comment "The GTIN-13 code of the product, or the product to which the offer refers. This is equivalent to 13-digit ISBN codes and EAN UCC-13. Former 12-digit UPC codes can be converted into a GTIN-13 code by simply adding a preceding zero. See [GS1 GTIN Summary](http://www.gs1.org/barcodes/technical/idkeys/gtin) for more details." ;
+    rdfs:subPropertyOf schema:gtin,
+        schema:identifier ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Demand,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:gtin14 a rdf:Property ;
+    rdfs:label "gtin14" ;
+    rdfs:comment "The GTIN-14 code of the product, or the product to which the offer refers. See [GS1 GTIN Summary](http://www.gs1.org/barcodes/technical/idkeys/gtin) for more details." ;
+    rdfs:subPropertyOf schema:gtin,
+        schema:identifier ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Demand,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:gtin8 a rdf:Property ;
+    rdfs:label "gtin8" ;
+    rdfs:comment "The GTIN-8 code of the product, or the product to which the offer refers. This code is also known as EAN/UCC-8 or 8-digit EAN. See [GS1 GTIN Summary](http://www.gs1.org/barcodes/technical/idkeys/gtin) for more details." ;
+    rdfs:subPropertyOf schema:gtin,
+        schema:identifier ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Demand,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:hasAdultConsideration a rdf:Property ;
+    rdfs:label "hasAdultConsideration" ;
+    rdfs:comment "Used to tag an item to be intended or suitable for consumption or use by adults only." ;
+    schema:domainIncludes schema:Offer,
+        schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:AdultOrientedEnumeration ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2989> .
+
+schema:hasCredential a rdf:Property ;
+    rdfs:label "hasCredential" ;
+    rdfs:comment "A credential awarded to the Person or Organization." ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Credential ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2289> .
+
+schema:hasDigitalProductPassport a rdf:Property ;
+    rdfs:label "hasDigitalProductPassport" ;
+    rdfs:comment "A link to a Digital Product Passport (DPP) or a digital record detailing the lifecycle, sustainability, and compliance data for this product or offer. This may be a direct URL, a GS1 Digital Link URI, or a nested DigitalProductPassport object. Note: This property is aligned with the IANA 'dpp' link relation and the GS1 Web Vocabulary 'dpp' link type." ;
+    rdfs:subPropertyOf schema:hasCertification ;
+    owl:equivalentProperty gs1:dpp ;
+    schema:domainIncludes schema:Offer,
+        schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:DigitalProductPassport,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/DPP> .
+
+schema:hasEnergyConsumptionDetails a rdf:Property ;
+    rdfs:label "hasEnergyConsumptionDetails" ;
+    rdfs:comment "Defines the energy efficiency Category (also known as \"class\" or \"rating\") for a product according to an international energy efficiency standard." ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:EnergyConsumptionDetails ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2670> .
+
+schema:hasGS1DigitalLink a rdf:Property ;
+    rdfs:label "hasGS1DigitalLink" ;
+    rdfs:comment "The <a href=\"https://www.gs1.org/standards/gs1-digital-link\">GS1 digital link</a> associated with the object. This URL should conform to the particular requirements of digital links. The link should only contain the Application Identifiers (AIs) that are relevant for the entity being annotated, for instance a [[Product]] or an [[Organization]], and for the correct granularity. In particular, for products:<ul><li>A Digital Link that contains a serial number (AI <code>21</code>) should only be present on instances of [[IndividualProduct]]</li><li>A Digital Link that contains a lot number (AI <code>10</code>) should be annotated as [[SomeProducts]] if only products from that lot are sold, or [[IndividualProduct]] if there is only a specific product.</li><li>A Digital Link that contains a global model number (AI <code>8013</code>) should be attached to a [[Product]] or a [[ProductModel]].</li></ul> Other item types should be adapted similarly." ;
+    rdfs:subPropertyOf schema:identifier ;
+    schema:domainIncludes schema:Offer,
+        schema:Organization,
+        schema:Place,
+        schema:Product ;
+    schema:rangeIncludes schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3475> .
+
+schema:hasMeasurement a rdf:Property ;
+    rdfs:label "hasMeasurement" ;
+    rdfs:comment "A measurement of an item, For example, the inseam of pants, the wheel size of a bicycle, the gauge of a screw, or the carbon footprint measured for certification by an authority. Usually an exact measurement, but can also be a range of measurements for adjustable products, for example belts and ski bindings." ;
+    schema:domainIncludes schema:Certification,
+        schema:Offer,
+        schema:Product,
+        schema:SizeSpecification ;
+    schema:rangeIncludes schema:QuantitativeValue ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2811> .
+
+schema:hasMemberProgram a rdf:Property ;
+    rdfs:label "hasMemberProgram" ;
+    rdfs:comment "MemberProgram offered by an Organization, for example an eCommerce merchant or an airline." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:MemberProgram ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3563> .
+
+schema:hasOccupation a rdf:Property ;
+    rdfs:label "hasOccupation" ;
+    rdfs:comment "The Person's occupation. For past professions, use Role for expressing dates." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Occupation ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1698> .
+
+schema:hasOfferCatalog a rdf:Property ;
+    rdfs:label "hasOfferCatalog" ;
+    rdfs:comment "Indicates an OfferCatalog listing for this Organization, Person, or Service." ;
+    schema:domainIncludes schema:Organization,
+        schema:Person,
+        schema:Service ;
+    schema:rangeIncludes schema:OfferCatalog .
+
+schema:hasPOS a rdf:Property ;
+    rdfs:label "hasPOS" ;
+    rdfs:comment "Points-of-Sales operated by the organization or person." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Place .
+
+schema:hasProductReturnPolicy a rdf:Property ;
+    rdfs:label "hasProductReturnPolicy" ;
+    rdfs:comment "Indicates a ProductReturnPolicy that may be applicable." ;
+    schema:domainIncludes schema:Organization,
+        schema:Product ;
+    schema:rangeIncludes schema:ProductReturnPolicy ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2288> ;
+    schema:supersededBy schema:hasMerchantReturnPolicy .
+
+schema:hasShippingService a rdf:Property ;
+    rdfs:label "hasShippingService" ;
+    rdfs:comment "Specification of a shipping service offered by the organization." ;
+    schema:domainIncludes schema:OfferShippingDetails,
+        schema:Organization ;
+    schema:rangeIncludes schema:ShippingService ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3617> .
+
+schema:height a rdf:Property ;
+    rdfs:label "height" ;
+    rdfs:comment "The height of the item." ;
+    schema:domainIncludes schema:MediaObject,
+        schema:OfferShippingDetails,
+        schema:Person,
+        schema:Product,
+        schema:ShippingConditions,
+        schema:VisualArtwork ;
+    schema:rangeIncludes schema:Distance,
+        schema:QuantitativeValue ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3617> .
+
+schema:homeLocation a rdf:Property ;
+    rdfs:label "homeLocation" ;
+    rdfs:comment "A contact location for a person's residence." ;
+    rdfs:subPropertyOf schema:location ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:ContactPoint,
+        schema:Place .
+
+schema:honorificPrefix a rdf:Property ;
+    rdfs:label "honorificPrefix" ;
+    rdfs:comment "An honorific prefix preceding a Person's name such as Dr/Mrs/Mr." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:honorificSuffix a rdf:Property ;
+    rdfs:label "honorificSuffix" ;
+    rdfs:comment "An honorific suffix following a Person's name such as M.D./PhD/MSCSW." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:importer a rdf:Property ;
+    rdfs:label "importer" ;
+    rdfs:comment "An organization or person who imports the product into a specific market or region." ;
+    schema:domainIncludes schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/DPP> .
+
+schema:inProductGroupWithID a rdf:Property ;
+    rdfs:label "inProductGroupWithID" ;
+    rdfs:comment "Indicates the [[productGroupID]] for a [[ProductGroup]] that this product [[isVariantOf]]. " ;
+    owl:equivalentProperty unece:variantId ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1797> .
+
+schema:isAccessoryOrSparePartFor a rdf:Property ;
+    rdfs:label "isAccessoryOrSparePartFor" ;
+    rdfs:comment "A pointer to another product (or multiple products) for which this product is an accessory or spare part." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Product .
+
+schema:isConsumableFor a rdf:Property ;
+    rdfs:label "isConsumableFor" ;
+    rdfs:comment "A pointer to another product (or multiple products) for which this product is a consumable." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Product .
+
+schema:isFamilyFriendly a rdf:Property ;
+    rdfs:label "isFamilyFriendly" ;
+    rdfs:comment "Indicates whether this content is family friendly." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:Boolean .
+
+schema:isGift a rdf:Property ;
+    rdfs:label "isGift" ;
+    rdfs:comment "Indicates whether the offer was accepted as a gift for someone other than the buyer." ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Boolean .
+
+schema:isOftenBoughtWith a rdf:Property ;
+    rdfs:label "isOftenBoughtWith" ;
+    rdfs:comment "Indicates a product that is often bought with the described product." ;
+    rdfs:subPropertyOf schema:isRelatedTo ;
+    schema:domainIncludes schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:Product ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/4878> .
+
+schema:isSimilarTo a rdf:Property ;
+    rdfs:label "isSimilarTo" ;
+    rdfs:comment "A pointer to another, functionally similar product (or multiple products)." ;
+    owl:equivalentProperty unece:SubstituteProduct ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Product,
+        schema:Service .
+
+schema:isicV4 a rdf:Property ;
+    rdfs:label "isicV4" ;
+    rdfs:comment "The International Standard of Industrial Classification of All Economic Activities (ISIC), Revision 4 code for a particular organization, business person, or place." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person,
+        schema:Place ;
+    schema:rangeIncludes schema:Text .
+
+schema:iso6523Code a rdf:Property ;
+    rdfs:label "iso6523Code" ;
+    rdfs:comment "An organization identifier as defined in [ISO 6523(-1)](https://en.wikipedia.org/wiki/ISO/IEC_6523). The identifier should be in the `XXXX:YYYYYY:ZZZ` or `XXXX:YYYYYY`format. Where `XXXX` is a 4 digit _ICD_ (International Code Designator), `YYYYYY` is an _OID_ (Organization Identifier) with all formatting characters (dots, dashes, spaces) removed with a maximal length of 35 characters, and `ZZZ` is an optional OPI (Organization Part Identifier) with a maximum length of 35 characters. The various components (ICD, OID, OPI) are joined with a colon character (ASCII `0x3a`). Note that many existing organization identifiers defined as attributes like [leiCode](https://schema.org/leiCode) (`0199`), [duns](https://schema.org/duns) (`0060`) or [GLN](https://schema.org/globalLocationNumber) (`0088`) can be expressed using ISO-6523. If possible, ISO-6523 codes should be preferred to populating [vatID](https://schema.org/vatID) or [taxID](https://schema.org/taxID), as ISO identifiers are less ambiguous." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2915> .
+
+schema:itemCondition a rdf:Property ;
+    rdfs:label "itemCondition" ;
+    rdfs:comment "A predefined value from OfferItemCondition specifying the condition of the product or service, or the products or services included in the offer. Also used for product return policies to specify the condition of products accepted for returns." ;
+    schema:domainIncludes schema:Demand,
+        schema:MerchantReturnPolicy,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:OfferItemCondition .
+
+schema:jobTitle a rdf:Property ;
+    rdfs:label "jobTitle" ;
+    rdfs:comment "The job title of the person (for example, Financial Manager)." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:DefinedTerm,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2192> .
+
+schema:keywords a rdf:Property ;
+    rdfs:label "keywords" ;
+    rdfs:comment "Keywords or tags used to describe some item. Multiple textual entries in a keywords list are typically delimited by commas, or by repeating the property." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Event,
+        schema:Organization,
+        schema:Place,
+        schema:Product ;
+    schema:rangeIncludes schema:DefinedTerm,
+        schema:Text,
+        schema:URL .
+
+schema:knows a rdf:Property ;
+    rdfs:label "knows" ;
+    rdfs:comment "The most generic bi-directional social/work relation." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person .
+
+schema:knowsAbout a rdf:Property ;
+    rdfs:label "knowsAbout" ;
+    rdfs:comment "Of a [[Person]], and less typically of an [[Organization]], to indicate a topic that is known about - suggesting possible expertise but not implying it. We do not distinguish skill levels here, or relate this to educational content, events, objectives or [[JobPosting]] descriptions." ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Text,
+        schema:Thing,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1688> .
+
+schema:knowsLanguage a rdf:Property ;
+    rdfs:label "knowsLanguage" ;
+    rdfs:comment "Of a [[Person]], and less typically of an [[Organization]], to indicate a known language. We do not distinguish skill levels or reading/writing/speaking/signing here. Use language codes from the [IETF BCP 47 standard](http://tools.ietf.org/html/bcp47)." ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Language,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1688> .
+
+schema:legalAddress a rdf:Property ;
+    rdfs:label "legalAddress" ;
+    rdfs:comment "The legal address of an organization which acts as the officially registered address used for legal and tax purposes. The legal address can be different from the place of operations of a business and other addresses can be part of an organization." ;
+    rdfs:subPropertyOf cmns-loc:hasAddress ;
+    owl:equivalentProperty fibo-fnd-plc-adr:hasRegisteredAddress ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:PostalAddress .
+
+schema:legalName a rdf:Property ;
+    rdfs:label "legalName" ;
+    rdfs:comment "The official name of the organization, e.g. the registered company name." ;
+    rdfs:subPropertyOf cmns-txt:hasName ;
+    owl:equivalentProperty gs1:organizationLegalName,
+        fibo-fnd-rel-rel:hasLegalName ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Text .
+
+schema:legalRepresentative a rdf:Property ;
+    rdfs:label "legalRepresentative" ;
+    rdfs:comment "One or multiple persons who represent this organization legally such as CEO or sole administrator." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Person .
+
+schema:leiCode a rdf:Property ;
+    rdfs:label "leiCode" ;
+    rdfs:comment "An organization identifier that uniquely identifies a legal entity as defined in ISO 17442." ;
+    rdfs:subPropertyOf schema:identifier ;
+    owl:equivalentProperty fibo-be-le-lp:hasLegalEntityIdentifier,
+        gleif-L1:hasLEI ;
+    schema:contributor <https://schema.org/docs/collab/FIBO>,
+        <https://schema.org/docs/collab/GLEIF> ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Text .
+
+schema:lifeEvent a rdf:Property ;
+    rdfs:label "lifeEvent" ;
+    rdfs:comment "A life event like baptism, communions, Bar Mitzvahs, Aqiqah, Namakarana, Miyamairi, burial, ...." ;
+    schema:domainIncludes schema:Person ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:Event ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/4540> .
+
+schema:logo a rdf:Property ;
+    rdfs:label "logo" ;
+    rdfs:comment "An associated logo." ;
+    rdfs:subPropertyOf schema:image ;
+    owl:equivalentProperty unece:logoReferencedDocument ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Brand,
+        schema:Certification,
+        schema:Organization,
+        schema:Place,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:ImageObject,
+        schema:URL .
+
+schema:manufacturer a rdf:Property ;
+    rdfs:label "manufacturer" ;
+    rdfs:comment "The manufacturer of the product." ;
+    rdfs:subPropertyOf fibo-fnd-pas-pas:isProvisionedBy ;
+    owl:equivalentProperty unece:manufacturerParty,
+        gs1:manufacturer ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Organization .
+
+schema:members a rdf:Property ;
+    rdfs:label "members" ;
+    rdfs:comment "A member of this organization." ;
+    schema:domainIncludes schema:Organization,
+        schema:ProgramMembership ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person ;
+    schema:supersededBy schema:member .
+
+schema:merchant a rdf:Property ;
+    rdfs:label "merchant" ;
+    rdfs:comment "'merchant' is an out-dated term for 'seller'." ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person ;
+    schema:supersededBy schema:seller .
+
+schema:model a rdf:Property ;
+    rdfs:label "model" ;
+    rdfs:comment "The model of the product. Use with the URL of a ProductModel or a textual representation of the model identifier. The URL of the ProductModel can be from an external source. It is recommended to additionally provide strong product identifiers via the gtin8/gtin13/gtin14 and mpn properties." ;
+    rdfs:subPropertyOf cmns-cls:isClassifiedBy ;
+    owl:equivalentProperty unece:ModelName ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:ProductModel,
+        schema:Text .
+
+schema:mpn a rdf:Property ;
+    rdfs:label "mpn" ;
+    rdfs:comment "The Manufacturer Part Number (MPN) of the product, or the product to which the offer refers." ;
+    owl:equivalentProperty unece:manufacturerAssignedId ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Demand,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:naics a rdf:Property ;
+    rdfs:label "naics" ;
+    rdfs:comment "The North American Industry Classification System (NAICS) code for a particular organization or business person." ;
+    rdfs:subPropertyOf cmns-cls:isClassifiedBy ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:nationality a rdf:Property ;
+    rdfs:label "nationality" ;
+    rdfs:comment "Nationality of the person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Country .
+
+schema:netWorth a rdf:Property ;
+    rdfs:label "netWorth" ;
+    rdfs:comment "The total financial value of the person as calculated by subtracting the total value of liabilities from the total value of assets." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:MonetaryAmount,
+        schema:PriceSpecification .
+
+schema:nonprofitStatus a rdf:Property ;
+    rdfs:label "nonprofitStatus" ;
+    rdfs:comment "nonprofitStatus indicates the legal status of a non-profit organization in its primary place of business." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:NonprofitType ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2543> .
+
+schema:nsn a rdf:Property ;
+    rdfs:label "nsn" ;
+    rdfs:comment "Indicates the [NATO stock number](https://en.wikipedia.org/wiki/NATO_Stock_Number) (nsn) of a [[Product]]. " ;
+    rdfs:subPropertyOf schema:identifier,
+        cmns-id:identifiedBy ;
+    owl:equivalentProperty unece:nSNId ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2126> .
+
+schema:numberOfEmployees a rdf:Property ;
+    rdfs:label "numberOfEmployees" ;
+    rdfs:comment "The number of employees in an organization, e.g. business." ;
+    schema:domainIncludes schema:BusinessAudience,
+        schema:Organization ;
+    schema:rangeIncludes schema:QuantitativeValue .
+
+schema:orderDate a rdf:Property ;
+    rdfs:label "orderDate" ;
+    rdfs:comment "Date order was placed." ;
+    rdfs:subPropertyOf cmns-dt:hasDate ;
+    owl:equivalentProperty unece:OrderDate ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Date,
+        schema:DateTime .
+
+schema:orderDelivery a rdf:Property ;
+    rdfs:label "orderDelivery" ;
+    rdfs:comment "The delivery of the parcel related to this order or order item." ;
+    schema:domainIncludes schema:Order,
+        schema:OrderItem ;
+    schema:rangeIncludes schema:ParcelDelivery .
+
+schema:orderNumber a rdf:Property ;
+    rdfs:label "orderNumber" ;
+    rdfs:comment "The identifier of the transaction." ;
+    rdfs:subPropertyOf schema:identifier ;
+    owl:equivalentProperty unece:OrderIdentifier ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Text .
+
+schema:orderStatus a rdf:Property ;
+    rdfs:label "orderStatus" ;
+    rdfs:comment "The current status of the order." ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:OrderStatus .
+
+schema:orderedItem a rdf:Property ;
+    rdfs:label "orderedItem" ;
+    rdfs:comment "The item ordered." ;
+    rdfs:subPropertyOf fibo-fnd-pas-pas:hasProduct ;
+    schema:domainIncludes schema:Order,
+        schema:OrderItem ;
+    schema:rangeIncludes schema:OrderItem,
+        schema:Product,
+        schema:Service .
+
+schema:ownershipFundingInfo a rdf:Property ;
+    rdfs:label "ownershipFundingInfo" ;
+    rdfs:comment "For an [[Organization]] (often but not necessarily a [[NewsMediaOrganization]]), a description of organizational ownership structure; funding and grants. In a news/media setting, this is with particular reference to editorial independence.   Note that the [[funder]] is also available and can be used to make basic funder information machine-readable." ;
+    rdfs:subPropertyOf schema:publishingPrinciples ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:NewsMediaOrganization,
+        schema:Organization ;
+    schema:rangeIncludes schema:AboutPage,
+        schema:CreativeWork,
+        schema:Text,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1525> .
+
+schema:parents a rdf:Property ;
+    rdfs:label "parents" ;
+    rdfs:comment "A parents of the person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person ;
+    schema:supersededBy schema:parent .
+
+schema:partOfInvoice a rdf:Property ;
+    rdfs:label "partOfInvoice" ;
+    rdfs:comment "The order is being paid as part of the referenced Invoice." ;
+    rdfs:subPropertyOf fibo-fnd-arr-doc:isReferencedIn,
+        cmns-col:isPartOf ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:Invoice .
+
+schema:pattern a rdf:Property ;
+    rdfs:label "pattern" ;
+    rdfs:comment "A pattern that something has, for example 'polka dot', 'striped', 'Canadian flag'. Values are typically expressed as text, although links to controlled value schemes are also supported." ;
+    owl:equivalentProperty unece:printDesignDescription ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Product ;
+    schema:rangeIncludes schema:DefinedTerm,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1797> .
+
+schema:paymentDue a rdf:Property ;
+    rdfs:label "paymentDue" ;
+    rdfs:comment "The date that payment is due." ;
+    rdfs:subPropertyOf fibo-fbc-dae-dbt:hasPaymentDueDate ;
+    owl:equivalentProperty unece:PaymentDueDate ;
+    schema:domainIncludes schema:Invoice,
+        schema:Order ;
+    schema:rangeIncludes schema:DateTime ;
+    schema:supersededBy schema:paymentDueDate .
+
+schema:paymentMethod a rdf:Property ;
+    rdfs:label "paymentMethod" ;
+    rdfs:comment "The name of the credit card or other method of payment for the order." ;
+    rdfs:subPropertyOf fibo-fbc-pas-fpas:hasPaymentMechanism ;
+    schema:domainIncludes schema:Invoice,
+        schema:Order ;
+    schema:rangeIncludes schema:PaymentMethod,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3537> .
+
+schema:paymentMethodId a rdf:Property ;
+    rdfs:label "paymentMethodId" ;
+    rdfs:comment "An identifier for the method of payment used (e.g. the last 4 digits of the credit card)." ;
+    owl:equivalentProperty unece:PaymentMeansID ;
+    schema:domainIncludes schema:Invoice,
+        schema:Order ;
+    schema:rangeIncludes schema:Text .
+
+schema:paymentUrl a rdf:Property ;
+    rdfs:label "paymentUrl" ;
+    rdfs:comment "The URL for sending a payment." ;
+    rdfs:subPropertyOf cmns-loc:hasAddress ;
+    schema:domainIncludes schema:Order ;
+    schema:rangeIncludes schema:URL .
+
+schema:performerIn a rdf:Property ;
+    rdfs:label "performerIn" ;
+    rdfs:comment "Event that this person is a performer or participant in." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Event .
+
+schema:productID a rdf:Property ;
+    rdfs:label "productID" ;
+    rdfs:comment "The product identifier, such as ISBN. For example: ``` meta itemprop=\"productID\" content=\"isbn:123-456-789\" ```." ;
+    rdfs:subPropertyOf schema:identifier ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:productionDate a rdf:Property ;
+    rdfs:label "productionDate" ;
+    rdfs:comment "The date of production of the item, e.g. vehicle." ;
+    owl:equivalentProperty unece:ProductionDate ;
+    schema:contributor <https://schema.org/docs/collab/Automotive_Ontology_Working_Group> ;
+    schema:domainIncludes schema:Product,
+        schema:Vehicle ;
+    schema:rangeIncludes schema:Date .
+
+schema:purchaseDate a rdf:Property ;
+    rdfs:label "purchaseDate" ;
+    rdfs:comment "The date the item, e.g. vehicle, was purchased by the current owner." ;
+    schema:contributor <https://schema.org/docs/collab/Automotive_Ontology_Working_Group> ;
+    schema:domainIncludes schema:Product,
+        schema:Vehicle ;
+    schema:rangeIncludes schema:Date .
+
+schema:recycledContentPercentage a rdf:Property ;
+    rdfs:label "recycledContentPercentage" ;
+    rdfs:comment "The percentage of recycled material in the product." ;
+    schema:domainIncludes schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:Number ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/DPP> .
+
+schema:relatedTo a rdf:Property ;
+    rdfs:label "relatedTo" ;
+    rdfs:comment "The most generic familial relation." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person .
+
+schema:releaseDate a rdf:Property ;
+    rdfs:label "releaseDate" ;
+    rdfs:comment "The release date of a product or product model. This can be used to distinguish the exact variant of a product." ;
+    owl:equivalentProperty unece:ProductAvailabilityDate ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Product ;
+    schema:rangeIncludes schema:Date .
+
+schema:reviews a rdf:Property ;
+    rdfs:label "reviews" ;
+    rdfs:comment "Review of the item." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Offer,
+        schema:Organization,
+        schema:Place,
+        schema:Product ;
+    schema:rangeIncludes schema:Review ;
+    schema:supersededBy schema:review .
+
+schema:seeks a rdf:Property ;
+    rdfs:label "seeks" ;
+    rdfs:comment "A pointer to products or services sought by the organization or person (demand)." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Demand .
+
+schema:siblings a rdf:Property ;
+    rdfs:label "siblings" ;
+    rdfs:comment "A sibling of the person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person ;
+    schema:supersededBy schema:sibling .
+
+schema:size a rdf:Property ;
+    rdfs:label "size" ;
+    rdfs:comment "A standardized size of a product or creative work, specified either through a simple textual string (for example 'XL', '32Wx34L'), a  QuantitativeValue with a unitCode, or a comprehensive and structured [[SizeSpecification]]; in other cases, the [[width]], [[height]], [[depth]] and [[weight]] properties may be more applicable. " ;
+    owl:equivalentProperty unece:sizeDescription ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Product ;
+    schema:rangeIncludes schema:DefinedTerm,
+        schema:QuantitativeValue,
+        schema:SizeSpecification,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1797> .
+
+schema:skills a rdf:Property ;
+    rdfs:label "skills" ;
+    rdfs:comment "A statement of knowledge, skill, ability, task or any other assertion expressing a competency that is either claimed by a person, an organization or desired or required to fulfill a role or to work in an occupation." ;
+    schema:domainIncludes schema:JobPosting,
+        schema:Occupation,
+        schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:DefinedTerm,
+        schema:Text ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1698>,
+        <https://github.com/schemaorg/schemaorg/issues/2322> .
+
+schema:sku a rdf:Property ;
+    rdfs:label "sku" ;
+    rdfs:comment "The Stock Keeping Unit (SKU), i.e. a merchant-specific identifier for a product or service, or the product to which the offer refers." ;
+    rdfs:subPropertyOf schema:identifier ;
+    owl:equivalentProperty unece:sellerAssignedId ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Demand,
+        schema:Offer,
+        schema:Product ;
+    schema:rangeIncludes schema:Text .
+
+schema:slogan a rdf:Property ;
+    rdfs:label "slogan" ;
+    rdfs:comment "A slogan or motto associated with the item." ;
+    owl:equivalentProperty unece:PromotionalMessage ;
+    schema:domainIncludes schema:Brand,
+        schema:Organization,
+        schema:Place,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Text .
+
+schema:specification a rdf:Property ;
+    rdfs:label "specification" ;
+    rdfs:comment "A specification of the product, often grouped by a section header/name. This is a cleaner alternative to additionalProperty for strict retail product specifications." ;
+    schema:domainIncludes schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:PropertyValue ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/4878> .
+
+schema:spouse a rdf:Property ;
+    rdfs:label "spouse" ;
+    rdfs:comment "The person's spouse." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person .
+
+schema:substanceOfConcern a rdf:Property ;
+    rdfs:label "substanceOfConcern" ;
+    rdfs:comment "A substance of concern (SoC) contained within the product, typically based on regulatory lists like REACH or RoHS." ;
+    schema:domainIncludes schema:Product ;
+    schema:isPartOf <https://pending.schema.org> ;
+    schema:rangeIncludes schema:ChemicalSubstance,
+        schema:DefinedTerm,
+        schema:Text,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/DPP> .
+
+schema:taxID a rdf:Property ;
+    rdfs:label "taxID" ;
+    rdfs:comment "The Tax / Fiscal ID of the organization or person, e.g. the TIN in the US or the CIF/NIF in Spain." ;
+    rdfs:subPropertyOf schema:identifier ;
+    owl:equivalentProperty fibo-fnd-pty-pty:hasTaxIdentifier ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:telephone a rdf:Property ;
+    rdfs:label "telephone" ;
+    rdfs:comment "The telephone number." ;
+    owl:equivalentProperty gs1:telephone ;
+    schema:domainIncludes schema:ContactPoint,
+        schema:Organization,
+        schema:Person,
+        schema:Place ;
+    schema:rangeIncludes schema:Text .
+
+schema:unnamedSourcesPolicy a rdf:Property ;
+    rdfs:label "unnamedSourcesPolicy" ;
+    rdfs:comment "For an [[Organization]] (typically a [[NewsMediaOrganization]]), a statement about policy on use of unnamed sources and the decision process required." ;
+    rdfs:subPropertyOf schema:publishingPrinciples ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:NewsMediaOrganization,
+        schema:Organization ;
+    schema:rangeIncludes schema:CreativeWork,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1525> .
+
+schema:vatID a rdf:Property ;
+    rdfs:label "vatID" ;
+    rdfs:comment "The value-added Tax ID of the organization or person with national prefix (for example IT123456789). Can also be described as [[iso6523Code]] with proper prefix." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Text .
+
+schema:weight a rdf:Property ;
+    rdfs:label "weight" ;
+    rdfs:comment "The weight of the product or person." ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:OfferShippingDetails,
+        schema:Person,
+        schema:Product,
+        schema:ShippingConditions,
+        schema:VisualArtwork ;
+    schema:rangeIncludes schema:Mass,
+        schema:QuantitativeValue ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3617> .
+
+schema:width a rdf:Property ;
+    rdfs:label "width" ;
+    rdfs:comment "The width of the item." ;
+    schema:domainIncludes schema:MediaObject,
+        schema:OfferShippingDetails,
+        schema:Product,
+        schema:ShippingConditions,
+        schema:VisualArtwork ;
+    schema:rangeIncludes schema:Distance,
+        schema:QuantitativeValue ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3617> .
+
+schema:workLocation a rdf:Property ;
+    rdfs:label "workLocation" ;
+    rdfs:comment "A contact location for a person's place of work." ;
+    rdfs:subPropertyOf schema:location ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:ContactPoint,
+        schema:Place .
+
+schema:worksFor a rdf:Property ;
+    rdfs:label "worksFor" ;
+    rdfs:comment "Organizations that the person works for." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Organization .
+
+schema:alumni a rdf:Property ;
+    rdfs:label "alumni" ;
+    rdfs:comment "Alumni of an organization." ;
+    schema:domainIncludes schema:EducationalOrganization,
+        schema:Organization ;
+    schema:inverseOf schema:alumniOf ;
+    schema:rangeIncludes schema:Person .
+
+schema:alumniOf a rdf:Property ;
+    rdfs:label "alumniOf" ;
+    rdfs:comment "An organization that the person is an alumni of." ;
+    schema:domainIncludes schema:Person ;
+    schema:inverseOf schema:alumni ;
+    schema:rangeIncludes schema:EducationalOrganization,
+        schema:Organization .
+
+schema:audience a rdf:Property ;
+    rdfs:label "audience" ;
+    rdfs:comment "An intended audience, i.e. a group for whom something was created." ;
+    owl:equivalentProperty dct:audience ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Event,
+        schema:LodgingBusiness,
+        schema:PlayAction,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Audience .
+
+schema:award a rdf:Property ;
+    rdfs:label "award" ;
+    rdfs:comment "An award won by or for this item." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Organization,
+        schema:Person,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Text .
+
+schema:broker a rdf:Property ;
+    rdfs:label "broker" ;
+    rdfs:comment "An entity that arranges for an exchange between a buyer and a seller.  In most cases a broker never acquires or releases ownership of a product or service involved in an exchange.  If it is not clear whether an entity is a broker, seller, or buyer, the latter two terms are preferred." ;
+    schema:domainIncludes schema:Invoice,
+        schema:Order,
+        schema:Reservation,
+        schema:Service ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person .
+
+schema:category a rdf:Property ;
+    rdfs:label "category" ;
+    rdfs:comment "A category for the item. Greater signs or slashes can be used to informally indicate a category hierarchy." ;
+    schema:domainIncludes schema:ActionAccessSpecification,
+        schema:Guide,
+        schema:Invoice,
+        schema:Offer,
+        schema:PhysicalActivity,
+        schema:Product,
+        schema:Recommendation,
+        schema:Service,
+        schema:SpecialAnnouncement ;
+    schema:rangeIncludes schema:CategoryCode,
+        schema:PhysicalActivityCategory,
+        schema:Text,
+        schema:Thing,
+        schema:URL ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/1741>,
+        <https://github.com/schemaorg/schemaorg/issues/2490> .
+
+schema:colleague a rdf:Property ;
+    rdfs:label "colleague" ;
+    rdfs:comment "A colleague of the person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person,
+        schema:URL .
+
+schema:contactPoint a rdf:Property ;
+    rdfs:label "contactPoint" ;
+    rdfs:comment "A contact point for a person or organization." ;
+    owl:equivalentProperty gs1:contactPoint,
+        fibo-fnd-org-org:hasContactPoint ;
+    schema:domainIncludes schema:HealthInsurancePlan,
+        schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:ContactPoint .
+
+schema:employee a rdf:Property ;
+    rdfs:label "employee" ;
+    rdfs:comment "Someone working for this organization." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Person .
+
+schema:event a rdf:Property ;
+    rdfs:label "event" ;
+    rdfs:comment "Upcoming or past event associated with this place, organization, or action." ;
+    schema:domainIncludes schema:InformAction,
+        schema:InviteAction,
+        schema:JoinAction,
+        schema:LeaveAction,
+        schema:Organization,
+        schema:Place,
+        schema:PlayAction ;
+    schema:rangeIncludes schema:Event .
+
+schema:founder a rdf:Property ;
+    rdfs:label "founder" ;
+    rdfs:comment "A person or organization who founded this organization." ;
+    schema:domainIncludes schema:Organization ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person .
+
+schema:funding a rdf:Property ;
+    rdfs:label "funding" ;
+    rdfs:comment "A [[Grant]] that directly or indirectly provide funding or sponsorship for this item. See also [[ownershipFundingInfo]]." ;
+    schema:contributor <https://schema.org/docs/collab/TP> ;
+    schema:domainIncludes schema:BioChemEntity,
+        schema:CreativeWork,
+        schema:Event,
+        schema:MedicalEntity,
+        schema:Organization,
+        schema:Person,
+        schema:Product ;
+    schema:inverseOf schema:fundedItem ;
+    schema:rangeIncludes schema:Grant ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/383> .
+
+schema:hasCertification a rdf:Property ;
+    rdfs:label "hasCertification" ;
+    rdfs:comment "Certification information about a product, organization, service, place, or person." ;
+    rdfs:subPropertyOf fibo-fnd-arr-doc:isReferencedIn,
+        cmns-cls:isClassifiedBy ;
+    owl:equivalentProperty unece:ApplicableCertificate ;
+    schema:domainIncludes schema:Organization,
+        schema:Person,
+        schema:Place,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Certification ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/3230> .
+
+schema:hasMerchantReturnPolicy a rdf:Property ;
+    rdfs:label "hasMerchantReturnPolicy" ;
+    rdfs:comment "Specifies a MerchantReturnPolicy that may be applicable." ;
+    schema:domainIncludes schema:Offer,
+        schema:Organization,
+        schema:Product ;
+    schema:rangeIncludes schema:MerchantReturnPolicy ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2288> .
+
+schema:interactionStatistic a rdf:Property ;
+    rdfs:label "interactionStatistic" ;
+    rdfs:comment "The number of interactions for the CreativeWork using the WebSite or SoftwareApplication. The most specific child type of InteractionCounter should be used." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:InteractionCounter ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2421> .
+
+schema:isRelatedTo a rdf:Property ;
+    rdfs:label "isRelatedTo" ;
+    rdfs:comment "A pointer to another, somehow related product (or multiple products)." ;
+    owl:equivalentProperty unece:RelatedProduct ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Product,
+        schema:Service .
+
+schema:isVariantOf a rdf:Property ;
+    rdfs:label "isVariantOf" ;
+    rdfs:comment "Indicates the kind of product that this is a variant of. In the case of [[ProductModel]], this is a pointer (from a ProductModel) to a base product from which this product is a variant. It is safe to infer that the variant inherits all product features from the base model, unless defined locally. This is not transitive. In the case of a [[ProductGroup]], the group description also serves as a template, representing a set of Products that vary on explicitly defined, specific dimensions only (so it defines both a set of variants, as well as which values distinguish amongst those variants). When used with [[ProductGroup]], this property can apply to any [[Product]] included in the group." ;
+    rdfs:subPropertyOf skos:broader,
+        cmns-cls:exemplifies ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Product,
+        schema:ProductModel ;
+    schema:inverseOf schema:hasVariant ;
+    schema:rangeIncludes schema:ProductGroup,
+        schema:ProductModel .
+
+schema:makesOffer a rdf:Property ;
+    rdfs:label "makesOffer" ;
+    rdfs:comment "A pointer to products or services offered by the organization or person." ;
+    owl:equivalentProperty fibo-fnd-pas-pas:offers ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:inverseOf schema:offeredBy ;
+    schema:rangeIncludes schema:Offer .
+
+schema:offers a rdf:Property ;
+    rdfs:label "offers" ;
+    rdfs:comment """An offer to provide this item&#x2014;for example, an offer to sell a product, rent the DVD of a movie, perform a service, or give away tickets to an event. Use [[businessFunction]] to indicate the kind of transaction offered, i.e. sell, lease, etc. This property can also be used to describe a [[Demand]]. While this property is listed as expected on a number of common types, it can be used in others. In that case, using a second type, such as Product or a subtype of Product, can clarify the nature of the offer.
+      """ ;
+    owl:equivalentProperty fibo-fnd-pas-pas:isProductOf ;
+    schema:domainIncludes schema:AggregateOffer,
+        schema:CreativeWork,
+        schema:EducationalOccupationalProgram,
+        schema:Event,
+        schema:MenuItem,
+        schema:Product,
+        schema:Service,
+        schema:Trip ;
+    schema:inverseOf schema:itemOffered ;
+    schema:rangeIncludes schema:Demand,
+        schema:Offer ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/2289> .
+
+schema:owns a rdf:Property ;
+    rdfs:label "owns" ;
+    rdfs:comment "Things owned by the organization or person." ;
+    owl:equivalentProperty gs1:owns ;
+    schema:contributor <https://schema.org/docs/collab/GoodRelationsTerms> ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:inverseOf schema:owner ;
+    schema:rangeIncludes schema:Thing ;
+    schema:source <https://github.com/schemaorg/schemaorg/issues/4603> .
+
+schema:parent a rdf:Property ;
+    rdfs:label "parent" ;
+    rdfs:comment "A parent of this person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person .
+
+schema:paymentDueDate a rdf:Property ;
+    rdfs:label "paymentDueDate" ;
+    rdfs:comment "The date that payment is due." ;
+    owl:equivalentProperty unece:PaymentDueDate ;
+    schema:domainIncludes schema:Invoice,
+        schema:Order ;
+    schema:rangeIncludes schema:Date,
+        schema:DateTime .
+
+schema:review a rdf:Property ;
+    rdfs:label "review" ;
+    rdfs:comment "A review of the item." ;
+    schema:domainIncludes schema:Brand,
+        schema:CreativeWork,
+        schema:Event,
+        schema:Offer,
+        schema:Organization,
+        schema:Place,
+        schema:Product,
+        schema:Service ;
+    schema:rangeIncludes schema:Review .
+
+schema:serviceArea a rdf:Property ;
+    rdfs:label "serviceArea" ;
+    rdfs:comment "The geographic area where the service is provided." ;
+    schema:domainIncludes schema:ContactPoint,
+        schema:Organization,
+        schema:Service ;
+    schema:rangeIncludes schema:AdministrativeArea,
+        schema:GeoShape,
+        schema:Place ;
+    schema:supersededBy schema:areaServed .
+
+schema:sibling a rdf:Property ;
+    rdfs:label "sibling" ;
+    rdfs:comment "A sibling of the person." ;
+    schema:domainIncludes schema:Person ;
+    schema:rangeIncludes schema:Person .
+
+schema:sponsor a rdf:Property ;
+    rdfs:label "sponsor" ;
+    rdfs:comment "A person or organization that supports a thing through a pledge, promise, or financial contribution. E.g. a sponsor of a Medical Study or a corporate sponsor of an event." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Event,
+        schema:Grant,
+        schema:MedicalStudy,
+        schema:Organization,
+        schema:Person ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person .
+
+schema:subOrganization a rdf:Property ;
+    rdfs:label "subOrganization" ;
+    rdfs:comment "A relationship between two organizations where the first includes the second, e.g., as a subsidiary. See also: the more specific 'department' property." ;
+    owl:equivalentProperty gs1:subOrganization,
+        fibo-be-oac-cctl:hasSubsidiary ;
+    schema:domainIncludes schema:Organization ;
+    schema:inverseOf schema:parentOrganization ;
+    schema:rangeIncludes schema:Organization .
+
+schema:material a rdf:Property ;
+    rdfs:label "material" ;
+    rdfs:comment "A material that something is made from, e.g. leather, wool, cotton, paper." ;
+    schema:domainIncludes schema:CreativeWork,
+        schema:Product ;
+    schema:rangeIncludes schema:Product,
+        schema:Text,
+        schema:URL .
+
+schema:memberOf a rdf:Property ;
+    rdfs:label "memberOf" ;
+    rdfs:comment "An Organization (or ProgramMembership) to which this Person or Organization belongs." ;
+    schema:domainIncludes schema:Organization,
+        schema:Person ;
+    schema:inverseOf schema:member ;
+    schema:rangeIncludes schema:MemberProgramTier,
+        schema:Organization,
+        schema:ProgramMembership .
+
+schema:parentOrganization a rdf:Property ;
+    rdfs:label "parentOrganization" ;
+    rdfs:comment "The larger organization that this organization is a [[subOrganization]] of, if any." ;
+    owl:equivalentProperty gs1:parentOrganization ;
+    schema:domainIncludes schema:Organization ;
+    schema:inverseOf schema:subOrganization ;
+    schema:rangeIncludes schema:Organization .
+
+schema:seller a rdf:Property ;
+    rdfs:label "seller" ;
+    rdfs:comment "An entity which offers (sells / leases / lends / loans) the services / goods.  A seller may also be a provider." ;
+    rdfs:subPropertyOf schema:participant,
+        fibo-fnd-pas-pas:hasSupplier ;
+    owl:equivalentProperty unece:Seller ;
+    schema:domainIncludes schema:BuyAction,
+        schema:Demand,
+        schema:Flight,
+        schema:Offer,
+        schema:Order ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person .
+
+schema:areaServed a rdf:Property ;
+    rdfs:label "areaServed" ;
+    rdfs:comment "The geographic area where a service or offered item is provided." ;
+    owl:equivalentProperty fibo-fnd-pas-pas:hasServiceArea ;
+    schema:domainIncludes schema:ContactPoint,
+        schema:DeliveryChargeSpecification,
+        schema:Demand,
+        schema:FinancialIncentive,
+        schema:Offer,
+        schema:Organization,
+        schema:Service ;
+    schema:rangeIncludes schema:AdministrativeArea,
+        schema:GeoShape,
+        schema:Place,
+        schema:Text .
+
+schema:member a rdf:Property ;
+    rdfs:label "member" ;
+    rdfs:comment "A member of an Organization or a ProgramMembership. Organizations can be members of organizations; ProgramMembership is typically for individuals." ;
+    owl:equivalentProperty fibo-fnd-org-org:hasMember ;
+    schema:domainIncludes schema:Organization,
+        schema:ProgramMembership ;
+    schema:inverseOf schema:memberOf ;
+    schema:rangeIncludes schema:Organization,
+        schema:Person .
+
+schema:location a rdf:Property ;
+    rdfs:label "location" ;
+    rdfs:comment "The location of, for example, where an event is happening, where an organization is located, or where an action takes place." ;
+    owl:equivalentProperty cmns-loc:isLocatedIn ;
+    schema:domainIncludes schema:Action,
+        schema:Event,
+        schema:InteractionCounter,
+        schema:Organization ;
+    schema:rangeIncludes schema:Place,
+        schema:PostalAddress,
+        schema:Text,
+        schema:VirtualLocation .

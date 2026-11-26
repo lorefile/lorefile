@@ -2,8 +2,10 @@
 //! microsecond lookups. Also home to the graph queries, search, describe and the
 //! compact Markdown summary that agents load into their context.
 
+use crate::iri::{self, Iris, Key};
 use crate::loader::Raw;
 use crate::schema::*;
+use crate::trust::{self, Kind as TKind};
 use indexmap::IndexMap;
 use serde::Serialize;
 use serde_json::{json, Value as Json};
@@ -20,6 +22,9 @@ pub struct Relationship {
     pub description: String,
     pub properties: IndexMap<String, Property>,
     pub source: Option<EdgeSource>,
+    /// The `iri:` written on the link, if any (`Ontology::iris` has the resolved one).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iri: Option<String>,
     pub file: String,
 }
 
@@ -39,6 +44,8 @@ pub enum Kind {
     Action,
     Source,
     Term,
+    Metric,
+    Function,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -80,6 +87,8 @@ pub struct Stats {
     pub actions: usize,
     pub sources: usize,
     pub glossary_terms: usize,
+    pub metrics: usize,
+    pub functions: usize,
     pub files: usize,
 }
 
@@ -93,11 +102,19 @@ pub struct Ontology {
     pub actions: IndexMap<String, ActionDef>,
     pub sources: IndexMap<String, SourceDef>,
     pub glossary: Vec<GlossaryTerm>,
+    pub metrics: IndexMap<String, MetricDef>,
+    pub functions: IndexMap<String, FunctionDef>,
     pub files: Vec<String>,
     /// Problems the loader hit (bad YAML etc). Surfaced by the validator.
     pub load_problems: Vec<String>,
     /// Duplicates the loader saw; the validator turns these into errors.
     pub duplicates: Vec<(Kind, String, String)>,
+    /// Every IRI, resolved: declared with `iri:` or derived from the namespace.
+    pub iris: Iris,
+    /// `trust.yaml` as written; `None` when the space has none.
+    pub trust: Option<TrustBook>,
+    /// Every grade, resolved against the fingerprints (see `trust::resolve`).
+    pub graded: trust::Graded,
 }
 
 /// `PurchaseOrder` → `purchase_order`. Used for CEL variable names.
@@ -121,6 +138,41 @@ pub fn snake(name: &str) -> String {
     out
 }
 
+/// One line saying where a metric comes from: `shop_bigquery.orders · where status = 'paid' · count distinct order_id`.
+fn metric_source_brief(s: &MetricSource) -> String {
+    let mut parts = vec![if s.tool.is_empty() { format!("{}.{}", s.connection, s.table) } else { format!("{} tool {}{}", s.connection, s.tool, if s.params.is_empty() { String::new() } else { format!(" {}", serde_json::to_string(&s.params).unwrap_or_default()) }) }];
+    if !s.filter.is_empty() {
+        parts.push(format!("where {}", s.filter));
+    }
+    if !s.measure.is_empty() {
+        parts.push(s.measure.clone());
+    }
+    parts.join(" · ")
+}
+
+/// One line saying how a function runs: `call tool mmm_run_budget_optimizer on the ads MCP server with {...}`.
+pub fn function_runs_brief(f: &FunctionDef) -> String {
+    match &f.runs {
+        None => "nowhere declared yet".to_string(),
+        Some(r) => match r.kind.as_str() {
+            "mcp" => format!("call tool `{}` on the `{}` MCP server{}", r.tool, r.server, if r.args.is_empty() { String::new() } else { format!(" with {}", serde_json::to_string(&r.args).unwrap_or_default()) }),
+            "http" => format!("{} {}", if r.method.is_empty() { "POST" } else { r.method.as_str() }, r.url),
+            "manual" => "a person does it; record the request".to_string(),
+            other => format!("runs as `{}`", other),
+        },
+    }
+}
+
+fn metric_from(m: &MetricDef) -> String {
+    if let Some(s) = &m.source {
+        return metric_source_brief(s);
+    }
+    if !m.variants.is_empty() {
+        return m.variants.iter().map(|v| format!("when {} → {}", v.when, metric_source_brief(&v.source))).collect::<Vec<_>>().join("; ");
+    }
+    if m.sql.is_some() { "sql (see describe)".to_string() } else { "nowhere yet".to_string() }
+}
+
 fn truncate(s: &str, n: usize) -> String {
     let s = s.trim().replace('\n', " ");
     if s.chars().count() <= n {
@@ -142,6 +194,7 @@ impl Ontology {
             files: raw.files,
             load_problems: raw.problems,
             glossary: raw.glossary,
+            trust: raw.trust,
             ..Default::default()
         };
 
@@ -160,6 +213,7 @@ impl Ontology {
                     description: r.description.clone(),
                     properties: r.properties.iter().map(|(k, v)| (k.clone(), v.normalize())).collect(),
                     source: r.source.clone(),
+                    iri: r.iri.clone(),
                     file: t.file.clone(),
                 });
             }
@@ -174,6 +228,7 @@ impl Ontology {
                 description: r.description,
                 properties: r.properties.iter().map(|(k, v)| (k.clone(), v.normalize())).collect(),
                 source: r.source,
+                iri: r.iri,
                 file: r.file,
             };
             if ont.relationships.iter().any(|x| x.from == rel.from && x.name == rel.name) {
@@ -203,7 +258,152 @@ impl Ontology {
             }
             ont.sources.insert(s.connection.clone(), s);
         }
+        for m in raw.metrics {
+            if let Some(prev) = ont.metrics.get(&m.name) {
+                ont.duplicates.push((Kind::Metric, m.name.clone(), format!("{} and {}", prev.file, m.file)));
+                continue;
+            }
+            ont.metrics.insert(m.name.clone(), m);
+        }
+        for f in raw.functions {
+            if let Some(prev) = ont.functions.get(&f.name) {
+                ont.duplicates.push((Kind::Function, f.name.clone(), format!("{} and {}", prev.file, f.file)));
+                continue;
+            }
+            ont.functions.insert(f.name.clone(), f);
+        }
+        ont.iris = ont.resolve_iris();
+        ont.graded = trust::resolve(&ont);
         ont
+    }
+
+    /// Swap in another trust book (the one a save is about to write) and resolve again.
+    pub fn set_trust(&mut self, book: Option<TrustBook>) {
+        self.trust = book;
+        self.graded = trust::resolve(self);
+    }
+
+    /// The grade of one thing right now.
+    pub fn grade_of(&self, k: TKind, name: &str) -> trust::Status {
+        self.graded.get(k, name)
+    }
+
+    /// A metric's basis, or a variant's when they differ: "transactional", "attributed · modelled".
+    pub fn basis_words(m: &MetricDef) -> Option<String> {
+        let mut words: Vec<&str> = Vec::new();
+        if let Some(b) = m.basis {
+            words.push(b.word());
+        }
+        for v in &m.variants {
+            if let Some(b) = v.basis {
+                if !words.contains(&b.word()) {
+                    words.push(b.word());
+                }
+            }
+        }
+        if words.is_empty() { None } else { Some(words.join(" · ")) }
+    }
+
+    /// Resolves the IRI of everything that has one.
+    fn resolve_iris(&self) -> Iris {
+        let mut iris = iri::base(&self.manifest);
+        let terms = self.term_words();
+        let man = "ontology.yaml";
+        iris.put(Key::Space, None, man, &terms);
+        for d in &self.manifest.domains {
+            iris.put(Key::Domain(d.name.clone()), None, man, &terms);
+        }
+        for t in self.types.values() {
+            iris.put(Key::Entity(t.name.clone()), t.iri.as_deref(), &t.file, &terms);
+            for (pn, p) in &t.properties {
+                iris.put(Key::Field(t.name.clone(), pn.clone()), p.normalize().iri.as_deref(), &t.file, &terms);
+            }
+        }
+        for r in &self.relationships {
+            iris.put(Key::Link(r.from.clone(), r.name.clone()), r.iri.as_deref(), &r.file, &terms);
+        }
+        for (i, g) in self.glossary.iter().enumerate() {
+            iris.put(Key::Term(i), g.iri.as_deref(), "glossary.yaml", &terms);
+        }
+        for c in self.constraints.values() {
+            iris.put(Key::Guardrail(c.id.clone()), c.iri.as_deref(), &c.file, &terms);
+        }
+        for a in self.actions.values() {
+            iris.put(Key::Action(a.name.clone()), a.iri.as_deref(), &a.file, &terms);
+        }
+        for m in self.metrics.values() {
+            iris.put(Key::Metric(m.name.clone()), None, &m.file, &terms);
+        }
+        for f in self.functions.values() {
+            iris.put(Key::Function(f.name.clone()), None, &f.file, &terms);
+        }
+        for s in self.sources.values() {
+            iris.put(Key::Source(s.connection.clone()), None, &s.file, &terms);
+        }
+        iris
+    }
+
+    /// The glossary's words, in order (term IRIs are derived from them).
+    pub fn term_words(&self) -> Vec<String> {
+        self.glossary.iter().map(|g| g.term.clone()).collect()
+    }
+
+    // ---------- IRIs ----------
+
+    pub fn iri_type(&self, name: &str) -> String {
+        self.iris.get(&Key::Entity(name.to_string()))
+    }
+    pub fn iri_field(&self, type_name: &str, field: &str) -> String {
+        self.iris.get(&Key::Field(type_name.to_string(), field.to_string()))
+    }
+    pub fn iri_link(&self, r: &Relationship) -> String {
+        self.iris.get(&Key::Link(r.from.clone(), r.name.clone()))
+    }
+    pub fn iri_guardrail(&self, id: &str) -> String {
+        self.iris.get(&Key::Guardrail(id.to_string()))
+    }
+    pub fn iri_action(&self, name: &str) -> String {
+        self.iris.get(&Key::Action(name.to_string()))
+    }
+    pub fn iri_term(&self, index: usize) -> String {
+        self.iris.map.get(&Key::Term(index)).cloned().unwrap_or_else(|| self.iris.derived(&Key::Term(index), &self.term_words()))
+    }
+    pub fn iri_metric(&self, name: &str) -> String {
+        self.iris.get(&Key::Metric(name.to_string()))
+    }
+    pub fn iri_function(&self, name: &str) -> String {
+        self.iris.get(&Key::Function(name.to_string()))
+    }
+    pub fn iri_source(&self, connection: &str) -> String {
+        self.iris.get(&Key::Source(connection.to_string()))
+    }
+    pub fn iri_domain(&self, name: &str) -> String {
+        self.iris.get(&Key::Domain(name.to_string()))
+    }
+    /// The IRI of whatever a name refers to (a glossary term's `means`).
+    pub fn iri_of_name(&self, name: &str) -> Option<String> {
+        if let Some(t) = self.type_(name) {
+            return Some(self.iri_type(&t.name));
+        }
+        if let Some(r) = self.relationship(name).first() {
+            return Some(self.iri_link(r));
+        }
+        if let Some(a) = self.action(name) {
+            return Some(self.iri_action(&a.name));
+        }
+        if let Some(c) = self.constraint(name) {
+            return Some(self.iri_guardrail(&c.id));
+        }
+        if self.metrics.contains_key(name) {
+            return Some(self.iri_metric(name));
+        }
+        if self.functions.contains_key(name) {
+            return Some(self.iri_function(name));
+        }
+        if self.sources.contains_key(name) {
+            return Some(self.iri_source(name));
+        }
+        None
     }
 
     pub fn stats(&self) -> Stats {
@@ -214,6 +414,8 @@ impl Ontology {
             actions: self.actions.len(),
             sources: self.sources.len(),
             glossary_terms: self.glossary.len(),
+            metrics: self.metrics.len(),
+            functions: self.functions.len(),
             files: self.files.len(),
         }
     }
@@ -274,6 +476,10 @@ impl Ontology {
             Some(Kind::Constraint)
         } else if self.sources.contains_key(name) {
             Some(Kind::Source)
+        } else if self.metrics.contains_key(name) {
+            Some(Kind::Metric)
+        } else if self.functions.contains_key(name) {
+            Some(Kind::Function)
         } else {
             None
         }
@@ -530,6 +736,18 @@ impl Ontology {
                 });
             }
         }
+        for m in self.metrics.values() {
+            let s = score_text(&m.name, 95).max(score_text(&m.name.replace('_', " "), 85)).max(score_text(&m.description, 40)).max(score_text(&m.caveats, 20));
+            if s > 0 {
+                hits.push(Hit { kind: Kind::Metric, name: m.name.clone(), snippet: truncate(&m.description, 140), score: s, file: m.file.clone() });
+            }
+        }
+        for f in self.functions.values() {
+            let s = score_text(&f.name, 95).max(score_text(&f.name.replace('_', " "), 85)).max(score_text(&f.description, 40));
+            if s > 0 {
+                hits.push(Hit { kind: Kind::Function, name: f.name.clone(), snippet: truncate(&f.description, 140), score: s, file: f.file.clone() });
+            }
+        }
         for s in self.sources.values() {
             let sc = score_text(&s.connection, 80).max(score_text(&s.kind, 40)).max(score_text(&s.description, 30));
             if sc > 0 {
@@ -543,21 +761,45 @@ impl Ontology {
 
     // ---------- describe ----------
 
-    fn constraint_brief(&self, c: &Constraint) -> Json {
-        json!({
+    pub fn constraint_brief(&self, c: &Constraint) -> Json {
+        let mut j = json!({
             "id": c.id, "name": c.name, "severity": c.severity, "applies_to": c.applies_to,
-            "rule": c.rule, "rationale": c.rationale,
-        })
+            "rule": c.rule, "rationale": c.rationale, "iri": self.iri_guardrail(&c.id),
+        });
+        if self.graded.has_file {
+            j["grade"] = json!(self.grade_of(TKind::Guardrail, &c.id).word());
+        }
+        j
     }
 
     pub fn describe(&self, name: &str) -> Option<Json> {
+        if let Some(f) = self.functions.get(name) {
+            let mut j = serde_json::to_value(f).unwrap_or(json!({}));
+            j["kind"] = json!("function");
+            j["name"] = json!(f.name);
+            j["how"] = json!(function_runs_brief(f));
+            j["iri"] = json!(self.iri_function(&f.name));
+            j["used_by_actions"] = json!(self.actions.values().filter(|a| a.tags.iter().any(|t| t == &format!("does:{}", f.name))).map(|a| a.name.clone()).collect::<Vec<_>>());
+            return Some(j);
+        }
+        if let Some(m) = self.metrics.get(name) {
+            let mut j = serde_json::to_value(m).unwrap_or(json!({}));
+            j["kind"] = json!("metric");
+            j["name"] = json!(m.name);
+            j["from"] = json!(metric_from(m));
+            j["iri"] = json!(self.iri_metric(&m.name));
+            if self.graded.has_file {
+                j["trust"] = self.grade_of(TKind::Metric, &m.name).to_json(TKind::Metric);
+            }
+            return Some(j);
+        }
         if let Some(t) = self.type_(name) {
             let props: Vec<Json> = t
                 .properties
                 .iter()
                 .map(|(n, p)| {
                     let p = p.normalize();
-                    let mut j = json!({ "name": n, "type": p.kind, "description": p.description });
+                    let mut j = json!({ "name": n, "type": p.kind, "description": p.description, "iri": self.iri_field(&t.name, n) });
                     if p.key { j["key"] = json!(true); }
                     if p.required { j["required"] = json!(true); }
                     if !p.values.is_empty() { j["values"] = serde_json::to_value(&p.values).unwrap_or(Json::Null); }
@@ -568,18 +810,19 @@ impl Ontology {
             let out: Vec<Json> = self
                 .outgoing(&t.name)
                 .iter()
-                .map(|r| json!({ "name": r.name, "to": r.to, "cardinality": r.cardinality, "description": r.description }))
+                .map(|r| json!({ "name": r.name, "to": r.to, "cardinality": r.cardinality, "description": r.description, "iri": self.iri_link(r) }))
                 .collect();
             let inc: Vec<Json> = self
                 .incoming(&t.name)
                 .iter()
-                .map(|r| json!({ "name": r.name, "from": r.from, "cardinality": r.cardinality, "description": r.description }))
+                .map(|r| json!({ "name": r.name, "from": r.from, "cardinality": r.cardinality, "description": r.description, "iri": self.iri_link(r) }))
                 .collect();
             let cons: Vec<Json> = self.constraints_for(&t.name).iter().map(|c| self.constraint_brief(c)).collect();
             let acts: Vec<String> = self.actions_involving(&t.name).iter().map(|a| a.name.clone()).collect();
             let mut j = json!({
                 "kind": "type",
                 "name": t.name,
+                "iri": self.iri_type(&t.name),
                 "description": t.description,
                 "domain": self.domain_of(&t.name),
                 "key": t.key_property(),
@@ -595,6 +838,19 @@ impl Ontology {
             if let Some(s) = &t.source {
                 let kind = self.sources.get(&s.connection).map(|x| x.kind.clone()).unwrap_or_else(|| "unknown".into());
                 j["source"] = json!({ "connection": s.connection, "kind": kind, "table": s.table, "key": s.key, "columns": s.columns, "tool": s.tool, "params": s.params });
+                if self.graded.has_file {
+                    j["source"]["trust"] = self.grade_of(TKind::Binding, &t.name).to_json(TKind::Binding);
+                }
+            }
+            // asked by a glossary word: say what the word means and how well that is backed
+            if !t.name.eq_ignore_ascii_case(name) {
+                if let Some(g) = self.glossary.iter().find(|g| g.term.eq_ignore_ascii_case(name)) {
+                    let mut w = json!({ "term": g.term, "means": g.means, "description": g.description });
+                    if self.graded.has_file {
+                        w["trust"] = self.grade_of(TKind::Term, &g.term).to_json(TKind::Term);
+                    }
+                    j["word"] = w;
+                }
             }
             if !t.instances.is_empty() {
                 j["inline_instances"] = json!(t.instances.len());
@@ -614,7 +870,7 @@ impl Ontology {
                         .collect();
                     let props: Vec<Json> = r.properties.iter().map(|(n, p)| json!({ "name": n, "type": p.kind, "description": p.description })).collect();
                     json!({
-                        "kind": "relationship", "name": r.name, "qualified": r.qualified(),
+                        "kind": "relationship", "name": r.name, "qualified": r.qualified(), "iri": self.iri_link(r),
                         "from": r.from, "to": r.to, "cardinality": r.cardinality,
                         "description": r.description, "properties": props, "constraints": cons,
                         "source": r.source, "file": r.file,
@@ -627,7 +883,7 @@ impl Ontology {
         if let Some(a) = self.action(name) {
             let checks: Vec<Json> = self.constraints_for(&a.name).iter().map(|c| self.constraint_brief(c)).collect();
             return Some(json!({
-                "kind": "action", "name": a.name, "description": a.description,
+                "kind": "action", "name": a.name, "iri": self.iri_action(&a.name), "description": a.description,
                 "inputs": a.inputs, "effects": a.effects, "checks": checks,
                 "requires_approval_from": a.requires_approval_from, "side_effects": a.side_effects,
                 "tags": a.tags, "file": a.file,
@@ -638,19 +894,34 @@ impl Ontology {
         if let Some(c) = self.constraint(name) {
             let mut j = serde_json::to_value(c).unwrap_or(Json::Null);
             j["kind"] = json!("constraint");
+            j["iri"] = json!(self.iri_guardrail(&c.id));
+            if self.graded.has_file {
+                j["trust"] = self.grade_of(TKind::Guardrail, &c.id).to_json(TKind::Guardrail);
+            }
             j["applies_to_kind"] = json!(self.kind_of(&c.applies_to));
             j["file"] = json!(c.file);
             return Some(j);
         }
         if let Some(s) = self.sources.get(name) {
-            let used_by: Vec<String> = self
+            let mut used_by: Vec<String> = self
                 .types
                 .values()
                 .filter(|t| t.source.as_ref().map(|x| x.connection == s.connection).unwrap_or(false))
                 .map(|t| t.name.clone())
                 .collect();
+            for m in self.metrics.values() {
+                if m.source.as_ref().map(|x| x.connection == s.connection).unwrap_or(false) || m.variants.iter().any(|v| v.source.connection == s.connection) {
+                    used_by.push(format!("metric {}", m.name));
+                }
+            }
+            for f in self.functions.values() {
+                if f.runs.as_ref().map(|r| r.kind == "mcp" && (r.server == s.connection || Some(r.server.as_str()) == s.server.as_deref())).unwrap_or(false) {
+                    used_by.push(format!("function {}", f.name));
+                }
+            }
             let mut j = serde_json::to_value(s).unwrap_or(Json::Null);
             j["kind"] = json!("source");
+            j["iri"] = json!(self.iri_source(&s.connection));
             j["used_by"] = json!(used_by);
             j["file"] = json!(s.file);
             return Some(j);
@@ -659,11 +930,49 @@ impl Ontology {
     }
 
     pub fn describe_markdown(&self, name: &str) -> Option<String> {
+        if let Some(f) = self.functions.get(name) {
+            let io = |m: &IndexMap<String, String>| m.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ");
+            let mut md = format!("# {} (function)\n\n{}\n\nInputs: {}\nOutputs: {}\nHow: {}\n", f.name, f.description.trim(), io(&f.inputs), io(&f.outputs), function_runs_brief(f));
+            if let Some(w) = &f.writes_back {
+                md.push_str(&format!("Writes back: {} → {}{}\n", w.entity, w.connection, if w.table.is_empty() { String::new() } else { format!(".{}", w.table) }));
+            }
+            if !f.may_be_called_by.is_empty() {
+                md.push_str(&format!("May be called by: {}\n", f.may_be_called_by.join(", ")));
+            }
+            if !f.owner.is_empty() {
+                md.push_str(&format!("Owner: {}\n", f.owner));
+            }
+            if !f.caveats.is_empty() {
+                md.push_str(&format!("Caveats: {}\n", f.caveats.trim()));
+            }
+            return Some(md);
+        }
+        if let Some(m) = self.metrics.get(name) {
+            let mut md = format!("# {} (metric{})\n\n{}\n\n", m.name, if m.grain.is_empty() { String::new() } else { format!(", per {}", m.grain) }, m.description.trim());
+            md.push_str(&format!("From: {}\n", metric_from(m)));
+            if let Some(b) = Self::basis_words(m) {
+                md.push_str(&format!("Basis: {}\n", b));
+            }
+            if self.graded.has_file {
+                let st = self.grade_of(TKind::Metric, &m.name);
+                md.push_str(&format!("Trust: {}{}\n", st.word(), st.say(TKind::Metric).map(|s| format!(". {}", s)).unwrap_or_default()));
+            }
+            if let Some(sql) = &m.sql {
+                md.push_str(&format!("\n```sql\n{}\n```\n", sql.trim()));
+            }
+            if !m.owner.is_empty() {
+                md.push_str(&format!("Owner: {}\n", m.owner));
+            }
+            if !m.caveats.is_empty() {
+                md.push_str(&format!("Caveats: {}\n", m.caveats.trim()));
+            }
+            return Some(md);
+        }
         let j = self.describe(name)?;
         let mut md = String::new();
         match j["kind"].as_str().unwrap_or("") {
             "type" => {
-                md.push_str(&format!("# {} (type)\n\n{}\n\n", j["name"].as_str().unwrap_or(""), j["description"].as_str().unwrap_or("")));
+                md.push_str(&format!("# {} (type)\n\nIRI: {}\n\n{}\n\n", j["name"].as_str().unwrap_or(""), j["iri"].as_str().unwrap_or(""), j["description"].as_str().unwrap_or("")));
                 if let Some(d) = j["domain"].as_str() { md.push_str(&format!("Domain: {}\n\n", d)); }
                 md.push_str("## Properties\n\n| name | type | description |\n|---|---|---|\n");
                 for p in j["properties"].as_array().unwrap_or(&vec![]) {
@@ -715,6 +1024,11 @@ impl Ontology {
             st.types, st.relationships, st.constraints, st.actions, st.sources
         ));
         md.push_str("Use `describe(name)` for full detail, `constraints_for(name)` for rules, `validate(action, inputs)` before acting, `where_is(type)` to find the data.\n\n");
+        md.push_str(&format!("IRIs: each name below is `{}<Name>` unless an IRI follows it.\n\n", self.iris.namespace));
+        if self.graded.has_file {
+            md.push_str(&format!("{}\n\n", self.graded.line()));
+        }
+        let mark = |k: TKind, n: &str| -> Option<String> { if self.graded.has_file { self.grade_of(k, n).mark() } else { None } };
 
         // types grouped by domain
         let mut by_domain: IndexMap<String, Vec<&TypeDef>> = IndexMap::new();
@@ -735,9 +1049,13 @@ impl Ontology {
             }
             for t in types {
                 let rels: Vec<String> = self.outgoing(&t.name).iter().map(|r| format!("─{}→ {}", r.name, r.to)).collect();
+                let own = if self.iris.declared.contains_key(&Key::Entity(t.name.clone())) { format!(" ({})", self.iris.compact(&self.iri_type(&t.name))) } else { String::new() };
+                let data = mark(TKind::Binding, &t.name).map(|m| format!(" [data binding {}]", m)).unwrap_or_default();
                 md.push_str(&format!(
-                    "- **{}**: {}{}\n",
+                    "- **{}**{}{}: {}{}\n",
                     t.name,
+                    own,
+                    data,
                     truncate(&t.description, 160),
                     if rels.is_empty() { String::new() } else { format!(" [{}]", rels.join(", ")) }
                 ));
@@ -752,7 +1070,13 @@ impl Ontology {
         md.push_str(&format!("{} blocking · {} warnings · {} informational\n\n", blocks.len(), warns, infos));
         blocks.sort_by(|a, b| a.id.cmp(&b.id));
         for c in blocks.iter().take(40) {
-            md.push_str(&format!("- **{}** ({}): {} — `{}`\n", c.id, c.applies_to, c.name, c.rule));
+            let m = mark(TKind::Guardrail, &c.id).map(|m| format!(" [{}]", if m.starts_with("UNVERIFIED") { "UNVERIFIED".to_string() } else { m })).unwrap_or_default();
+            md.push_str(&format!("- **{}** ({}){}: {} — `{}`\n", c.id, c.applies_to, m, c.name, c.rule));
+        }
+        // a rule an agent wrote that is not blocking is still named, so it is never read as policy
+        let unverified: Vec<&String> = if self.graded.has_file { self.constraints.values().filter(|c| c.severity != Severity::Block && self.grade_of(TKind::Guardrail, &c.id).grade == Some(Grade::Proposed)).map(|c| &c.id).collect() } else { vec![] };
+        if !unverified.is_empty() {
+            md.push_str(&format!("- UNVERIFIED warnings and notes (an agent proposed them, nobody has reviewed them): {}\n", unverified.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")));
         }
         if blocks.len() > 40 {
             md.push_str(&format!("- … {} more blocking rules; use `constraints_for`\n", blocks.len() - 40));
@@ -777,13 +1101,41 @@ impl Ontology {
         if !self.sources.is_empty() {
             md.push_str("## Data sources\n\n");
             for s in self.sources.values() {
-                let used: Vec<String> = self
+                let mut used: Vec<String> = self
                     .types
                     .values()
                     .filter(|t| t.source.as_ref().map(|x| x.connection == s.connection).unwrap_or(false))
                     .map(|t| t.name.clone())
                     .collect();
+                used.extend(self.metrics.values().filter(|m| m.source.as_ref().map(|x| x.connection == s.connection).unwrap_or(false) || m.variants.iter().any(|v| v.source.connection == s.connection)).map(|m| format!("metric {}", m.name)));
+                used.extend(self.functions.values().filter(|f| f.runs.as_ref().map(|r| r.kind == "mcp" && (r.server == s.connection || Some(r.server.as_str()) == s.server.as_deref())).unwrap_or(false)).map(|f| format!("function {}", f.name)));
                 md.push_str(&format!("- **{}** ({}): {}\n", s.connection, s.kind, if used.is_empty() { truncate(&s.description, 100) } else { used.join(", ") }));
+            }
+            md.push('\n');
+        }
+
+        if !self.metrics.is_empty() {
+            md.push_str("## Metrics (what counts, and where it comes from)\n\n");
+            for m in self.metrics.values().take(40) {
+                let tags: Vec<String> = Self::basis_words(m).into_iter().chain(mark(TKind::Metric, &m.name)).collect();
+                md.push_str(&format!(
+                    "- **{}**{}{}: {} — {}{}\n",
+                    m.name,
+                    if m.grain.is_empty() { String::new() } else { format!(" (per {})", m.grain) },
+                    if tags.is_empty() { String::new() } else { format!(" [{}]", tags.join(" · ")) },
+                    truncate(&m.description, 120),
+                    metric_from(m),
+                    if m.owner.is_empty() { String::new() } else { format!(" · owner {}", m.owner) }
+                ));
+            }
+            md.push('\n');
+        }
+
+        if !self.functions.is_empty() {
+            md.push_str("## Functions (what agents can run, and where)\n\n");
+            for f in self.functions.values().take(40) {
+                let io = |m: &IndexMap<String, String>| m.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ");
+                md.push_str(&format!("- **{}**({}) → {}: {} — {}\n", f.name, io(&f.inputs), io(&f.outputs), truncate(&f.description, 110), function_runs_brief(f)));
             }
             md.push('\n');
         }
@@ -791,7 +1143,8 @@ impl Ontology {
         if !self.glossary.is_empty() {
             md.push_str("## Glossary\n\n");
             for g in self.glossary.iter().take(60) {
-                md.push_str(&format!("- \"{}\" means **{}**\n", g.term, g.means));
+                let m = mark(TKind::Term, &g.term).map(|_| " [UNVERIFIED]".to_string()).unwrap_or_default();
+                md.push_str(&format!("- \"{}\" means **{}**{}\n", g.term, g.means, m));
             }
             md.push('\n');
         }

@@ -78,5 +78,5 @@ source:
     created_at_min: "YYYY-MM-DDT00:00:00Z"
     limit: 250
     graphql: "{ orders(first: 250, query: \"processed_at:>=YYYY-MM-DD\") { nodes { id name processedAt createdAt cancelledAt cancelReason closedAt test confirmed displayFinancialStatus displayFulfillmentStatus currencyCode presentmentCurrencyCode totalPriceSet { shopMoney { amount } presentmentMoney { amount currencyCode } } currentTotalPriceSet { shopMoney { amount } } subtotalPriceSet { shopMoney { amount } } totalDiscountsSet { shopMoney { amount } } totalTaxSet { shopMoney { amount } } totalShippingPriceSet { shopMoney { amount } } sourceName sourceIdentifier landingPageUrl referrerUrl customerJourneySummary { customerOrderIndex daysToConversion momentsCount firstVisit { source sourceType referrerUrl landingPage utmParameters { source medium campaign content term } } lastVisit { source sourceType referrerUrl landingPage utmParameters { source medium campaign content term } } } customer { id } discountCodes tags customAttributes { key value } app { id name } } } }"
-owner: ecommerce@stella.example
+owner: ecommerce@yourcompany.example
 tags: [shopify, orders]

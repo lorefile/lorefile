@@ -1,6 +1,6 @@
-# Deploying Stella Ontology
+# Deploying Lorefile
 
-Three ways to run it, from a laptop to a hosted service, and how data access and approvals work in each. Plain English, with the honest status of each path.
+Two ways to run it today, on a laptop and in your own cloud, a note on a hosted version later, and how data access and approvals work. Plain English, with the honest status of each path.
 
 ---
 
@@ -28,17 +28,19 @@ DuckDB inside the binary is a convenience for the cases where you want the ontol
 
 ---
 
-## 2. Three ways to run it
+## 2. Ways to run it
 
 ### A. On a laptop (today, works)
 
 ```bash
-stella-ontology serve --dir ./ontology          # web page on http://127.0.0.1:7070, one space
-stella-ontology mcp --dir ./ontology            # MCP over stdio, for Claude Code / Claude Desktop / Cursor
+lorefile serve --dir ./ontology          # web page on http://127.0.0.1:7070, one space
+lorefile mcp --dir ./ontology            # MCP over stdio, for Claude Code / Claude Desktop / Cursor
 
-stella-ontology serve --dir ./spaces --allow-edit   # a folder of spaces: one per brand, created from the page
-stella-ontology mcp --dir ./spaces                  # agents pass space: "brand-two" in each tool call
+lorefile serve --dir ./spaces --allow-edit   # a folder of spaces: one per brand, created from the page
+lorefile mcp --dir ./spaces                  # agents pass space: "brand-two" in each tool call
 ```
+
+The first `serve` makes a login token, saves it to `<dir>/.lorefile/auth.toml` and prints a link that signs the page in (`http://127.0.0.1:7070/?token=…`), plus the command that connects Claude Code over HTTP. Open the link once and the page remembers it. `--no-auth` turns the login off on a laptop. Details in [PRODUCTION.md](PRODUCTION.md#signing-in-and-mcp-over-http).
 
 The folder is the deployment. Copy it, zip it, `git clone` it. Nothing else to install. The examples and packs ship inside the binary and show up in the page's picker as read-only spaces (`@ecommerce`, `@meta-ads`), so a new team can look at how it is done and copy one. Spaces, storage and the production checklist are in [PRODUCTION.md](PRODUCTION.md).
 
@@ -47,81 +49,122 @@ The folder is the deployment. Copy it, zip it, `git clone` it. Nothing else to i
 The [Dockerfile](Dockerfile) builds a small image: one binary, running as a non-root user, with your spaces on a volume at `/spaces`.
 
 ```bash
-docker build -t stella-ontology .
-docker run -d -p 7070:7070 -v stella-spaces:/spaces stella-ontology            # read-only page and API
-docker run -d -p 7070:7070 -v stella-spaces:/spaces stella-ontology serve --dir /spaces --host 0.0.0.0 --allow-edit --commit-edits
+docker build -t lorefile .
+export LOREFILE_TOKEN=$(openssl rand -hex 32)      # or take it from your secret manager
+docker run -d -p 7070:7070 -v lorefile-spaces:/spaces -e LOREFILE_TOKEN="$LOREFILE_TOKEN" lorefile        # read-only page, API and MCP
+docker run -d -p 7070:7070 -v lorefile-spaces:/spaces -e LOREFILE_TOKEN="$LOREFILE_TOKEN" lorefile serve --dir /spaces --host 0.0.0.0 --allow-edit
 ```
 
-Runs anywhere a container runs: Cloud Run, Fly.io, ECS, Kubernetes, a $5 VPS. State is files, so it restarts in a second; run one replica per spaces folder. The folder comes from a volume, a `git clone` at boot, or a bucket mount (S3 or GCS through a FUSE mount, or synced with `rclone`); the trade-offs and the recommended pattern are in [PRODUCTION.md](PRODUCTION.md). Warehouse credentials come from environment variables or your secret manager, never from the folder.
+Open `http://127.0.0.1:7070` and paste the token into the login screen, or connect Claude Code to the container:
 
-Two gaps for a real cloud deployment, both on the roadmap:
-
-- **MCP over HTTP.** Today MCP is stdio only, which suits a laptop. ChatGPT, hosted agents, and anything on another machine need the HTTP transport. That is Phase 3 work.
-- **Authentication.** The web page has no login. Put it behind your SSO proxy (Cloudflare Access, IAP, Tailscale) until the hosted version exists.
-
-### C. Stella Cloud (not built yet; this is the plan)
-
-Stella runs the same open-source binary for you and adds the parts that are hard to do alone:
-
-```
-You                                    Stella Cloud (SOC2)
-───                                    ───────────────────
-github.com/you/ontology ──push──►      sync → validate → serve
-                                       ├─ you.ontology.stella.app         web page, SSO
-                                       ├─ you.ontology.stella.app/mcp     one URL per agent, API key each
-                                       ├─ audit log: which person or agent read or changed what
-                                       ├─ read-only warehouse credentials held in Stella's secret manager
-                                       ├─ every change is a pull request, approvers from the `owner:` fields
-                                       └─ versions, rollback, uptime, support
+```bash
+claude mcp add --transport http lorefile http://127.0.0.1:7070/mcp --header "Authorization: Bearer $LOREFILE_TOKEN"
 ```
 
-You connect a GitHub repository (or upload a folder), and Stella gives you the URL to paste into Claude, ChatGPT, or your own agents. Free to run yourself, paid when Stella runs it for you.
+Without `LOREFILE_TOKEN` the container makes a token on its first start, saves it in the volume (`/spaces/.lorefile/auth.toml`) and prints it in `docker logs`. `--no-auth` is refused on `--host 0.0.0.0` unless `--i-know` is added, for the case where a proxy in front already signs people in.
+
+Runs anywhere a container runs: Cloud Run, Fly.io, ECS, Kubernetes, a $5 VPS (Fly.io config and commands are in §3). State is files, so it restarts in a second; run one replica per spaces folder. The folder comes from a volume, a `git clone` at boot, or a bucket mount (S3 or GCS through a FUSE mount, or synced with `rclone`); the trade-offs and the recommended pattern are in [PRODUCTION.md](PRODUCTION.md). Warehouse credentials come from environment variables or your secret manager, never from the folder.
+
+For a real cloud deployment:
+
+- **HTTPS in front.** The token travels in a header or a cookie, so anything past `127.0.0.1` goes over HTTPS: Caddy, or the platform's own proxy (Fly, Cloud Run and Render give you one).
+- **MCP over HTTP.** Built: `POST /mcp` speaks MCP's Streamable HTTP transport behind the same token, so Claude Code, and any agent that can send a header, reaches the container. Claude Desktop's custom connectors and ChatGPT connect from their vendor's cloud and sign in with OAuth, which Lorefile does not offer yet (backlog); on a laptop, Desktop keeps using stdio.
+- **One login for everyone.** The token is shared. For a login per person, put an SSO proxy in front (Cloudflare Access, IAP, Tailscale); accounts and SSO in Lorefile itself are backlog.
+
+### C. Hosted, later
+
+A hosted version may come later. It would run the same open-source binary for you and add what is hard to do alone: one safe copy of each space that agents read through one URL, SSO, an audit log, and GitHub sync, with nothing of your data passing through it. It is not being built now; the earlier plan is in [BACKLOG.md](BACKLOG.md) under "Hosted version, later".
 
 ---
 
-## 3. How a new business would start
+## 3. Vercel, Fly.io and friends
+
+**Short answer: Vercel hosts the docs, not the app.** Vercel runs static files and short-lived functions: every request starts fresh, no disk survives, and a function lives for seconds or minutes. Lorefile is one long-running process that owns a folder: it watches the YAML, keeps DuckDB in memory, writes proposals and the activity log under `.lorefile/`, and runs git. It needs a machine with a disk that outlives a restart.
+
+| Option | What it would mean | Verdict |
+|---|---|---|
+| **The app on Vercel** | Keep each space in a bucket, re-read it on every request, drop git and the inbox or rebuild them on a database, pay a cold start on each call. | **Bin.** A different product with a worse story. |
+| **The page on Vercel, the API elsewhere** | Serve the page from Vercel and point it at the binary on another host. | **Bin.** The binary already serves the page; splitting them brings back cross-origin requests (removed on purpose) and a second login problem, for no gain. |
+| **The docs on Vercel, the app on a host with a disk** | The tutorial, and later a landing page, as static files on Vercel. The app as the existing Docker image on Fly.io, Railway, Render or a VM, with the spaces folder on a persistent volume. | **Recommended.** Each host does what it is good at. |
+
+```
+   Vercel  ──  the docs: tutorial now, landing page later     static files, vercel.json
+   Fly.io  ──  the app: page + JSON API, a volume at /spaces  one machine, fly.toml
+                 └─ later: one machine and one volume per customer
+```
+
+**The docs on Vercel.** [vercel.json](vercel.json) publishes the `docs/` folder as it is: no framework, no install, no build. `docs/index.html` (the page at `/`) is a copy of `docs/tutorial.html`; `python3 scripts/build-tutorial.py` writes both from README.md, and the HTML is committed, so rebuild and commit after README changes. [.vercelignore](.vercelignore) uploads only `docs/` and `vercel.json`, and explains each line of vercel.json, since JSON has no comments.
+
+```bash
+python3 scripts/build-tutorial.py     # writes docs/tutorial.html and docs/index.html
+vercel deploy                         # a preview URL; vercel deploy --prod for the live one
+```
+
+Connecting the repository in Vercel's dashboard works the same way: it reads vercel.json on every push.
+
+**The app on Fly.io.** [fly.toml](fly.toml) builds the [Dockerfile](Dockerfile), runs `serve --dir /spaces --port 7070 --host 0.0.0.0` on one small machine, mounts a volume named `spaces` at `/spaces`, and lets the machine stop when idle and start on the next request (`min_machines_running = 0`). [.dockerignore](.dockerignore) keeps `target/`, `spaces/`, `docs/` and `.git/` out of the build, so the upload is under 1 MB.
+
+```bash
+fly launch --no-deploy --copy-config              # creates the app from fly.toml; pick a free app name
+fly volumes create spaces --size 1 --region lhr   # a 1 GB disk, in the same region as primary_region
+fly deploy --ha=false                             # builds on Fly (5-10 minutes the first time), one machine
+fly ssh console -C "ls -ld /spaces"               # the volume should belong to uid 10001 (fly.toml says how)
+```
+
+Before pointing anyone at it:
+
+- **It is public; the token is the lock.** `https://<app>.fly.dev` is on the internet as soon as it deploys. Set the token before the first deploy with `fly secrets set LOREFILE_TOKEN=$(openssl rand -hex 32)` (Fly passes secrets in as environment variables); without it the server makes one and prints it in `fly logs`. Anyone with the token can read, and write when `--allow-edit` is on. For a login per person, an SSO proxy (Cloudflare Access) in front, and note that the `fly.dev` address goes around a proxy set up on your own domain.
+- **The health check.** Every route but `/healthz` now needs the token, so fly.toml's check must ask `/healthz`; it still asks `/api/spaces`, which answers 401 (see the status table).
+- **MCP over HTTP.** Fly terminates HTTPS, so Claude Code connects with `claude mcp add --transport http lorefile https://<app>.fly.dev/mcp --header "Authorization: Bearer <token>"`.
+- **One machine per volume.** Two servers must never share a spaces folder; `--ha=false` stops Fly starting a spare. Fly warns that a single volume has no standby; that is the trade-off for now, and git as the home ([PRODUCTION.md §2](PRODUCTION.md#2-where-the-files-live-disk-git-or-a-bucket), answer B) makes the disk disposable.
+
+**Railway, Render, a VM.** The same image runs anywhere that gives a container a persistent disk: mount it at `/spaces`, expose port 7070, keep the command above. Cloud Run is the same image but stateless; its bucket mount is the FUSE case in [PRODUCTION.md §2](PRODUCTION.md#2-where-the-files-live-disk-git-or-a-bucket).
+
+---
+
+## 4. How a new business would start
 
 Say you have just started an app business and want agents to understand it.
 
-1. `stella-ontology init ./ontology` writes a starter folder with two types, two rules and one action.
-2. Open the folder in Claude Code and say: *"This is a subscription app. Add Customer, Plan, Subscription, Invoice. A customer on a trial cannot be invoiced. Refunds over $500 need Finance."* Claude edits the YAML files directly, because they are just files. `stella-ontology validate` catches anything misspelled.
+1. `lorefile init ./ontology` writes a starter folder with two types, two rules and one action.
+2. Open the folder in Claude Code and say: *"This is a subscription app. Add Customer, Plan, Subscription, Invoice. A customer on a trial cannot be invoiced. Refunds over $500 need Finance."* Claude edits the YAML files directly, because they are just files. `lorefile validate` catches anything misspelled.
 3. Point the data bindings at where the rows live: a Postgres `source:` for customers, a Stripe export in Parquet, a BigQuery table for events.
 4. Register the MCP server with Claude Desktop or Claude Code (one command, in [README.md](README.md)). From now on, every conversation starts with the same understanding of the business.
-5. Later, in Stella Cloud, the same folder gets a URL that ChatGPT and hosted agents can use too. Everyone reads from one place.
+5. Later, with MCP over HTTP, the same folder gets a URL that ChatGPT and hosted agents can use too. Everyone reads from one place.
 
 What the ontology **ingests** is structure and meaning, not rows. Phase 3 adds `init --from postgres://…` to draft types from an existing database schema so step 2 starts from a filled-in list instead of a blank page.
 
 ---
 
-## 4. How approvals work
+## 5. How approvals work
 
 There are two different approvals, and they should not be confused.
 
 | Approval | What it protects | How it works |
 |---|---|---|
-| **Changing the ontology** (a new rule, a changed threshold) | The definitions themselves | A file edit, reviewed as a pull request. Each type, rule and action has an `owner:`; they are the natural reviewers. Merge, and the server reloads. In Stella Cloud the same flow runs through the web page. |
+| **Changing the ontology** (a new rule, a changed threshold) | The definitions themselves | A file edit, reviewed as a pull request. Each type, rule and action has an `owner:`; they are the natural reviewers. Merge, and the server reloads. The page's Agents inbox runs the same flow for agents' proposals: Accept is the merge. |
 | **Taking an action** (switching a supplier, approving a contract) | The business | `validate` says pass / warn / fail and names `requires_approval_from`. The agent reports that to the human. The ontology records the policy; it does not sign off on behalf of anyone. |
 
-Agents can read everything through MCP. Writing through MCP is `propose_change`: the change is compiled and checked; with `--allow-edit` and a clean result it is written (and committed with `--commit-edits`), otherwise it waits in the web page's Agents inbox for a person to accept or set aside. Shipped examples never accept changes.
+Agents can read everything through MCP. Writing through MCP is `propose_change`: the change is compiled and checked; with `--allow-edit` and a clean result it is written (and committed, since a space keeps its own git history), otherwise it waits in the web page's Agents inbox for a person to accept or set aside. Shipped examples never accept changes.
 
 ---
 
-## 5. Warehouse permissions, concretely
+## 6. Warehouse permissions, concretely
 
 - **Credentials never live in the folder.** A `source:` file names an environment variable, nothing more. The repository is safe to share.
-- **Read-only and fenced.** When the binary reads through DuckDB it attaches sources read-only, refuses anything but a single `SELECT`, and after building the views it locks DuckDB to the folders those views read from: no other file on the machine, no extension install, no network. Use a read-only service account anyway.
+- **Read-only and fenced.** When the binary reads through DuckDB it reads local files only (csv, parquet, `.duckdb`), refuses anything but a single `SELECT`, and after building the views it locks DuckDB to the folders those views read from: no other file on the machine, no extension install, no network. Warehouse and S3 sources are declared, never read here. Use a read-only service account for the connectors agents use anyway.
 - **Row-level security stays in the warehouse.** If BigQuery hides EU rows from a user, the ontology MCP does not un-hide them, because it never fetched them; the user's own BigQuery MCP did, under the user's own login.
-- **In Stella Cloud**, each tenant gets its own secret store entry and its own isolated process. The hosted audit log records every tool call: which agent, which tool, which type, when.
+- **A hosted version**, if one comes, would give each tenant its own isolated process and an audit log of every change, and would hold no warehouse credentials either.
 
 ---
 
-## 6. Ontology packs for common MCPs
+## 7. Ontology packs for common MCPs
 
 Meta Ads, Google Ads, Shopify, Stripe, HubSpot and similar MCP servers return data but no business meaning: what is a "conversion", which campaign objective maps to which KPI, what "state-level" reporting can and cannot tell you. A pack is a ready-made ontology folder for one of those sources, with the type descriptions, glossary, data bindings and the gotchas written down, so an agent that has both MCPs knows what it is looking at. Three ship inside the binary today (`@meta-ads`, `@google-ads`, `@shopify`), read-only in the picker; copy one into a space to adapt it. Stripe and HubSpot are next.
 
 ---
 
-## 7. Status of each path
+## 8. Status of each path
 
 | Path | Status |
 |---|---|
@@ -131,9 +174,14 @@ Meta Ads, Google Ads, Shopify, Stripe, HubSpot and similar MCP servers return da
 | DuckDB fenced to each space's data folders | Built, tested |
 | Docker image | Dockerfile written (non-root, volume at `/spaces`), not yet built on our side (no Docker on the build machine) |
 | `--host 0.0.0.0` for containers | Built |
+| Docs on Vercel: `vercel.json`, `.vercelignore`, `docs/index.html` (§3) | Files written, deploy not run on our side |
+| App on Fly.io: `fly.toml`, `.dockerignore`, one machine, a volume at `/spaces` (§3) | Files written, deploy not run on our side. fly.toml's health check still asks `/api/spaces`, which now needs the token: change its `path` to `/healthz` |
+| App on Vercel | Binned (§3): no disk that survives, no long-running process |
 | `propose_change` through MCP, with a review inbox | Built, verified |
 | Clone-at-boot and push to a git remote | Not built; an entrypoint loop does it (PRODUCTION.md) |
-| MCP over HTTP | Not built (Phase 3) |
-| Login for the web page | Not built; use an SSO proxy |
-| Stella Cloud | Design only |
+| MCP over HTTP (`POST /mcp`, Streamable HTTP, bearer token) | Built, tested end to end with a scripted client; OAuth for Desktop's and ChatGPT's connectors is backlog |
+| Login: one token for the page, the API and MCP (`LOREFILE_TOKEN`, or made on the first run) | Built, tested; accounts and SSO are backlog |
+| `GET /healthz` for load balancers, no token needed | Built |
 | `init --from <database>` | Not built (Phase 3) |
+
+A hosted version is not on this list: it may come later ([BACKLOG.md](BACKLOG.md), "Hosted version, later").

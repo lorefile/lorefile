@@ -13,7 +13,7 @@ types:
       current_amount_micros: { type: integer, description: "As read from campaign_budget.amount_micros" }
       new_amount_micros:     integer
       reason:                string
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [google, change]
 
   - type: TargetChange
@@ -29,5 +29,5 @@ types:
       current_target:  { type: number, description: "tCPA in currency units or tROAS ratio; pass a decimal like 25.0" }
       new_target:      { type: number, description: "Pass a decimal like 30.0" }
       reason:          string
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [google, change]

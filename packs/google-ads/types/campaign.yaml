@@ -47,5 +47,5 @@ source:
   params:
     customer_id: "<Account.customer_id>"
     query: "SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.advertising_channel_type, campaign.advertising_channel_sub_type, campaign.bidding_strategy_type, campaign.bidding_strategy, campaign.bidding_strategy_system_status, campaign.target_cpa.target_cpa_micros, campaign.maximize_conversions.target_cpa_micros, campaign.target_roas.target_roas, campaign.maximize_conversion_value.target_roas, campaign_budget.amount_micros, campaign_budget.explicitly_shared, campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type, campaign.experiment_type, campaign.start_date, campaign.end_date FROM campaign WHERE campaign.status != 'REMOVED'"
-owner: measurement@stella.example
+owner: measurement@yourcompany.example
 tags: [google, structure]

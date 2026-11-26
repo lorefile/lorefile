@@ -41,7 +41,7 @@ types:
       connection: meta_ads
       tool: get_insights
       params: { object_id: "<Account.id or Campaign.campaign_id or AdSet.adset_id or Ad.ad_id>", time_range: { since: "YYYY-MM-DD", until: "YYYY-MM-DD" }, level: campaign, breakdown: "", action_attribution_windows: [7d_click, 1d_view] }
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [meta, measurement]
 
   - type: Conversion
@@ -82,7 +82,7 @@ types:
       connection: meta_ads
       tool: get_insights
       params: { object_id: "<Campaign.campaign_id or AdSet.adset_id or Ad.ad_id>", time_range: { since: "YYYY-MM-DD", until: "YYYY-MM-DD" }, level: campaign, fields: [actions, action_values], action_attribution_windows: [7d_click, 1d_view], breakdown: "" }
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [meta, measurement]
 
   - type: AttributionWindow
@@ -112,7 +112,7 @@ types:
       - { window_id: 28d_click,        label: "28-day click",            event: click,        days: 28, status: retired, note: "Retired January 2021 with the iOS 14 changes" }
       - { window_id: 28d_view,         label: "28-day view",             event: view,         days: 28, status: retired, note: "Retired January 2021" }
       - { window_id: 7d_view,          label: "7-day view",              event: view,         days: 7,  status: retired, note: "Retired January 2021" }
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [meta, measurement, reference]
 
   - type: LiftStudy
@@ -140,5 +140,5 @@ types:
       powered:         { type: boolean, description: "Meta's own power estimate: can this study detect the expected lift" }
     relationships:
       measures: { to: Campaign, cardinality: many-to-many, description: "Campaigns in the test cells" }
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [meta, measurement, incrementality]

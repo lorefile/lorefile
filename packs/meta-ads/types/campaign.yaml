@@ -39,5 +39,5 @@ source:
   connection: meta_ads
   tool: get_campaigns
   params: { account_id: "act_<Account.account_id>", limit: 100, status_filter: "" }
-owner: measurement@stella.example
+owner: measurement@yourcompany.example
 tags: [meta, structure]

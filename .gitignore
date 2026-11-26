@@ -1,5 +1,5 @@
 /target
-.stella/
+.lorefile/
 *.log
 .DS_Store
 /spaces/

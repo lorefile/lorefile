@@ -19,6 +19,10 @@ pub struct Raw {
     pub actions: Vec<ActionDef>,
     pub sources: Vec<SourceDef>,
     pub glossary: Vec<GlossaryTerm>,
+    pub metrics: Vec<MetricDef>,
+    pub functions: Vec<FunctionDef>,
+    /// `trust.yaml`: who stands behind what. `None` when the space has no such file.
+    pub trust: Option<TrustBook>,
     pub files: Vec<String>,
     /// Problems found while loading (bad YAML, unrecognised files).
     pub problems: Vec<String>,
@@ -91,6 +95,7 @@ fn ingest(raw: &mut Raw, rel: &str, text: &str) {
     if text.trim().is_empty() {
         return;
     }
+    raw.files.push(rel.to_string());
     let value: Yaml = match serde_yaml::from_str(text) {
         Ok(v) => v,
         Err(e) => {
@@ -98,9 +103,9 @@ fn ingest(raw: &mut Raw, rel: &str, text: &str) {
             return;
         }
     };
-    raw.files.push(rel.to_string());
     if let Err(e) = classify(raw, rel, value) {
-        raw.problems.push(format!("{}: {}", rel, e));
+        // keep the cause: "parsing constraints: unknown field `severty`, expected one of …"
+        raw.problems.push(format!("{}: {:#}", rel, e));
     }
 }
 
@@ -163,6 +168,35 @@ fn classify(raw: &mut Raw, rel: &str, value: Yaml) -> Result<()> {
             s.file = rel.to_string();
             raw.sources.push(s);
         }
+    } else if has(&value, "metric") {
+        let mut m: MetricDef = serde_yaml::from_value(value).context("parsing metric")?;
+        m.file = rel.to_string();
+        raw.metrics.push(m);
+    } else if has(&value, "metrics") {
+        let f: MetricsFile = serde_yaml::from_value(value).context("parsing metrics list")?;
+        for mut m in f.metrics {
+            m.file = rel.to_string();
+            raw.metrics.push(m);
+        }
+    } else if has(&value, "function") {
+        let mut f: FunctionDef = serde_yaml::from_value(value).context("parsing function")?;
+        f.file = rel.to_string();
+        raw.functions.push(f);
+    } else if has(&value, "functions") {
+        let f: FunctionsFile = serde_yaml::from_value(value).context("parsing functions list")?;
+        for mut x in f.functions {
+            x.file = rel.to_string();
+            raw.functions.push(x);
+        }
+    } else if has(&value, "trust") {
+        if rel != crate::trust::FILE {
+            anyhow::bail!("a `trust:` file is written by Lorefile as trust.yaml at the root of the space, not here (and not under another name: rename a trust.yml to trust.yaml)");
+        }
+        let t: TrustFile = serde_yaml::from_value(value).context("parsing trust.yaml")?;
+        if raw.trust.is_some() {
+            anyhow::bail!("second trust file found; only one trust.yaml is allowed");
+        }
+        raw.trust = Some(t.trust);
     } else if has(&value, "terms") {
         let g: Glossary = serde_yaml::from_value(value).context("parsing glossary")?;
         raw.glossary.extend(g.terms);
@@ -174,7 +208,7 @@ fn classify(raw: &mut Raw, rel: &str, value: Yaml) -> Result<()> {
         raw.manifest = Some(m);
     } else {
         anyhow::bail!(
-            "unrecognised file: expected one of type/types, relationship(s), constraints, action(s), connection/sources, terms, or ontology.yaml"
+            "unrecognised file: expected one of type/types, relationship(s), constraints, action(s), connection/sources, metric(s), function(s), terms, trust, or ontology.yaml"
         );
     }
     Ok(())

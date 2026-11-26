@@ -37,7 +37,7 @@ types:
       params:
         order_id: "<Order.order_id>"
         graphql: "{ order(id: \"gid://shopify/Order/<Order.order_id>\") { lineItems(first: 100) { nodes { id sku title variantTitle vendor quantity originalUnitPriceSet { shopMoney { amount } } totalDiscountSet { shopMoney { amount } } discountAllocations { allocatedAmountSet { shopMoney { amount } } } unfulfilledQuantity isGiftCard requiresShipping taxable product { id } variant { id } } } } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, orders]
 
   - type: Customer
@@ -74,7 +74,7 @@ types:
       params:
         limit: 250
         graphql: "{ customers(first: 250) { nodes { id email state verifiedEmail numberOfOrders amountSpent { amount currencyCode } emailMarketingConsent { marketingState } smsMarketingConsent { marketingState } tags taxExempt createdAt lastOrder { id } defaultAddress { countryCodeV2 provinceCode } } } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, customers, pii]
 
   - type: Fulfillment
@@ -106,7 +106,7 @@ types:
       params:
         order_id: "<Order.order_id>"
         graphql: "{ order(id: \"gid://shopify/Order/<Order.order_id>\") { fulfillments { id status displayStatus trackingInfo { company number url } location { id } service { handle } createdAt updatedAt fulfillmentLineItems(first: 50) { nodes { quantity lineItem { id } } } } } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, orders]
 
   - type: Refund
@@ -141,7 +141,7 @@ types:
       params:
         order_id: "<Order.order_id>"
         graphql: "{ order(id: \"gid://shopify/Order/<Order.order_id>\") { refunds { id createdAt note totalRefundedSet { shopMoney { amount } } refundLineItems(first: 50) { nodes { quantity restockType lineItem { id } subtotalSet { shopMoney { amount } } } } transactions { kind gateway status amountSet { shopMoney { amount } } } orderAdjustments(first: 10) { nodes { reason amountSet { shopMoney { amount } } } } } } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, orders]
 
   - type: DiscountCode
@@ -178,5 +178,5 @@ types:
       params:
         limit: 50
         graphql: "{ codeDiscountNodes(first: 50) { nodes { id codeDiscount { ... on DiscountCodeBasic { title status startsAt endsAt usageLimit asyncUsageCount appliesOncePerCustomer codes(first: 5) { nodes { code } } customerGets { value { ... on DiscountPercentage { percentage } ... on DiscountAmount { amount { amount } } } } combinesWith { orderDiscounts productDiscounts shippingDiscounts } } ... on DiscountCodeFreeShipping { title status startsAt endsAt usageLimit asyncUsageCount codes(first: 5) { nodes { code } } } } } } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, promotions]

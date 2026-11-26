@@ -8,7 +8,7 @@ constraints:
       Shopify refuses to cancel an order with open fulfillments. Once goods have
       shipped the customer gets a refund (refund_order), and the fulfillment is
       cancelled first if the carrier still has the parcel.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
 
   - id: SH-009
     name: Only captured money can be refunded
@@ -18,7 +18,7 @@ constraints:
     rationale: >
       pending has no payment to return, authorized is released by voiding (cancel
       the order), refunded has nothing left, voided and expired never captured.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
 
   - id: SH-010
     name: Refund within what is left on the order
@@ -29,7 +29,7 @@ constraints:
       current_total_price is what remains after earlier refunds and edits; the
       gateway rejects a refund above it. Shipping refunds go through
       order_adjustments and count toward the same ceiling.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
 
   - id: SH-011
     name: Percentage discounts are between 0 and 100
@@ -37,7 +37,7 @@ constraints:
     rule: code.value_type == "percentage" implies double(code.value) > 0.0 && double(code.value) <= 100.0
     severity: block
     rationale: Shopify stores percentages as a negative string; pass the positive magnitude here. 0 does nothing and more than 100 is rejected.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
 
   - id: SH-012
     name: End after start
@@ -45,7 +45,7 @@ constraints:
     rule: code.ends_at == null || code.ends_at > code.starts_at
     severity: block
     rationale: ISO 8601 timestamps compare as strings when both are UTC; an end before the start creates a code that can never be used.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
 
   - id: SH-013
     name: Unlimited codes leak and stop measuring
@@ -56,7 +56,7 @@ constraints:
       A code without a usage limit reaches coupon sites and browser extensions
       within days; after that its orders say nothing about the creator or channel
       it was made for. Limit uses, set once_per_customer, or issue unique codes.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [attribution]
 
   - id: SH-014
@@ -70,7 +70,7 @@ constraints:
       Facebook and Instagram, Google, TikTok) have their own checkout; none of
       them carries an online-store customer journey, so attribute them to the
       channel itself, not to a campaign.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [attribution]
 
   - id: SH-015
@@ -83,5 +83,5 @@ constraints:
       came from: codes travel through coupon sites and friends. Attribute from the
       customer journey (first and last visit, UTM parameters, referrer) and treat
       the code as a secondary signal.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [attribution]

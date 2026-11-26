@@ -3,89 +3,108 @@
   "configurations": [
     {
       "name": "ontology-spaces",
-      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeExecutable": "./target/debug/lorefile",
       "runtimeArgs": [
         "serve",
         "--dir",
         "spaces",
         "--port",
         "7076",
-        "--allow-edit"
+        "--allow-edit",
+        "--no-auth"
       ],
       "port": 7076
     },
     {
       "name": "ontology-ui",
-      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeExecutable": "./target/debug/lorefile",
       "runtimeArgs": [
         "serve",
         "--dir",
         "examples/supply-chain",
         "--port",
-        "7070"
+        "7070",
+        "--no-auth"
       ],
       "port": 7070
     },
     {
       "name": "ontology-ui-parquet",
-      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeExecutable": "./target/debug/lorefile",
       "runtimeArgs": [
         "serve",
         "--dir",
         "examples/supply-chain-parquet",
         "--port",
-        "7071"
+        "7071",
+        "--no-auth"
       ],
       "port": 7071
     },
     {
       "name": "ontology-ui-ecommerce",
-      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeExecutable": "./target/debug/lorefile",
       "runtimeArgs": [
         "serve",
         "--dir",
         "examples/ecommerce",
         "--port",
-        "7073"
+        "7073",
+        "--no-auth"
       ],
       "port": 7073
     },
     {
       "name": "ontology-ui-saas-pricing",
-      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeExecutable": "./target/debug/lorefile",
       "runtimeArgs": [
         "serve",
         "--dir",
         "examples/saas-pricing",
         "--port",
-        "7074"
+        "7074",
+        "--no-auth"
       ],
       "port": 7074
     },
     {
       "name": "ontology-ui-b2b-sales",
-      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeExecutable": "./target/debug/lorefile",
       "runtimeArgs": [
         "serve",
         "--dir",
         "examples/b2b-sales",
         "--port",
-        "7075"
+        "7075",
+        "--no-auth"
       ],
       "port": 7075
     },
     {
       "name": "ontology-ui-edit",
-      "runtimeExecutable": "./target/debug/stella-ontology",
+      "runtimeExecutable": "./target/debug/lorefile",
       "runtimeArgs": [
         "serve",
         "--dir",
         "examples/supply-chain",
         "--port",
         "7072",
-        "--allow-edit"
+        "--allow-edit",
+        "--no-auth"
       ],
       "port": 7072
+    },
+    {
+      "name": "ontology-login",
+      "runtimeExecutable": "./target/debug/lorefile",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/supply-chain",
+        "--port",
+        "7077"
+      ],
+      "port": 7077
     }
   ]
 }

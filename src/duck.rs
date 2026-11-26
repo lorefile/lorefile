@@ -1,14 +1,19 @@
 //! DuckDB inside the binary: the Phase 2 data door.
 //!
-//! One in-memory DuckDB per process holds the ontology as tables (`nodes`,
+//! One in-memory DuckDB per space holds the ontology as tables (`nodes`,
 //! `properties`, `edges`, `constraints`, `actions`, `sources`) plus one view per
 //! data-bound type or relationship, named after it, that reads the rows where
-//! they live: a CSV or Parquet file, a `.duckdb` file, a Postgres table through
-//! DuckDB's postgres extension, or Parquet on S3/HTTP through httpfs. One SQL
-//! statement can then join "rules about Supplier" to "actual suppliers".
+//! they live: a CSV or Parquet file, or a `.duckdb` file, next to the ontology.
+//! One SQL statement can then join "rules about Supplier" to "actual suppliers".
 //!
-//! Everything here is read-only: sources are attached `READ_ONLY`, and `query`
-//! accepts exactly one SELECT/WITH statement.
+//! Local files only, on purpose. Postgres, S3 and HTTP are declared sources
+//! that agents read with their own connectors: reading them here would need
+//! DuckDB's external access, and that is the switch the fence turns off.
+//!
+//! Everything here is read-only: sources are attached `READ_ONLY`, `query`
+//! accepts exactly one SELECT/WITH statement, and once the views exist the
+//! database may touch only the folders they read from (the fence). A space
+//! whose fence cannot be set does not get a database at all.
 
 use crate::data::{Column, QueryResult, Record};
 use crate::ontology::{Ontology, Relationship};
@@ -27,8 +32,8 @@ use std::time::Instant;
 pub const MAX_ROWS: usize = 500;
 /// Cap on rows `instances()` loads from a DuckDB-backed source.
 pub const MAX_INSTANCE_ROWS: usize = 10_000;
-/// Source kinds DuckDB reads directly.
-pub const KINDS: &[&str] = &["csv", "parquet", "duckdb", "postgres", "s3", "httpfs"];
+/// Source kinds DuckDB reads directly: local files next to the ontology.
+pub const KINDS: &[&str] = &["csv", "parquet", "duckdb"];
 /// Names of the ontology tables; a type or relationship with one of these names gets no view.
 const RESERVED: &[&str] = &["nodes", "properties", "edges", "constraints", "actions", "sources"];
 
@@ -49,9 +54,9 @@ pub struct ViewInfo {
 
 pub struct Db {
     conn: Mutex<Connection>,
-    /// True when DuckDB was fenced to the folders the views read from (no
-    /// other file, no network) before any query ran. Off when a source is
-    /// remote (postgres, s3) because those need external access at query time.
+    /// Always true for an open database: DuckDB was fenced to the folders the
+    /// views read from (no other file, no extension, no network) before any
+    /// query ran. A database that cannot be fenced is not opened.
     pub fenced: bool,
     /// Type name, or `From.relationship` for relationships → view.
     views: IndexMap<String, ViewInfo>,
@@ -90,38 +95,8 @@ fn yaml_lit(v: &serde_yaml::Value) -> String {
     }
 }
 
-/// `${VAR}` → the environment value. Errors name the missing variable.
-pub fn expand_env(s: &str) -> Result<String> {
-    let mut out = String::new();
-    let mut rest = s;
-    while let Some(start) = rest.find("${") {
-        out.push_str(&rest[..start]);
-        let after = &rest[start + 2..];
-        let Some(end) = after.find('}') else { bail!("unterminated ${{ in `{}`", s) };
-        let var = &after[..end];
-        match std::env::var(var) {
-            Ok(v) => out.push_str(&v),
-            Err(_) => bail!("environment variable {} is not set", var),
-        }
-        rest = &after[end + 1..];
-    }
-    out.push_str(rest);
-    Ok(out)
-}
 
-fn cfg_str(src: &SourceDef, key: &str) -> Option<String> {
-    match src.config.get(key)? {
-        serde_yaml::Value::String(s) => Some(s.clone()),
-        serde_yaml::Value::Number(n) => Some(n.to_string()),
-        serde_yaml::Value::Bool(b) => Some(b.to_string()),
-        _ => None,
-    }
-}
 
-fn cfg_bool(src: &SourceDef, key: &str) -> bool {
-    matches!(src.config.get(key), Some(serde_yaml::Value::Bool(true)))
-        || matches!(cfg_str(src, key).as_deref(), Some("true") | Some("yes") | Some("1"))
-}
 
 /// `my-conn.prod` → `src_my_conn_prod`: a safe ATTACH alias.
 fn alias_for(connection: &str) -> String {
@@ -129,9 +104,6 @@ fn alias_for(connection: &str) -> String {
     format!("src_{}", safe)
 }
 
-fn has_scheme(s: &str) -> bool {
-    ["s3://", "s3a://", "gs://", "gcs://", "r2://", "az://", "http://", "https://", "hf://"].iter().any(|p| s.starts_with(p))
-}
 
 fn has_ext(s: &str) -> bool {
     Path::new(s).extension().is_some() || s.contains('*') || s.contains('?')
@@ -144,14 +116,6 @@ fn file_in(root: &Path, folder: Option<&String>, table: &str, ext: &str) -> Path
     p
 }
 
-/// `base/table.parquet` for remote sources; the table may already be a full URL.
-fn url_in(base: &str, table: &str) -> String {
-    if has_scheme(table) {
-        return table.to_string();
-    }
-    let name = if has_ext(table) { table.to_string() } else { format!("{}.parquet", table) };
-    format!("{}/{}", base.trim_end_matches('/'), name)
-}
 
 /// `a.b.c` → `"a"."b"."c"`.
 fn dotted(parts: &[&str]) -> String {
@@ -229,7 +193,6 @@ struct Builder<'c> {
     conn: &'c Connection,
     has_json: bool,
     attached: HashSet<String>,
-    loaded: HashSet<String>,
     views: IndexMap<String, ViewInfo>,
     skipped: IndexMap<String, String>,
     unreadable: IndexMap<String, String>,
@@ -237,8 +200,6 @@ struct Builder<'c> {
     root: PathBuf,
     /// Folders the local views read from; the only ones queries may touch afterwards.
     local_dirs: HashSet<String>,
-    /// A postgres/s3/http source was attached: the fence has to stay open.
-    remote: bool,
 }
 
 impl<'c> Builder<'c> {
@@ -252,16 +213,6 @@ impl<'c> Builder<'c> {
         self.conn.execute_batch(sql).map_err(|e| anyhow!("{}", e)).with_context(|| format!("running `{}`", truncate_sql(sql)))
     }
 
-    fn load_extension(&mut self, name: &str) -> Result<()> {
-        if self.loaded.contains(name) {
-            return Ok(());
-        }
-        self.conn
-            .execute_batch(&format!("INSTALL {}; LOAD {};", name, name))
-            .map_err(|e| anyhow!("could not load the DuckDB `{}` extension: {} (the first use downloads it from extensions.duckdb.org, so network access is needed once)", name, e))?;
-        self.loaded.insert(name.to_string());
-        Ok(())
-    }
 
     fn attach(&mut self, alias: &str, target: &str, options: &str) -> Result<()> {
         if self.attached.contains(alias) {
@@ -275,36 +226,6 @@ impl<'c> Builder<'c> {
         Ok(())
     }
 
-    /// Credentials for httpfs come from env vars or the AWS credential chain, never from YAML.
-    fn s3_secret(&mut self, src: &SourceDef) -> Result<()> {
-        let alias = alias_for(&src.connection);
-        if self.attached.contains(&format!("secret:{}", alias)) {
-            return Ok(());
-        }
-        let mut opts: Vec<String> = vec!["TYPE S3".into()];
-        if cfg_bool(src, "credential_chain") {
-            self.load_extension("aws")?;
-            opts.push("PROVIDER CREDENTIAL_CHAIN".into());
-            if let Some(p) = cfg_str(src, "profile") { opts.push(format!("PROFILE {}", lit(&p))); }
-        } else if let (Ok(k), Ok(s)) = (std::env::var("AWS_ACCESS_KEY_ID"), std::env::var("AWS_SECRET_ACCESS_KEY")) {
-            opts.push(format!("KEY_ID {}", lit(&k)));
-            opts.push(format!("SECRET {}", lit(&s)));
-            if let Ok(t) = std::env::var("AWS_SESSION_TOKEN") { opts.push(format!("SESSION_TOKEN {}", lit(&t))); }
-        }
-        for (key, opt) in [("region", "REGION"), ("endpoint", "ENDPOINT"), ("url_style", "URL_STYLE")] {
-            if let Some(v) = cfg_str(src, key).or_else(|| if key == "region" { std::env::var("AWS_REGION").ok() } else { None }) {
-                opts.push(format!("{} {}", opt, lit(&v)));
-            }
-        }
-        if let Some(v) = cfg_str(src, "use_ssl") { opts.push(format!("USE_SSL {}", v)); }
-        if opts.len() > 1 {
-            let scope = cfg_str(src, "path").or_else(|| cfg_str(src, "url"));
-            let scope_sql = scope.map(|s| format!(", SCOPE {}", lit(&s))).unwrap_or_default();
-            self.exec(&format!("CREATE OR REPLACE SECRET {} ({}{});", ident(&format!("stella_{}", alias)), opts.join(", "), scope_sql))?;
-        }
-        self.attached.insert(format!("secret:{}", alias));
-        Ok(())
-    }
 
     /// A FROM-able expression for one table of one source, attaching or loading what it needs.
     fn table_ref(&mut self, root: &Path, src: &SourceDef, table: &str) -> Result<String> {
@@ -330,37 +251,10 @@ impl<'c> Builder<'c> {
                 parts.extend(table.split('.'));
                 Ok(dotted(&parts))
             }
-            "postgres" => {
-                let conn_str = if let Some(var) = cfg_str(src, "env") {
-                    std::env::var(&var).map_err(|_| anyhow!("source `{}`: environment variable {} (the Postgres connection string) is not set", src.connection, var))?
-                } else if let Some(cs) = cfg_str(src, "connection_string").or_else(|| cfg_str(src, "dsn")) {
-                    expand_env(&cs)?
-                } else {
-                    bail!("source `{}` (postgres) needs `env: <VAR>` naming the environment variable that holds the libpq connection string", src.connection)
-                };
-                self.load_extension("postgres")?;
-                self.remote = true;
-                let alias = alias_for(&src.connection);
-                self.attach(&alias, &conn_str, "TYPE postgres")?;
-                let schema = cfg_str(src, "schema").unwrap_or_else(|| "public".into());
-                let mut parts: Vec<&str> = vec![alias.as_str()];
-                if table.contains('.') { parts.extend(table.split('.')) } else { parts.push(schema.as_str()); parts.push(table) }
-                Ok(dotted(&parts))
-            }
-            "s3" | "httpfs" => {
-                self.load_extension("httpfs")?;
-                self.remote = true;
-                let base = src.path.clone().or_else(|| cfg_str(src, "url")).or_else(|| cfg_str(src, "bucket").map(|b| format!("s3://{}", b)));
-                let url = match base {
-                    Some(b) => url_in(&expand_env(&b)?, table),
-                    None if has_scheme(table) => table.to_string(),
-                    None => bail!("source `{}` ({}) needs `path: s3://bucket/prefix` (or an https:// base URL)", src.connection, kind),
-                };
-                if url.starts_with("s3") || url.starts_with("r2") || url.starts_with("gs") || url.starts_with("gcs") {
-                    self.s3_secret(src)?;
-                }
-                Ok(format!("read_parquet({})", lit(&url)))
-            }
+            "postgres" | "s3" | "httpfs" => bail!(
+                "source `{}` ({}) is remote: the SQL door reads only local csv, parquet and duckdb files so the fence always holds; agents query it with their own connector",
+                src.connection, kind
+            ),
             other => bail!("kind `{}` is not readable here; agents query it with their own connector", other),
         }
     }
@@ -514,7 +408,7 @@ impl<'c> Builder<'c> {
                 "({}, 'type', {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
                 lit(&t.name),
                 lit_opt(&ont.domain_of(&t.name).unwrap_or_default()),
-                lit(&t.description.trim()),
+                lit(t.description.trim()),
                 lit_opt(&t.key_property().unwrap_or_default()),
                 lit_opt(&t.owner),
                 lit_list(&t.tags),
@@ -662,7 +556,7 @@ impl Db {
         let conn = Connection::open_in_memory().context("opening DuckDB")?;
         let has_json = conn.query_row("SELECT to_json(1)::VARCHAR", [], |_| Ok(())).is_ok();
         let root = std::fs::canonicalize(&ont.root).unwrap_or_else(|_| ont.root.clone());
-        let mut b = Builder { conn: &conn, has_json, attached: HashSet::new(), loaded: HashSet::new(), views: IndexMap::new(), skipped: IndexMap::new(), unreadable: IndexMap::new(), root, local_dirs: HashSet::new(), remote: false };
+        let mut b = Builder { conn: &conn, has_json, attached: HashSet::new(), views: IndexMap::new(), skipped: IndexMap::new(), unreadable: IndexMap::new(), root, local_dirs: HashSet::new() };
         for t in ont.types.values() {
             if let Err(e) = b.type_view(ont, t) {
                 b.skipped.insert(t.name.clone(), format!("{:#}", e));
@@ -678,23 +572,14 @@ impl Db {
         }
         b.ontology_tables(ont)?;
         // The fence. Everything the views need is set up; from here on a query
-        // may read only the folders those views point at: no other file on
-        // the machine, no extension install, no network. `lock_configuration`
-        // stops a query from switching it back on.
-        let fenced = if b.remote {
-            false
-        } else {
-            let mut dirs: Vec<String> = b.local_dirs.iter().map(|d| format!("{}/", d.trim_end_matches('/'))).collect();
-            dirs.sort();
-            let sql = format!("SET allowed_directories = {}; SET enable_external_access = false; SET lock_configuration = true;", lit_list(&dirs));
-            match conn.execute_batch(&sql) {
-                Ok(()) => true,
-                Err(e) => {
-                    eprintln!("warn  DuckDB could not be fenced to the data folders: {}", e);
-                    false
-                }
-            }
-        };
+        // may read only the folders those views point at: no other file on the
+        // machine, no extension install, no network. `lock_configuration` stops
+        // a query from switching it back on. No fence, no database: fail closed.
+        let mut dirs: Vec<String> = b.local_dirs.iter().map(|d| format!("{}/", d.trim_end_matches('/'))).collect();
+        dirs.sort();
+        let sql = format!("SET allowed_directories = {}; SET enable_external_access = false; SET lock_configuration = true;", lit_list(&dirs));
+        conn.execute_batch(&sql).map_err(|e| anyhow!("DuckDB could not be fenced to the data folders, so no SQL door was opened: {}", e))?;
+        let fenced = true;
         let (views, skipped, unreadable) = (b.views, b.skipped, b.unreadable);
         Ok(Db { conn: Mutex::new(conn), fenced, views, skipped, unreadable, has_json })
     }
@@ -887,7 +772,7 @@ mod tests {
     }
 
     fn tmp(name: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("stella-duck-{}-{}", name, std::process::id()));
+        let d = std::env::temp_dir().join(format!("lorefile-duck-{}-{}", name, std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         d
@@ -904,14 +789,6 @@ mod tests {
         assert!(check_read_only("insert into nodes values (1)").is_err());
         assert!(check_read_only("/* select */ copy nodes to 'x.csv'").is_err());
         assert!(check_read_only("").is_err());
-    }
-
-    #[test]
-    fn env_expansion_names_missing_vars() {
-        std::env::set_var("STELLA_TEST_VAR", "ok");
-        assert_eq!(expand_env("a ${STELLA_TEST_VAR} b").unwrap(), "a ok b");
-        let e = expand_env("${STELLA_DEFINITELY_UNSET}").unwrap_err().to_string();
-        assert!(e.contains("STELLA_DEFINITELY_UNSET"));
     }
 
     /// CSV, a `.duckdb` file with a renamed column, and inline instances all become views;
@@ -991,15 +868,22 @@ mod tests {
     }
 
     #[test]
-    fn postgres_needs_its_env_var() {
-        let d = tmp("pg");
+    fn remote_sources_stay_outside_the_door_and_the_fence_holds() {
+        let d = tmp("remote");
         write(&d, "ontology.yaml", "name: t\n");
-        write(&d, "sources/s.yaml", "connection: pg\nkind: postgres\nenv: STELLA_TEST_PG_URL_UNSET\n");
-        write(&d, "types/t.yaml", "type: Order\nproperties: { id: { type: string, key: true } }\nsource: { connection: pg, table: orders }\n");
+        write(&d, "data/orders.csv", "id,total\nO-1,10\n");
+        write(&d, "sources/s.yaml", "sources:\n  - { connection: pg, kind: postgres, env: LOREFILE_TEST_PG_URL_UNSET }\n  - { connection: lake, kind: s3, path: s3://nothing/here }\n  - { connection: files, kind: csv, path: data }\n");
+        write(&d, "types/t.yaml", "types:\n  - type: Order\n    properties: { id: { type: string, key: true } }\n    source: { connection: pg, table: orders }\n  - type: Event\n    properties: { id: { type: string, key: true } }\n    source: { connection: lake, table: events }\n  - type: Local\n    properties: { id: { type: string, key: true }, total: number }\n    source: { connection: files, table: orders }\n");
         let ont = Ontology::from_raw(loader::load(&d).unwrap());
         let db = Db::open(&ont).unwrap();
-        let why = db.view_error("Order").unwrap();
-        assert!(why.contains("STELLA_TEST_PG_URL_UNSET"), "{}", why);
+        assert!(db.view("Order").is_none() && db.view("Event").is_none(), "remote kinds get no view");
+        assert!(db.unreadable.get("Order").map(|k| k == "postgres").unwrap_or(false), "{:?}", db.unreadable);
+        assert!(db.view("Local").is_some());
+        assert!(db.fenced, "declaring a remote source never opens the fence");
+        let outside = if cfg!(windows) { "C:/Windows/win.ini" } else { "/etc/passwd" };
+        assert!(db.query(&format!("select * from read_text('{}')", outside), 5).is_err());
+        assert!(db.query("install httpfs", 5).is_err());
+        assert!(db.query("select total from Local", 5).is_ok());
         let _ = std::fs::remove_dir_all(&d);
     }
 }

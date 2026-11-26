@@ -1,0 +1,42 @@
+{
+  "name": "lorefile",
+  "version": "0.1.0",
+  "description": "A team's business knowledge in plain YAML files, for AI agents: an MCP server, a CLI and a web page in one binary. This package downloads and runs it.",
+  "keywords": [
+    "ontology",
+    "mcp",
+    "ai-agents",
+    "semantic-layer",
+    "yaml",
+    "cli"
+  ],
+  "homepage": "https://github.com/lorefile/lorefile#readme",
+  "bugs": "https://github.com/lorefile/lorefile/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lorefile/lorefile.git",
+    "directory": "npm"
+  },
+  "license": "Apache-2.0",
+  "bin": {
+    "lorefile": "bin/lorefile.js"
+  },
+  "files": [
+    "bin/lorefile.js",
+    "checksums.txt",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

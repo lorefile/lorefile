@@ -25,7 +25,7 @@ Add two servers to `claude_desktop_config.json`: your Meta Ads MCP server under 
       "env": { "META_ACCESS_TOKEN": "..." }
     },
     "meta-ads-ontology": {
-      "command": "/absolute/path/to/stella-ontology",
+      "command": "/absolute/path/to/lorefile",
       "args": ["mcp", "--dir", "/absolute/path/to/packs/meta-ads"]
     }
   }
@@ -73,5 +73,5 @@ The agent answers: the campaign is a test cell and cannot be paused until the te
 ## Validate
 
 ```bash
-./target/debug/stella-ontology validate --dir packs/meta-ads
+./target/debug/lorefile validate --dir packs/meta-ads
 ```

@@ -29,7 +29,7 @@ types:
       params:
         customer_id: "<Account.customer_id>"
         query: "SELECT bidding_strategy.id, bidding_strategy.name, bidding_strategy.type, bidding_strategy.status, bidding_strategy.target_cpa.target_cpa_micros, bidding_strategy.target_roas.target_roas, bidding_strategy.maximize_conversion_value.target_roas, bidding_strategy.campaign_count, bidding_strategy.effective_currency_code FROM bidding_strategy WHERE bidding_strategy.status = 'ENABLED'"
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [google, bidding]
 
   - type: Audience
@@ -64,7 +64,7 @@ types:
       params:
         customer_id: "<Account.customer_id>"
         query: "SELECT user_list.id, user_list.name, user_list.type, user_list.membership_status, user_list.membership_life_span, user_list.size_for_search, user_list.size_for_display, user_list.size_range_for_search, user_list.eligible_for_search, user_list.eligible_for_display, user_list.match_rate_percentage, user_list.closing_reason FROM user_list"
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [google, targeting]
 
   - type: GeoTarget
@@ -102,5 +102,5 @@ types:
         customer_id: "<Account.customer_id>"
         query: "SELECT campaign_criterion.criterion_id, campaign_criterion.campaign, campaign_criterion.location.geo_target_constant, campaign_criterion.negative, campaign_criterion.bid_modifier FROM campaign_criterion WHERE campaign_criterion.type = 'LOCATION' AND campaign.id = <Campaign.campaign_id>"
         then: "SELECT geo_target_constant.id, geo_target_constant.name, geo_target_constant.canonical_name, geo_target_constant.target_type, geo_target_constant.country_code, geo_target_constant.status FROM geo_target_constant WHERE geo_target_constant.id IN (<ids>)"
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [google, targeting, geo]

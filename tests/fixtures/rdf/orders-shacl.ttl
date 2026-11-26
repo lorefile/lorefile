@@ -1,0 +1,72 @@
+# A small OWL + SHACL file written for Lorefile's tests (not copied from anywhere):
+# a class with three properties and a key, and a SHACL shape whose constraints
+# `lorefile import --from-rdf` turns into guardrails.
+
+@prefix ex:   <https://shop.example/ontology#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix sh:   <http://www.w3.org/ns/shacl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+ex: a owl:Ontology ;
+    rdfs:label "shop-example" ;
+    rdfs:comment "Orders, as another team's ontology describes them." .
+
+ex:Order a owl:Class ;
+    rdfs:label "Order" ;
+    rdfs:comment "One checkout." ;
+    skos:altLabel "basket" ;
+    owl:hasKey ( ex:orderId ) .
+
+ex:Customer a owl:Class ;
+    rdfs:label "Customer" ;
+    rdfs:comment "Someone who buys." .
+
+ex:orderId a owl:DatatypeProperty ;
+    rdfs:domain ex:Order ;
+    rdfs:range xsd:string ;
+    rdfs:comment "The order number." .
+
+ex:status a owl:DatatypeProperty ;
+    rdfs:domain ex:Order ;
+    rdfs:range xsd:string ;
+    rdfs:comment "Where the order is." .
+
+ex:total a owl:DatatypeProperty ;
+    rdfs:domain ex:Order ;
+    rdfs:range xsd:decimal .
+
+ex:placedBy a owl:ObjectProperty , owl:FunctionalProperty ;
+    rdfs:domain ex:Order ;
+    rdfs:range ex:Customer ;
+    rdfs:comment "An Order is placed by one Customer." .
+
+ex:OrderShape a sh:NodeShape ;
+    sh:targetClass ex:Order ;
+    sh:property [
+        sh:path ex:status ;
+        sh:minCount 1 ;
+        sh:in ( "placed" "paid" "shipped" ) ;
+        sh:message "An order's status is placed, paid or shipped"
+    ] ;
+    sh:property [
+        sh:path ex:total ;
+        sh:minInclusive 0 ;
+        sh:severity sh:Warning
+    ] ;
+    sh:property [
+        sh:path ex:note ;
+        sh:name "note" ;
+        sh:datatype xsd:string ;
+        sh:maxLength 200
+    ] ;
+    sh:property [
+        sh:path ex:placedBy ;
+        sh:class ex:Customer ;
+        sh:maxCount 1
+    ] .
+
+ex:VipShape a sh:NodeShape ;
+    sh:targetClass ex:Customer ;
+    sh:sparql [ sh:select "SELECT $this WHERE { $this ex:vip true }" ] .

@@ -1,6 +1,6 @@
-# Stella Ontology — Architecture Options
+# Lorefile — Architecture Options
 
-> Status: **approved 2026-11-25 — Option A core + DuckDB as the data door, in Rust.** Phase 1 is built; see [README.md](README.md) to run it. Sections below are the design as approved.
+> Status: **approved 2026-11-25 — Option A core + DuckDB as the data door, in Rust.** Phases 1 and 2 are built; see [README.md](README.md) to run it. Phase 3 (any MCP as a source, the capture loop, logic, hosted) is designed in [§17](#17-phase-3-design-any-mcp-is-a-source-the-ontology-keeps-what-matters); its first steps are built. Sections below are the design as approved. Since 2026-11-26 the project is released as **Lorefile**, open source only; the hosted parts of this design are parked in [BACKLOG.md](BACKLOG.md) under "Hosted version, later".
 
 ---
 
@@ -48,11 +48,11 @@ validate(switch_supplier, {part: BRK-220, to: Beta Ltd})
 
 Claude answers in one turn, correctly, and cites the rule. Nobody wrote a prompt for this. The ontology *is* the prompt.
 
-### Before / after: Stella's own apps
+### Before / after: a measurement company's own apps
 
-**Before.** Stella's MMM, experiments, and attribution tools each carry their own idea of "channel", "campaign", "KPI", "pre-period". Agents using Stella's MCP learn these by trial and error.
+**Before.** A marketing-measurement company's MMM, experiments, and attribution tools each carry their own idea of "channel", "campaign", "KPI", "pre-period". Agents using its MCP learn these by trial and error.
 
-**After.** One `marketing-measurement` ontology defines `Channel`, `Campaign`, `Experiment`, `KPI`, `Model`, with rules like *"a geo experiment needs at least 4 weeks of pre-period data"* and *"a Channel's spend has exactly one source of truth"*. Every Stella tool and every agent reads the same definitions.
+**After.** One `marketing-measurement` ontology defines `Channel`, `Campaign`, `Experiment`, `KPI`, `Model`, with rules like *"a geo experiment needs at least 4 weeks of pre-period data"* and *"a Channel's spend has exactly one source of truth"*. Every tool it ships and every agent reads the same definitions.
 
 ---
 
@@ -67,8 +67,8 @@ ontology/            ← humans and agents edit this
    constraints/**/*.yaml
    sources/*.yaml
         │
-        ▼  stella-ontology serve ./ontology
-   in-memory graph + small snapshot file (.stella/ontology.db)
+        ▼  lorefile serve ./ontology
+   in-memory graph + small snapshot file (.lorefile/ontology.db)
         │
    UI · MCP · API
 ```
@@ -123,13 +123,13 @@ Take Option A for the ontology. Borrow only the good part of Option C, DuckDB, a
         │
         ▼
  ┌───────────────────────────────────────────────────────────────┐
- │  stella-ontology   (one Rust binary, ~50 MB, starts in <100ms) │
+ │  lorefile          (one Rust binary, ~50 MB, starts in <100ms) │
  │                                                               │
  │  1. parse      every YAML file                                │
  │  2. validate   types exist · rules reference real properties  │
  │                · no duplicate IDs · cardinalities make sense  │
  │  3. graph      in RAM (10k nodes → microsecond lookups)       │
- │  4. snapshot   .stella/ontology.db  (fast cold start, UI)      │
+ │  4. snapshot   .lorefile/ontology.db  (fast cold start, UI)    │
  │  5. DuckDB     ontology tables + optional live connectors:    │
  │                Parquet · CSV · Postgres · MySQL · S3 ·        │
  │                Snowflake · BigQuery · Iceberg · Delta         │
@@ -145,7 +145,7 @@ Why this wins for the next 5 to 10 years:
 - **Files are the API.** Every LLM already reads YAML perfectly. No SDK required to understand an ontology; `cat` works.
 - **Git is the audit log.** Who changed rule SC-041, when, why, and what it looked like last quarter. SOC2 reviewers like this.
 - **The agent loop closes.** Agents don't just read the ontology, they propose changes to it as PRs. The ontology gets better the more agents use it.
-- **No lock-in, ever.** A customer who leaves Stella Cloud still has a folder of YAML and a free binary.
+- **No lock-in, ever.** A team that stops using it, or leaves any hosted copy, still has a folder of YAML and a free binary.
 - **DuckDB is the right bet for "connect to everything via config".** One embedded engine already speaks Parquet, Postgres, MySQL, S3, Iceberg, Delta, and more, with Snowflake and BigQuery reachable through Arrow. We don't write connectors; we write a 10-line YAML `source` and DuckDB does the rest.
 
 ---
@@ -258,7 +258,7 @@ refresh: 15m         # how often row counts / freshness are checked for the UI
 
 ## 5. UI wireframe (plain English)
 
-One page, three columns. Boots with `stella-ontology serve` and opens in the browser. Same page is embedded in Stella Cloud.
+One page, three columns. Boots with `lorefile serve` and opens in the browser.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -288,7 +288,7 @@ One page, three columns. Boots with `stella-ontology serve` and opens in the bro
 - **Right:** rules that apply, and where the data lives with live freshness.
 - **Bottom:** compiler status and an "Ask" box that is literally the same MCP server the agents use.
 
-Editing from the UI is opt-in (`serve --allow-edit`): an Edit button on every page and a "+ New" menu write the same YAML files, after the compiler has accepted the change (errors block, warnings pass). With `--commit-edits` each save is one git commit; otherwise the footer shows the uncommitted files for review. Agents get the same path as the `propose_change` MCP tool. Next: edit in UI → opens a PR.
+Editing from the UI is opt-in (`serve --allow-edit`): an Edit button on every page and a "+ New" menu write the same YAML files, after the compiler has accepted the change (errors block, warnings pass). Each save is one git commit when the space keeps its own history (the default for a space the app created; `--no-commit-edits` turns it off); a space nested inside another project's repository leaves its changes uncommitted for review, or commits them with `--commit-edits`. Agents get the same path as the `propose_change` MCP tool. Next: edit in UI → opens a PR.
 
 ---
 
@@ -357,64 +357,46 @@ Rust. The file format is the real product and is language-neutral, so Python and
 
 ---
 
-## 10. Hosting: laptop → any cloud → Stella Cloud
+## 10. Hosting: laptop → any cloud
 
-**Local.** `brew install stella-ontology` (or one `curl`), then `stella-ontology serve ./ontology`. UI at `localhost:7070`, MCP on stdio or `localhost:7070/mcp`.
+**Local.** `npx lorefile`, the Docker image, `cargo install lorefile` or one `curl` (all specified, being built; today `cargo build`), then `lorefile serve ./ontology`. UI at `localhost:7070`, MCP on stdio, and over HTTP at `localhost:7070/mcp` once the login token lands.
 
 **Any cloud.** The same binary in a container. The folder comes from a git clone at boot, or an S3/GCS bucket mount. Stateless, so it scales horizontally and restarts freely. Fly.io, Cloud Run, ECS, a $5 VPS, all fine.
 
-**Stella Cloud (SOC2).**
-
-```
-Customer                                 Stella Cloud
-────────                                 ────────────
-github.com/acme/ontology ───push───►     sync → compile → serve
-                                         ├─ acme.ontology.stella.app          UI with SSO
-                                         ├─ acme.ontology.stella.app/mcp      API key per agent
-                                         ├─ audit log: which person or agent read/changed what
-                                         ├─ connectors with secrets held by Stella (Snowflake, BQ…)
-                                         ├─ versions, rollback, scheduled freshness checks
-                                         └─ backups, uptime, support
-```
-
-Customers connect a repo through a GitHub app, or upload a folder. We run the open-source binary for them and add the things that are hard to do alone: identity, secrets, audit, uptime, multi-tenant isolation. Pricing can be a flat fee per ontology plus seats, with an enterprise tier for SSO and private connectors.
+**Hosted, later.** A hosted version may come later. It would run the same open-source binary and add what is hard to do alone: one safe copy that agents read, SSO and roles, an audit log, and GitHub sync. It is not being built now; the earlier design and pricing ideas are in [BACKLOG.md](BACKLOG.md) under "Hosted version, later".
 
 ---
 
 ## 11. Open source strategy
 
-**Open core, Apache 2.0.** Everything in this document except the cloud layer is open.
-
-| Open source (free, forever) | Stella Cloud (paid) |
-|---|---|
-| File format and compiler | Multi-tenant hosting |
-| MCP server, API, CLI | SSO, roles, per-agent API keys |
-| UI | Audit log and SOC2 reports |
-| DuckDB connectors | Managed secrets for warehouse connections |
-| Starter ontologies | Versioning UI, rollback, scheduled syncs |
-| | Support and SLAs |
+**Apache-2.0, all of it.** The file format, compiler, MCP server, API, CLI, page, DuckDB door, examples and packs are open and free. A hosted version, if one comes, would add hosting, SSO, roles and audit around the same binary, not features held back from it.
 
 How people benefit:
 
 - **No lock-in.** Their ontology is a folder they own.
 - **Community connectors and starter packs.** `supply-chain`, `saas-metrics`, `marketing-measurement`, `healthcare-claims`. Each a repo anyone can fork.
 - **Agent framework integrations** contributed by the community: Claude Agent SDK, OpenAI Agents, LangChain, CrewAI.
-- **Interop.** Export to OWL/RDF/JSON-LD/LinkML for the academic and enterprise world; import from dbt, LookML, OpenAPI, Protobuf, and raw database schemas.
+- **Interop.** Apache Ossie and OWL / SKOS / SHACL (Turtle, JSON-LD, N-Triples, RDF/XML) both ways, built (§18). Still to come: LinkML, and import from dbt, LookML, OpenAPI, Protobuf and raw database schemas.
 - **Trust.** Companies adopt ontology tooling slowly. Being able to read every line of the thing that governs their agents' behaviour matters.
 
-Why it helps Stella: the format becomes a standard, the hosted version is the obvious place to run it, and every Stella product gets a shared vocabulary for free.
+Why open: a format becomes a standard only when anyone can read it, run it and fork it.
 
 ---
 
 ## 12. The 5 to 10 year view
 
 - **The ontology becomes the contract between humans, data, and agents.** Every agent action is validated against it. "Did the agent follow policy?" becomes a query.
-- **Bootstrapping from what exists.** `stella-ontology init --from postgres://…` reads a schema and drafts the types. An LLM fills in descriptions. Day-one onboarding goes from weeks to an afternoon.
+- **Bootstrapping from what exists.** `lorefile init --from postgres://…` reads a schema and drafts the types. An LLM fills in descriptions. Day-one onboarding goes from weeks to an afternoon.
 - **Agents improve the ontology.** "40 suppliers have a `sustainability_score` column that isn't in the ontology. Add it?" arrives as a PR.
 - **Time travel for free.** Git gives "what did our rules look like in Q2?" without building anything.
-- **Standards gravity.** Palantir Foundry proved the ontology-as-operating-layer idea is worth billions, but closed. There is no open, lightweight, agent-first equivalent today. This is that gap.
+- **Standards gravity.** Palantir Foundry proved the ontology-as-operating-layer idea is worth billions, but closed. In autumn 2026 NVIDIA (Auto Ontology), Databricks (Genie Ontology), Snowflake (Business Ontology) and Microsoft (Fabric IQ Ontology) all shipped agent ontologies; each either runs the queries itself or is locked to one platform. What stays distinctive here:
+  - **a keeper only**: it never runs a query, a function or a write, and holds no credential; agents do the work with their own logins;
+  - **across warehouses and beyond them**: one ontology spans several warehouses and the non-warehouse MCPs a team already uses (ad platforms, a shop, a measurement tool);
+  - **actions, guardrails and approvers**: what an agent may do, what must hold first and who signs, checked by `validate` before the agent acts;
+  - **plain files in git**: a person reviews every change, and leaving costs nothing;
+  - **speaking the standards**: Apache Ossie, the draft interchange format backed by Snowflake, dbt and others, and the W3C's OWL, SKOS and SHACL, both ways, with an IRI on every entity, field, link, word, guardrail and action (§18), so a draft made elsewhere can move in and other tools can read it out.
 
-Tools we are deliberately not becoming: Neo4j (instance graph DB, heavy JVM), Protégé/OWL (academic), dbt semantic layer and Cube (metrics only, not rules or actions), LinkML (schema language with no runtime; we borrow its ideas).
+Tools we are deliberately not becoming: Neo4j (instance graph DB, heavy JVM), an OWL editor or reasoner like Protégé (we export to it and import from it; the YAML stays the source of truth), dbt semantic layer and Cube (metrics only, not rules or actions), LinkML (schema language with no runtime; we borrow its ideas).
 
 ---
 
@@ -423,9 +405,9 @@ Tools we are deliberately not becoming: Neo4j (instance graph DB, heavy JVM), Pr
 | Phase | Weeks | Deliverable |
 |---|---|---|
 | **1 · Core** | 1–3 | File format, Rust compiler with validation, in-memory graph, CLI (`validate`, `serve`, `describe`), MCP server with `search / describe / neighbors / constraints_for / where_is / validate`. Supply-chain example. Read-only. |
-| **2 · Doors** | 4–8 | **Built:** web UI; DuckDB inside the binary (cargo feature `duckdb`, on by default) reading Parquet, CSV, `.duckdb` files, Postgres and S3/HTTP Parquet, with the ontology as SQL tables; `query(sql)` as MCP tool, CLI command, `/api/query` and a SQL box in the UI; `examples/supply-chain-parquet`; edit mode in the UI (`--allow-edit`, `--commit-edits`) and `propose_change` in MCP, both validated by the compiler before a file is written. **Open:** MySQL, `init --from <db>`, Stella `marketing-measurement` ontology in production use internally. |
-| **3 · Cloud** | 9–16 | Snowflake, BigQuery, Databricks. `propose_change` opening PRs (today it validates and writes locally). Semantic search. Stella Cloud multi-tenant alpha with SSO and audit. |
-| **4 · Ecosystem** | ongoing | Starter packs, Python/TS SDKs, OWL/LinkML export, dbt/LookML import, GraphQL. Open-source launch. |
+| **2 · Doors** | 4–8 | **Built:** web UI; DuckDB inside the binary (cargo feature `duckdb`, on by default) reading Parquet, CSV, `.duckdb` files, Postgres and S3/HTTP Parquet, with the ontology as SQL tables; `query(sql)` as MCP tool, CLI command, `/api/query` and a SQL box in the UI; `examples/supply-chain-parquet`; edit mode in the UI (`--allow-edit`, `--commit-edits`) and `propose_change` in MCP, both validated by the compiler before a file is written. **Open:** MySQL, `init --from <db>`, a `marketing-measurement` ontology in production use. |
+| **3 · Any MCP is a source** | 9–16 | Designed in §17: agents offer to save what they settle during their work (`propose_patch`), a `logic/` folder (derived fields, metrics, functions as recipes), `does` and `mutable: false` checked by `validate`, the table browser and `init --from`. Built: `propose_patch`, metrics and functions, MCP over HTTP with a login token. A hosted copy (GitHub App sync, SSO, roles, audit) is parked in BACKLOG.md. The ontology never executes and never holds credentials. |
+| **4 · Ecosystem** | ongoing | Open-source launch as Lorefile. **Built:** `npx`, Docker and `cargo install` ready for the first tag; Apache Ossie and OWL / SKOS / SHACL import and export with IRIs (§18). **Open:** starter packs, Python/TS SDKs, sub-kinds (`extends`), LinkML, dbt/LookML import, GraphQL. |
 
 ---
 
@@ -479,3 +461,215 @@ Writing `examples/ecommerce`, `examples/saas-pricing` and `examples/b2b-sales` (
 10. **Unresolved inputs fail as "could not evaluate", not as "unknown".** When `PaymentMethod` cannot be read, `PM-002` reports `Undeclared reference to 'status'` and blocks. That is the right verdict, but the message should say "input payment_method not loaded" rather than leak the CEL error. *Fix:* mark results for unresolved inputs as `unknown` with the fetch hint attached, and let `--strict` decide whether unknown blocks.
 
 Smaller observations: `sql:` and `required:` are accepted silently and do nothing (see 2 and 4); a plain `description:` containing `: ` or starting with a quote breaks YAML parsing and E001 points at the line but not the key, which newcomers hit on their first rationale; the glossary's `means:` must name a type or action, so business words for a property (`EB` for `economic_buyer_contact_id`) have to be hung on the type instead.
+
+---
+
+## 17. Phase 3 design: any MCP is a source, the ontology keeps what matters
+
+> Status: **design, written 2026-11-25, revised the same day after discussion, not built.** The first draft made the ontology server execute actions and hold credentials. That is withdrawn. The ontology is the keeper of information: what matters to this business, where it lives, what may and may not be done. Agents do the work through the MCPs they already have, and those tools authenticate every request themselves.
+
+### 17.1 The principle: a Yellow Pages, not a switchboard
+
+| The ontology is responsible for | The ontology is not responsible for |
+|---|---|
+| What the entities, links, metrics and words mean | Fetching rows (the data MCP does, with the user's login) |
+| Where each thing lives: which MCP server, which tool, which table, which filter | Running functions (the tool or API the function names does) |
+| Which guardrails an agent must check before it acts, and `validate` to check them | Authenticating or authorising anything (every API and MCP does that per request) |
+| Recording what agents learned and proposed, for a person to accept | Enforcing anything inside Snowflake, BigQuery, Shopify or Meta |
+| Recording who stands behind each definition (proposed, accepted, checked) | Checking a definition against data itself: "checked" is a person's word |
+| Being the one copy agents read, so a definition is the same tomorrow as today | Being in the path of a write |
+
+This is the competitive position against Foundry: the same vocabulary (entities, links, functions, actions with criteria) without owning the data, the code or the credentials. Anyone whose agent runs in Claude, ChatGPT or Cursor with a data MCP installed can use it. There is nothing to host to get value; a hosted version, if one comes, would be about keeping the one copy safe, not about executing.
+
+### 17.2 Any MCP is a source, and the first run writes the ontology
+
+**Before.** Monday, a marketer in Claude: "Give me last week's campaign performance." Claude has the Meta Ads MCP, the Google Ads MCP and the BigQuery MCP installed. It explores: finds the Meta insights tool, picks a date range, finds the GA4 export in BigQuery, guesses that `purchase` is the conversion that matters, joins by campaign name, reports. Thirty tool calls and three clarifying questions. Tuesday, a colleague asks the same thing and Claude explores again, guesses differently, and the numbers do not match Monday's.
+
+**After.** Same Monday, but the ontology MCP is installed too and its instructions say: *when the user settles a definition during the work, offer to save it.* At the end Claude asks:
+
+```
+Claude: I used three things worth remembering for next time. Save them to the ontology?
+  • Success metric: "purchase" events in bigquery analytics.ga4_events, count distinct transaction_id
+  • Spend: Meta Ads MCP → get_insights(level: campaign, fields: spend, date_preset: last_7d)
+                           Google Ads MCP → campaign_report(metrics: cost_micros)
+  • Join: Meta campaign name ↔ ga4 utm_campaign (lower-cased)
+User: yes, and the success metric is different for the SaaS product, there it's trial_started
+Claude: Saved as a proposal in the space "acme"; someone with edit rights accepts it in the page.
+```
+
+Tuesday: "show me yesterday's performance." Claude calls `summary`, sees `Metric: paid_performance`, sees where each piece comes from, makes four tool calls, and the numbers match Monday's because the definition is the same file.
+
+What gets written, in the file format that exists today plus the Logic folder from 17.3:
+
+```yaml
+# sources/meta_ads.yaml                     (kind: mcp exists today)
+connection: meta_ads
+kind: mcp
+server: meta-ads
+description: The Meta Ads MCP the team has installed in Claude. Spend and results by campaign.
+
+# types/campaign.yaml
+type: Campaign
+source: { connection: meta_ads, tool: get_insights, params: { level: campaign, fields: [campaign_name, spend, impressions] }, key: campaign_id }
+
+# logic/measurement.yaml                    (new)
+metrics:
+  - metric: success
+    description: What counts as a win for this business. Different per product line.
+    variants:
+      - when: product_line == "store"
+        source: { connection: warehouse, table: analytics.ga4_events, filter: "event_name = 'purchase'", measure: "count distinct transaction_id" }
+      - when: product_line == "saas"
+        source: { connection: warehouse, table: analytics.ga4_events, filter: "event_name = 'trial_started'", measure: "count distinct user_pseudo_id" }
+    owner: growth@acme
+  - metric: paid_performance
+    description: Spend by channel next to success events, joined on campaign name.
+    needs: [Campaign.spend, success]
+    join: lower(meta.campaign_name) = lower(ga4.utm_campaign)
+    caveats: Platform-reported spend; Meta conversions are attributed, not incremental.
+```
+
+Three businesses, three success metrics: an e-commerce store counts purchases, a SaaS product counts trials or activations, a B2B company counts qualified opportunities. The metric has the same name in every space, `success`, so a pack, a prompt or a report can ask for it without knowing the business. Only the definition differs.
+
+**The mechanics that make the loop work:**
+
+1. **Instructions.** The MCP `initialize` text already tells agents to load `summary` first. It gains one sentence: *when the user settles a definition (a metric, a table, a filter, a word), offer to save it with `propose_patch`.* That sentence is the product.
+2. **`propose_patch`.** Today an agent proposes a change by sending the full text of one YAML file. That is fine for Claude Code and hard for a chat agent. `propose_patch` takes the same small operations the page uses (`add_type`, `set_source`, `set_property_description`, `add_relationship`, `add_constraint`, plus new `add_metric`, `add_function`, `add_term`), builds the file, compiles it, and writes or queues it exactly like `propose_change`. Agents stop writing YAML by hand.
+3. **`where_is` for `kind: mcp`** already answers "which server, which tool, which params". A metric source adds `filter` and `measure` so it is a complete recipe; `join` comes with step 2.
+4. **The page.** The Agents inbox shows each proposal in words: *"Claude learned: the success metric for the store is purchase events in ga4_events. Accept?"* with the YAML one click away. Accepting is what makes it true for everyone.
+5. **Warehouses are the best case, not the only one.** With BigQuery or Snowflake the ontology sits on the whole business and DuckDB or the warehouse MCP can run the metric SQL. With only ad-platform MCPs it still works: the recipe says which tool and which params, and the agent runs it.
+
+The table browser from the first draft stays, as a convenience for warehouses: list tables, tick, draft entities from columns, `init --from bigquery://…`. It is the batch version of the same loop.
+
+### 17.3 Logic: recipes with typed ins and outs
+
+The `logic/` folder holds three kinds of declaration. None of them run inside the ontology server.
+
+**Derived fields**, a computed property on an entity, as CEL or SQL. `Customer.is_churned: days_since(last_order_at) > 90`.
+
+**Metrics**, as in 17.2: a name, the definition, where it comes from, who owns it, the caveats.
+
+**Functions**, a contract and a pointer. Forecasting is the example that came up:
+
+```yaml
+# logic/forecast.yaml
+functions:
+  - function: forecast_spend_outcome
+    description: Projects success events for a proposed weekly spend per channel, from the MMM.
+    inputs:  { plan: SpendPlan }                       # entities in, so an agent knows what to gather
+    outputs: { forecast: Forecast }                    # entities out, so it knows what comes back
+    runs:    { kind: mcp, server: measurement, tool: mmm_run_budget_optimizer, args: { study_id: "{{plan.study_id}}", budget: "{{plan.weekly_budget}}" } }
+    writes_back: { entity: Forecast, to: { connection: warehouse, table: forecasts } }   # where the result lands, if anywhere
+    may_be_called_by: [growth_agent]
+```
+
+When the user says "run the forecast on this plan", the agent reads the function, gathers a `SpendPlan`, calls the measurement MCP tool named, gets a `Forecast` back, and writes it where `writes_back` says, through the warehouse MCP. The ontology told it what to run, how, and where the result goes. That MCP authenticated the call. Nothing passed through the ontology server.
+
+Who writes functions: the vendor whose MCP has the tool (a measurement vendor, Meta, Shopify), or the team's engineers as an HTTP endpoint the agent can call, or a pack. The ontology only needs the contract.
+
+### 17.4 Actions and the guardrails that are for agents
+
+An action says what may be done, what it changes, which guardrails to check, who must approve, and from Phase 3 which function does it:
+
+```yaml
+# actions/cancel_order.yaml
+action: cancel_order
+inputs: { order: Order, reason: string }
+checks: [ORD-004, ORD-011]
+requires_approval_from: support-lead@acme
+does: cancel_order                    # a function in logic/, which names the Shopify MCP tool
+```
+
+`validate(action, inputs)` stays the gate: the agent calls it, gets pass, warn or fail with reasons and the approver's name, and only then calls the tool the function names. The ontology server never calls the tool.
+
+Two small additions make the common policies one line:
+
+- `mutable: false` on an entity means no action may change it. *"The order table never gets updated"* becomes `type: Order` + `mutable: false`, and `validate` fails any action whose effects touch an Order. The compiler also refuses an action file that declares such an effect (`E014`).
+- `may_be_called_by` on a function, matched against the agent's declared name, so a reporting agent cannot run a budget change even if a person could.
+
+**Execution as an option, not the core.** A team that wants the server to call the tool for them (one door, one audit line, credentials in one place) can have a thin runner later, off by default, for `runs: http` and `runs: mcp`. It is not needed for the product to work and it is not where enforcement comes from.
+
+### 17.5 Enforcement: three layers, and which one is ours
+
+| Layer | Who enforces | What it stops | Whose job |
+|---|---|---|---|
+| **The agent** | The agent, by reading the guardrails and calling `validate` before acting. Model vendors' agents do this reliably when the instructions and tools make it the obvious path. | An agent updating the order table, moving a budget past the cap, skipping an approver. | **Ours.** The ontology exists for this layer. |
+| **The tools** | Every API and MCP, by authenticating and authorising each request: the warehouse's grants, Shopify's API scopes, a measurement vendor's own auth. | A human or an agent doing what their login does not allow. | **The customer's and the vendors'.** Already there; the ontology never widens it. |
+| **The one copy** | Whoever holds the ontology agents read: a protected `main` with review and CI, or the hosted space where rules cannot be changed casually and every change is logged. | A local edit becoming everyone's rule. | **The team's, with git** (and a hosted copy's, if one comes). |
+
+Someone with a local copy can still edit a guardrail and run their own agent against it. What they cannot do is change what everyone else's agent reads, and they cannot do anything their own logins do not already allow. That is the right boundary for a keeper of information. Teams that are serious put the hard limits in their APIs and functions, and write them into the ontology so agents stop before the API has to.
+
+### 17.6 Hosted, later
+
+A hosted version may come later, and with no execution and no credentials it would sell only the kept copy: one safe copy of each space that agents read through one HTTPS URL, SSO and roles for who may edit and who may accept proposals, an audit log kept for SOC2 evidence, and GitHub sync so page edits and accepted proposals become commits. It would run the same binary, and nothing of a customer's data would pass through it. It is not being built now; the earlier design (the sync diagram, the open-versus-hosted table and the pricing tiers) is in [BACKLOG.md](BACKLOG.md) under "Hosted version, later".
+
+### 17.8 Build order
+
+| Step | What | Size | Where |
+|---|---|---|---|
+| 1 | **The loop**: the "offer to save" instruction, `propose_patch` with the page's operations plus `add_metric` and `add_term`; metrics as the first `logic/` kind with a Logic step in the page; proposals shown in words in the Agents inbox | **built 2026-11-25** | open source |
+| 2 | `logic/` folder: derived fields, metrics with variants, functions with `runs` and `writes_back`; validation codes; Logic step in the page | **metrics and functions built 2026-11-25**; derived fields open | open source |
+| 3 | `does` on actions, `mutable: false`, `may_be_called_by`; `validate` honouring both | 1 week | open source |
+| 4 | MCP over HTTP with a token and an agent name | **token and HTTP built 2026-11-26**; agent name open | open source |
+| 5 | Table browser and `init --from` for BigQuery, Snowflake, Postgres | 2 weeks | open source |
+
+The hosted control plane (GitHub App sync, SSO, roles, Slack and email) is parked in BACKLOG.md. Step 1 is the product in miniature and can be built this week on what exists: `kind: mcp` sources, `propose_change`, the proposals inbox and the patch operations are all there.
+
+### 17.9 Decisions needed
+
+1. **The name of the universal metric.** `success` is proposed so packs and prompts can ask for it in any space. Alternatives: `conversion`, `primary_outcome`.
+2. **Expression languages.** CEL for derived fields and guardrails (in), SQL for metrics. Python stays out of the open-source path.
+3. **Does the server ever call a tool?** No in the core. A thin optional runner later, off by default, for teams that want one audit line.
+4. **How an agent identifies itself.** A name in the MCP command (`--agent growth_agent`) on stdio; over HTTP, a name given with the token. Needed for `may_be_called_by`.
+
+---
+
+## 18. Standards: Apache Ossie, OWL, SKOS and SHACL
+
+The YAML stays the source of truth: agents write it, people read it, git diffs it, and even LinkML's own FAQ says OWL should not be used as a schema language. Lorefile then speaks the two families of standards an organisation already has, both ways, and joins them with one identity per thing. [docs/standards-explained.md](docs/standards-explained.md) walks one order through all of it.
+
+**IRIs** (`src/iri.rs`). `ontology.yaml` may set `namespace:` (ends in `#` or `/`; default `https://lorefile.dev/ns/<space>#`) and `prefixes:`; common ones (`rdf`, `rdfs`, `owl`, `xsd`, `skos`, `sh`, `dcterms`, `schema`, `foaf`, `lorefile`) are built in. Entities, fields, links, glossary terms, guardrails and actions take an optional `iri:` (absolute, `prefix:local`, or `:local` for the space's own namespace). Without one the IRI is derived: entity `<ns>Order`, field `<ns>Order.total_usd`, link `<ns>Order.placed_by`, guardrail `<ns>EC-001`, action `<ns>cancel_order`, term `<ns>term.basket`, metric and function `<ns>name`, source `<ns>source.shop_files`, domain `<ns>domain.<slug>`, the space itself the namespace without its `#`. Fields are per entity because two entities' `status` rarely mean the same thing, and OWL would intersect their domains; to say they do, give both the same `iri:` (fields of different entities may share one, and so may links). The compiler resolves every IRI into `Ontology::iris`; E016 refuses one IRI on two things when either was written with `iri:`, W112 warns when two derived ones collide, E017 refuses an IRI that does not resolve. Files without these keys compile exactly as before.
+
+**Apache Ossie** (`src/ossie.rs`) is the semantic-layer world (Snowflake, dbt, Cube, AtScale, Atlan, DataHub, Collibra, NVIDIA's Auto Ontology), a draft at `0.3.0.dev0`. Export writes its three documents: the semantic model (entities with a table become datasets, fields fields, metrics SQL, links with key columns joins), the ontology (every entity a concept carrying its IRI, every link a relationship whose `verbalizes` pattern comes from its sentence) and the mapping between them. Each object is rebuilt from its portable parts the way import will, and only the difference goes into `nonportable_extensions` under `vendor_name: lorefile`, which Ossie readers must keep; things Ossie has no word for (guardrails, actions, functions, sources, owners) ride there whole. So a portable edit made in another tool wins on the way back, and a Lorefile export imported back is identical, which `tests/ossie.rs` checks for every shipped folder.
+
+**OWL, SKOS and SHACL** (`src/rdf.rs`, cargo feature `rdf`, on by default and kept in the slim build) are the W3C's ontology world (Protégé, GraphDB, Stardog, TopBraid, LinkML). `export --rdf` writes one graph as Turtle (written by our own pretty printer), JSON-LD, N-Triples or RDF/XML (Oxigraph's `oxttl`, `oxjsonld`, `oxrdfxml`); `import --from-rdf` reads all four with the same crates. No reasoner, no triple store. The mapping:
+
+| Lorefile | Standard | Notes |
+|---|---|---|
+| Space (`name`, `description`, `version`, `namespace`, `prefixes`) | `owl:Ontology` with `rdfs:label`, `rdfs:comment`, `owl:versionInfo`, `vann:preferredNamespaceUri`, `sh:declare` per prefix | `lorefile:formatVersion` marks a graph Lorefile wrote |
+| Domain | `skos:ConceptScheme` with `rdfs:label`, `rdfs:comment`; entities `skos:inScheme` it | `lorefile:types` keeps the order |
+| Entity | `owl:Class` with `rdfs:label`, `skos:prefLabel`, `rdfs:comment` | `tags` → `dcterms:subject`; `owner` → `lorefile:owner`; `source` binding and inline `instances` → `lorefile:source`, `lorefile:instances` (`rdf:JSON`) |
+| Field | `owl:DatatypeProperty` with `rdfs:label`, `rdfs:comment`, `rdfs:domain` the entity (an `owl:unionOf` when shared), `rdfs:range` an XSD type | string and enum `xsd:string`, integer `xsd:integer`, number `xsd:decimal`, boolean, date, datetime `xsd:dateTime`, json `rdf:JSON` |
+| How an entity uses its fields and links | one `sh:NodeShape` (also `lorefile:EntityShape`) per entity, `sh:targetClass` it, one `sh:property` per field and link: `sh:path`, `sh:name`, `sh:description`, `sh:order`, `sh:datatype` or `sh:class` | `required` → `sh:minCount 1`; enum `values` → `sh:in`; many-to-one or one-to-one → `sh:maxCount 1`; `key` → `lorefile:key`; `unit` → `lorefile:unit`; the cardinality text → `lorefile:cardinality` |
+| Link | `owl:ObjectProperty` with `rdfs:label`, the sentence as `rdfs:comment`, `rdfs:domain`, `rdfs:range` | many-to-one and one-to-one also `owl:FunctionalProperty`; one-to-one and one-to-many also `owl:InverseFunctionalProperty`; edge properties and edge tables → `lorefile:properties`, `lorefile:edgeSource` |
+| Glossary term | `skos:Concept` with `skos:prefLabel`, `skos:definition`, `lorefile:means` (and `lorefile:meansName`), and `skos:altLabel` on what it means | |
+| Guardrail | `sh:NodeShape` with `sh:severity` (`sh:Violation`, `sh:Warning`, `sh:Info`), `sh:message` (its name), `rdfs:comment`, `sh:targetClass` (or `sh:targetSubjectsOf` the link) | the rule always as `lorefile:cel`, with `lorefile:appliesTo`, `lorefile:rationale`, `lorefile:owner`; a conjunction of `x in [...]`, `x >= n` and friends, `x == v` and `has(self.x)` also becomes native `sh:in`, `sh:minInclusive` …, `sh:hasValue`, `sh:minCount`; anything else is `lorefile:celOnly`. A guardrail an action checks (its `applies_to` is the action, or an action lists it) gets `sh:deactivated true` and `lorefile:action`, because SHACL checks every row at any time and Lorefile checks before an action |
+| Action, metric, function, source | `lorefile:Action`, `lorefile:Metric`, `lorefile:Function`, `lorefile:Source` with `rdfs:label`, `rdfs:comment` and the object as `lorefile:definition` (`rdf:JSON`) | valid RDF that other tools store; a changed `rdfs:comment` wins on import |
+| File layout and order | `lorefile:file`, `lorefile:order` on each node | so an export imported back is identical, file for file |
+
+The `lorefile:` vocabulary lives at `https://lorefile.dev/vocab#`. Import has two modes per node: a node Lorefile wrote (it carries `lorefile:file`, or it is a `lorefile:EntityShape`) is restored exactly; anything else is read the way the standards mean it, with `rdfs:Class` and schema.org's `domainIncludes` / `rangeIncludes` understood, `owl:hasKey` as the key, `rdfs:subClassOf` as a `subclass-of:` tag until sub-kinds exist, SHACL property shapes as guardrails (`sh:minCount` → `has(self.x)`, `sh:in`, ranges, lengths, `sh:pattern` → `matches`), and a report of what was guessed, dropped (statements for reasoning, links to classes not imported) or kept for a person (SHACL with no CEL form). `--only` and `--depth` cut a large vocabulary down. Like the Ossie import, the files are compiled over the target folder first and nothing is written unless that compiles; no existing file is overwritten. `tests/rdf.rs` round-trips every shipped folder, checks the four formats carry the same graph, imports a slice of schema.org, and checks that a SHACL shape becomes a guardrail `check` enforces.
+
+## 19. Evidence grades: who stands behind each definition
+
+Built 2026-11-26 from `specs/2026-11-27-evidence-grades.md`. Agents read a definition another agent guessed yesterday in the same voice as one Finance checked against the ledger; grades make the difference visible, without letting an agent promote itself.
+
+| Grade | Means | Set by |
+|---|---|---|
+| (none) ungraded | nobody has said | existing spaces, hand-written files, imports, copies |
+| proposed | an agent wrote it, no person has looked | the save gate, for an agent's direct write (`--allow-edit`) |
+| accepted | a person stands behind the words | a person's edit or Accept in the page, Looks right, Vouch for all (never-graded things only), `lorefile trust accept` |
+| checked | a person ran it against real rows and it was right (who, when, which source, what was compared) | Mark as checked…, `lorefile trust check`, or a person confirming an agent's `record_check` |
+
+**Store.** One `trust.yaml` per space (`src/trust.rs`), one flow-style line per graded thing under `metrics`, `bindings`, `terms`, `guardrails`, written only by Lorefile. Not a key on each fact: agents write the fact files, so a grade there would have to be filtered out of every agent's text; inserting it would also rewrite hand-written files and turn every waiting proposal stale. `edit::apply` and `apply_files` refuse `trust.yaml` unless the write is Undo, which covers agents and the page's raw editor in one place; a `grade:` key in a fact file is an unknown key (E001).
+
+**Fingerprint.** Each line carries `of`, the first 12 hex characters of an FNV-1a hash (written in the crate, stable across Rust versions) of the thing as compiled, with keys sorted and `file` left out; a binding's covers its entity name, key and `source:`. A metric's and a binding's also carry the definition of every source they read (its description left out), so re-pointing a source stops, or for an agent queues, every grade that depends on it; a word written twice is one graded thing covering every meaning. A thing that no longer matches counts as ungraded and `validate` warns W113; an entry naming nothing warns W114; nonsense (checked without a source, a word marked checked, an empty `of`) is E018. A space with no `trust.yaml` compiles with exactly the diagnostics it had.
+
+**The gate.** Inside the save gate (`edit::stamp_for`), the ontology before and after a change is compared kind by kind: new and changed things get the saver's grade (agent → proposed, person → accepted; the person who accepted a proposal, not the agent who wrote it), deleted ones lose their line, and a person's words-only change to a checked metric or guardrail keeps the check with a fresh `of`. The entries are laid over `trust.yaml` as it is on disk, under a lock file in `.lorefile/` (stdio `mcp` and `serve` are separate processes), and the file is written before the facts in the same commit, so a crash leaves a harmless W114 orphan and never an unflagged fact. Undo does not restamp: the file goes back entry by entry with the facts (`trust::merge_undo`). `mcp::Server::propose` asks `edit::graded_overwrites` first and queues, even with `--allow-edit`, any agent change that would alter or remove an accepted or checked thing, saying which and why. `record_check` (`patch::plan_check`) is always queued, as a proposal with a `check` claim instead of a file.
+
+**What agents read.** `summary` gets one Trust line (only when the space has a `trust.yaml`) and marks proposed things UNVERIFIED and checked things with date and source; `describe` returns `trust` with `say`, a sentence the agent can use as it is; the server's instructions tell agents to say "unverified" before relying on a proposed definition and never to add numbers of different `basis`. `validate` verdicts do not change (an unreviewed blocking rule still blocks, failing safe); `unverified` names the unreviewed rules and data bindings the answer relied on, each rule result carries `grade` once the space has a `trust.yaml`, and `where_is` returns the binding's `trust`. An agent's `record_check` carries the fingerprint of what it compared, and a person's click is refused when the definition has changed since.
+
+**basis.** A separate optional key on metrics and variants (`transactional`, `attributed`, `modelled`, `experimental`): what kind of number it is, part of the definition and graded with it.
+
+**Export and import.** RDF: `lorefile:trust` on the graded thing (`lorefile:bindingTrust` on an entity), plus a `lorefile:Grading` record that is also a `prov:Activity` (`prov:wasAssociatedWith` a named `prov:Person` or `prov:SoftwareAgent`, `prov:endedAtTime`, `prov:used` the thing and the source). Ossie: the whole book in the root `lorefile` extension, and `ai_context.instructions` "Unverified: …" on a proposed metric or dataset (Ossie 0.3.0.dev0 has no native review-status field). Imports start ungraded; the claims are counted in the report (unreadable ones too); no imported object may name `trust.yaml` as its file; `--keep-grades` restores, for a team's own export, the grades that still match and that the compiler accepts. A copy of a space leaves `trust.yaml` behind.
+
+**Not done.** It grades definitions, not answers; it runs no check; it is as tamper-proof as the repository's review; "Priya" is a typed name until accounts exist. Grades on entities, fields, links, functions, actions and sources, and rules that read a grade, are in the backlog.

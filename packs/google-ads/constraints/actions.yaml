@@ -8,7 +8,7 @@ constraints:
       A manager account (MCC) holds no campaigns; query the client customer_id
       with the manager as login customer. A test account serves nothing and its
       metrics are synthetic.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
 
   - id: GA-012
     name: Campaigns in a running experiment are frozen
@@ -21,7 +21,7 @@ constraints:
       tests (in_active_experiment) and Google's own campaign experiments
       (experiment_type EXPERIMENT or DRAFT), which are edited through the
       experiment, not the arm.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [experiment]
 
   - id: GA-013
@@ -30,7 +30,7 @@ constraints:
     rule: campaign.status == "ENABLED"
     severity: block
     rationale: Pausing a PAUSED or REMOVED campaign does nothing; the request is aimed at the wrong campaign.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
 
   - id: GA-014
     name: Shared budgets are changed on the budget
@@ -41,7 +41,7 @@ constraints:
       When campaign_budget.explicitly_shared is true the amount belongs to a
       budget shared by several campaigns. Changing it changes all of them; the
       change must be scoped and approved as such.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [budget]
 
   - id: GA-015
@@ -53,7 +53,7 @@ constraints:
       A large budget change puts the strategy into LEARNING_BUDGET_CHANGE for
       days. The 20% step is our working rule, not a Google number; step bigger
       changes over several days.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [budget]
 
   - id: GA-016
@@ -66,5 +66,5 @@ constraints:
       TARGET_ROAS or MAXIMIZE_CONVERSION_VALUE. Any other strategy has no such
       target. Keep target changes within about 20% a step: a jump restarts
       learning and a tCPA far below the real CPA throttles delivery.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [bidding]

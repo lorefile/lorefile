@@ -9,8 +9,8 @@ properties:
   line_total_usd: { type: number, unit: USD }
   final_sale:     { type: boolean, description: "Copied from the product at checkout; final-sale lines are excluded from returns" }
 relationships:
-  part_of:     { to: Order, cardinality: many-to-one }
-  for_variant: { to: Variant, cardinality: many-to-one }
+  part_of:     { to: Order, cardinality: many-to-one, description: "An order line is part of one Order." }
+  for_variant: { to: Variant, cardinality: many-to-one, description: "An order line buys one Variant." }
 source:
   connection: shop_files
   table: order_lines

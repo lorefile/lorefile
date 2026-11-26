@@ -1,0 +1,14 @@
+# The ad platforms the team already has as MCP servers in Claude. The ontology
+# never calls them; it says which tool returns which rows so an agent can.
+sources:
+  - connection: meta_ads
+    kind: mcp
+    server: meta-ads
+    description: >
+      The Meta Ads MCP server installed in the team's Claude workspace. Spend,
+      impressions and reported conversions by campaign; see the meta-ads pack
+      for what those numbers can and cannot say.
+  - connection: google_ads
+    kind: mcp
+    server: google-ads
+    description: The Google Ads MCP server. Cost and conversions by campaign and day.

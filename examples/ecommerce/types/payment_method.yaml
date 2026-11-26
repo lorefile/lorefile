@@ -12,7 +12,7 @@ properties:
   expires:           { type: string, description: "YYYY-MM for cards" }
   status:            { type: enum, values: [active, expired, removed], description: "Refunds only succeed against active methods" }
 relationships:
-  belongs_to: { to: Customer, cardinality: many-to-one }
+  belongs_to: { to: Customer, cardinality: many-to-one, description: "A payment method belongs to one Customer." }
 source:
   connection: payments_bigquery
   table: payments.payment_methods

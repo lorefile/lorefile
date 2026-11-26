@@ -1,6 +1,7 @@
 //! Compile-time checks. The compiler is the maintainer: every reference must
 //! resolve, every rule must parse, every object should explain itself.
 
+use crate::iri::{self, Key};
 use crate::ontology::{snake, Kind, Ontology};
 use crate::rules;
 use crate::schema::Severity;
@@ -234,6 +235,86 @@ pub fn validate(ont: &Ontology) -> Report {
         }
     }
 
+    // one name, one kind: `describe` and `validate` must agree on what a name is
+    for m in ont.metrics.values() {
+        if ont.types.contains_key(&m.name) || ont.actions.contains_key(&m.name) || ont.functions.contains_key(&m.name) {
+            r.err("E015", &m.file, format!("`{}` is a metric and also an entity, action or function; one name, one kind", m.name));
+        }
+    }
+    for f in ont.functions.values() {
+        if ont.types.contains_key(&f.name) || ont.actions.contains_key(&f.name) {
+            r.err("E015", &f.file, format!("`{}` is a function and also an entity or action; one name, one kind", f.name));
+        }
+    }
+
+    // metrics
+    for m in ont.metrics.values() {
+        if m.description.trim().is_empty() {
+            r.warn("W101", &m.file, format!("metric `{}` has no description", m.name));
+        }
+        if m.owner.trim().is_empty() {
+            r.warn("W109", &m.file, format!("metric `{}` has no owner (who decides what it means)", m.name));
+        }
+        let sources: Vec<&crate::schema::MetricSource> = m.source.iter().chain(m.variants.iter().map(|v| &v.source)).collect();
+        if sources.is_empty() && m.sql.is_none() {
+            r.err("E013", &m.file, format!("metric `{}` says nothing about where it comes from: add source, variants or sql", m.name));
+        }
+        for s in sources {
+            match ont.sources.get(&s.connection) {
+                None => r.err("E008", &m.file, format!("metric `{}` uses unknown connection `{}`", m.name, s.connection)),
+                Some(src) => {
+                    if src.kind.eq_ignore_ascii_case("mcp") {
+                        if s.tool.is_empty() {
+                            r.err("E012", &m.file, format!("metric `{}` uses MCP source `{}` but names no `tool`", m.name, s.connection));
+                        }
+                    } else if s.table.is_empty() {
+                        r.err("E012", &m.file, format!("metric `{}` uses `{}` but names no `table`", m.name, s.connection));
+                    }
+                }
+            }
+        }
+    }
+
+    // functions
+    let primitive = |t: &str| matches!(t, "string" | "integer" | "number" | "boolean" | "date" | "datetime" | "json");
+    for f in ont.functions.values() {
+        if f.description.trim().is_empty() {
+            r.warn("W101", &f.file, format!("function `{}` has no description", f.name));
+        }
+        for (n, t) in f.inputs.iter().chain(f.outputs.iter()) {
+            if !primitive(t) && !ont.types.contains_key(t) {
+                r.err("E005", &f.file, format!("function `{}`: `{}` has unknown type `{}` (an entity, or string/integer/number/boolean/date/json)", f.name, n, t));
+            }
+        }
+        match &f.runs {
+            None => r.warn("W111", &f.file, format!("function `{}` does not say where it runs (`runs: {{kind: mcp|http|manual}}`)", f.name)),
+            Some(x) => match x.kind.as_str() {
+                "mcp" => {
+                    if x.server.is_empty() || x.tool.is_empty() {
+                        r.err("E014", &f.file, format!("function `{}` runs on MCP but names no `server` and `tool`", f.name));
+                    } else if !ont.sources.values().any(|s| s.kind.eq_ignore_ascii_case("mcp") && (s.connection == x.server || s.server.as_deref() == Some(x.server.as_str()))) {
+                        r.err("E014", &f.file, format!("function `{}` runs on MCP server `{}`, which no `kind: mcp` source under sources/ declares", f.name, x.server));
+                    }
+                }
+                "http" => {
+                    if x.url.is_empty() {
+                        r.err("E014", &f.file, format!("function `{}` runs over http but has no `url`", f.name));
+                    }
+                }
+                "manual" => {}
+                other => r.err("E014", &f.file, format!("function `{}`: runs.kind `{}` is not mcp, http or manual", f.name, other)),
+            },
+        }
+        if let Some(w) = &f.writes_back {
+            if !ont.types.contains_key(&w.entity) {
+                r.err("E005", &f.file, format!("function `{}` writes back `{}`, which is not an entity", f.name, w.entity));
+            }
+            if !w.connection.is_empty() && !ont.sources.contains_key(&w.connection) {
+                r.err("E008", &f.file, format!("function `{}` writes back to unknown connection `{}`", f.name, w.connection));
+            }
+        }
+    }
+
     // glossary
     for g in &ont.glossary {
         if ont.kind_of(&g.means).is_none() {
@@ -241,5 +322,104 @@ pub fn validate(ont: &Ontology) -> Report {
         }
     }
 
+    // trust.yaml: nothing at all when the space has none
+    if let Some(book) = &ont.trust {
+        let f = crate::trust::FILE;
+        for k in crate::trust::Kind::ALL {
+            for (name, rec) in crate::trust::entries(book, k) {
+                let what = format!("{} {}", k.word(), name);
+                if rec.of.trim().is_empty() {
+                    r.err("E018", f, format!("{} has a grade with no fingerprint (`of`), so nobody can tell what was graded", what));
+                }
+                if rec.grade == crate::schema::Grade::Checked {
+                    if !k.can_be_checked() {
+                        r.err("E018", f, format!("{} is marked checked, but a word has no rows to check against; a word tops out at accepted", what));
+                    }
+                    let missing: Vec<&str> = [("against", rec.against.as_deref().unwrap_or("")), ("by", rec.by.as_str()), ("at", rec.at.as_str())].iter().filter(|(_, v)| v.trim().is_empty()).map(|(k, _)| *k).collect();
+                    if !missing.is_empty() {
+                        r.err("E018", f, format!("{} is marked checked without {}: a check says who, when and against which source", what, missing.join(", ")));
+                    }
+                }
+                if let Some(a) = rec.against.as_deref().filter(|a| !a.trim().is_empty()) {
+                    if !ont.sources.contains_key(a) {
+                        r.err("E018", f, format!("{} names `{}` as what it was checked against, which is no source under sources/", what, a));
+                    }
+                }
+            }
+        }
+        for (k, name) in &ont.graded.all {
+            let st = ont.graded.get(*k, name);
+            if let (true, Some(rec)) = (st.changed, &st.record) {
+                r.warn("W113", f, format!("{} {} changed since it was {} ({}, {}); a person has to accept it again", k.word(), name, rec.grade.word(), crate::trust::who_said(&rec.by), rec.at));
+            }
+        }
+        for (k, name, rec) in &ont.graded.orphans {
+            r.warn("W114", f, format!("{} {} is {} in trust.yaml but no longer exists; the line can go", k.word(), name, rec.grade.word()));
+        }
+    }
+
+    // IRIs: each resolves, and no two things share one
+    for (file, msg) in &ont.iris.problems {
+        r.err("E017", file, msg.clone());
+    }
+    let terms = ont.term_words();
+    for c in iri::clashes(&ont.iris) {
+        let what: Vec<String> = c.keys.iter().map(|k| k.describe(&terms)).collect();
+        let what = what.join(" and ");
+        if c.declared {
+            let first = c.keys.iter().find(|k| ont.iris.declared.contains_key(*k)).unwrap_or(&c.keys[0]);
+            r.err("E016", &file_of(ont, first), format!("IRI <{}> names {}; each thing needs its own IRI", c.iri, what));
+        } else {
+            r.warn("W112", &file_of(ont, &c.keys[0]), format!("{} get the same derived IRI <{}>; set `iri:` on one of them so other tools can tell them apart", what, c.iri));
+        }
+    }
+
     r
+}
+
+/// The file an IRI's owner was written in.
+fn file_of(ont: &Ontology, key: &Key) -> String {
+    match key {
+        Key::Space | Key::Domain(_) => "ontology.yaml".into(),
+        Key::Entity(t) | Key::Field(t, _) => ont.types.get(t).map(|t| t.file.clone()).unwrap_or_default(),
+        Key::Link(from, name) => ont.relationships.iter().find(|r| &r.from == from && &r.name == name).map(|r| r.file.clone()).unwrap_or_default(),
+        Key::Term(_) => "glossary.yaml".into(),
+        Key::Guardrail(id) => ont.constraints.get(id).map(|c| c.file.clone()).unwrap_or_default(),
+        Key::Action(n) => ont.actions.get(n).map(|a| a.file.clone()).unwrap_or_default(),
+        Key::Metric(n) => ont.metrics.get(n).map(|m| m.file.clone()).unwrap_or_default(),
+        Key::Function(n) => ont.functions.get(n).map(|f| f.file.clone()).unwrap_or_default(),
+        Key::Source(n) => ont.sources.get(n).map(|s| s.file.clone()).unwrap_or_default(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{loader, ontology::Ontology};
+    use std::path::PathBuf;
+
+    fn space(files: &[(&str, &str)]) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("lorefile-strict-{}-{}", std::process::id(), files.len()));
+        let _ = std::fs::remove_dir_all(&d);
+        for (rel, text) in files {
+            let p = d.join(rel);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, text).unwrap();
+        }
+        d
+    }
+
+    #[test]
+    fn a_misspelled_key_is_an_error_not_a_silent_downgrade() {
+        let d = space(&[
+            ("ontology.yaml", "name: strict\n"),
+            ("types/order.yaml", "type: Order\nproperties: { order_id: { type: string, key: true }, status: string }\n"),
+            ("constraints/o.yaml", "constraints:\n  - { id: O-1, name: x, applies_to: Order, rule: status == 'paid', severty: block, rationale: r }\n"),
+        ]);
+        let ont = Ontology::from_raw(loader::load(&d).unwrap());
+        let report = super::validate(&ont);
+        assert!(!report.ok(), "{:?}", report.diags);
+        assert!(report.errors().iter().any(|e| e.message.contains("severty")), "the message names the key: {:?}", report.diags);
+        assert!(ont.constraints.is_empty(), "the rule was not loaded with a guessed severity");
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

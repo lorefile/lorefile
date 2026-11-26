@@ -23,7 +23,7 @@ The pack holds no data and never calls Shopify. `where_is("Order")` names the to
       "env": { "SHOPIFY_ACCESS_TOKEN": "...", "MYSHOPIFY_DOMAIN": "your-store.myshopify.com" }
     },
     "shopify-ontology": {
-      "command": "/absolute/path/to/stella-ontology",
+      "command": "/absolute/path/to/lorefile",
       "args": ["mcp", "--dir", "/absolute/path/to/packs/shopify"]
     }
   }
@@ -68,5 +68,5 @@ shopify-ontology  describe("Refund")                              → restock_ty
 ## Validate
 
 ```bash
-./target/debug/stella-ontology validate --dir packs/shopify
+./target/debug/lorefile validate --dir packs/shopify
 ```

@@ -9,7 +9,7 @@ constraints:
       secondary actions) are different populations; conversions_by_conversion_date
       books on a different day. Comparing one to another compares definitions, not
       campaigns. Read both under the same metric.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution]
 
   - id: GA-002
@@ -23,7 +23,7 @@ constraints:
       cross-device and modelled conversions arrive late. Three days is our working
       cut-off for quoting a number as provisional (a policy, not a Google figure);
       conversions_by_conversion_date is the settled alternative.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution, lag]
 
   - id: GA-003
@@ -39,7 +39,7 @@ constraints:
       location_type LOCATION_OF_PRESENCE, or user_location_view. Either way a geo
       split shows attributed conversions by place, not what the ads caused there;
       incrementality by geo needs a holdout experiment.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [geo, incrementality]
 
   - id: GA-004
@@ -52,7 +52,7 @@ constraints:
       top of the page, from whoever is cheapest to show to. Their conversions are
       incidental, so CPA or ROAS measures the audience, not the campaign. Judge
       them on CPM, CPV, impression share, and a lift or geo test.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [kpi]
 
   - id: GA-005
@@ -65,7 +65,7 @@ constraints:
       change, Smart Bidding re-learns for about one to two weeks. CPA and ROAS in
       that window are not the strategy's steady state, and another change extends
       it.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [bidding]
 
   - id: GA-006
@@ -77,7 +77,7 @@ constraints:
       status is what was set; serving_status is whether ads run. ENDED (end_date
       passed), PENDING (start_date ahead) or SUSPENDED explain zero spend before
       any performance story does.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [delivery]
 
   - id: GA-007
@@ -91,7 +91,7 @@ constraints:
       most campaigns; fatal for a geo experiment, where a holdout region's residents
       must not see ads and a test region's conversions must come from its
       residents. Geo-test cells need PRESENCE, and read-outs by physical location.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [geo, experiment]
 
   - id: GA-008
@@ -103,7 +103,7 @@ constraints:
       This action is counted in all_conversions only. It is not in conversions,
       not in cost_per_conversion, and Smart Bidding never optimised for it. Quote
       it as a secondary count.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution]
 
   - id: GA-009
@@ -116,7 +116,7 @@ constraints:
       sales); leads and sign-ups should count one per click (one person submitting
       a form twice is one lead). A purchase action set to ONE_PER_CLICK under-
       counts; a lead action set to MANY_PER_CLICK inflates and mis-trains bidding.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution]
 
   - id: GA-010
@@ -130,5 +130,5 @@ constraints:
       removed. A last-click action's counts are whole numbers and will not
       reconcile with data-driven actions in the same account; say which model a
       quoted number uses.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution]

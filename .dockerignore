@@ -1,4 +1,43 @@
-target
-.git
-.claude
+# What `docker build` (and `fly deploy`) leaves out of the build context, so the
+# upload stays small and the image never picks up local state.
+#
+# The Dockerfile copies only Cargo.toml, Cargo.lock, build.rs, src/, examples/,
+# packs/, LICENSE and NOTICE. Everything below is something it does not need. Do not add
+# examples/ or packs/ here: build.rs compiles them into the binary as the
+# shipped read-only spaces, README.md files and data/ folders included.
+
+# Rust build output: gigabytes, and the image builds its own.
+target/
+
+# Local spaces and their working state: these belong on the server's volume,
+# not baked into an image. Also any .lorefile/ folder (proposals, activity log).
+spaces/
+**/.lorefile/
+
+# The static docs site (published by Vercel, see vercel.json), the scripts that
+# build it and install releases, and the npm launcher package.
+docs/
+scripts/
+npm/
+
+# Version control, CI, editor and agent settings.
+.git/
+.github/
+.claude/
+.mcp.json
+**/.DS_Store
+
+# Tests, design notes and specs: not part of the binary.
+tests/
+design/
+specs/
+
+# Top-level Markdown docs (README.md, DEPLOY.md, ...). This pattern matches the
+# top level only, so examples/*/README.md and packs/*/README.md still go in.
 *.md
+
+# Deploy config for the hosts themselves. (The Dockerfile stays in: some
+# builders read it from the context.)
+fly.toml
+vercel.json
+.vercelignore

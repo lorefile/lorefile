@@ -1,0 +1,19 @@
+# What `vercel deploy` uploads from this folder. Vercel hosts only the static
+# docs; the app itself runs on a host with a disk (fly.toml, DEPLOY.md
+# "Vercel, Fly.io and friends").
+#
+# vercel.json is plain JSON, which has no comments, so it is explained here:
+#   framework: null         no framework ("Other"): Vercel serves files as they are
+#   installCommand: ""      skip the install step (there is no package.json)
+#   buildCommand: ""        skip the build step: the HTML is committed, built on a
+#                           laptop by `python3 scripts/build-tutorial.py`
+#   outputDirectory: docs   publish the docs/ folder; docs/index.html (a copy of
+#                           docs/tutorial.html) is the page at "/"
+#   cleanUrls: true         /tutorial serves tutorial.html; /tutorial.html redirects there
+#
+# Ignore everything at the top of the repository, then let back in only the
+# two things the site needs. This keeps target/ (gigabytes of Rust build output),
+# spaces/, src/ and the rest off Vercel.
+/*
+!docs
+!vercel.json

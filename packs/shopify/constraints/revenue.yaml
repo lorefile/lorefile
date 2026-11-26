@@ -8,7 +8,7 @@ constraints:
       test true means a test gateway or test mode placed the order. No money moved
       and no customer exists behind it. Exclude from every count, total and
       attribution; it cannot be cancelled or refunded in any meaningful sense.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [revenue]
 
   - id: SH-002
@@ -20,7 +20,7 @@ constraints:
       A cancelled order was either never paid or paid and refunded in full, so
       its net revenue is zero and its line items never shipped. It is not a sale
       to attribute, and it cannot be cancelled or refunded again.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [revenue]
 
   - id: SH-003
@@ -32,7 +32,7 @@ constraints:
       pending (cash on delivery, bank transfer, manual payment) and authorized
       (card reserved, not captured) orders count as sales in Shopify reports at
       processed_at but may never be paid. Quote them as booked, not collected.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [revenue]
 
   - id: SH-004
@@ -45,7 +45,7 @@ constraints:
       order time. The customer paid presentment_money in presentment_currency.
       Ad platforms report spend in their account currency; say which currency a
       ROAS mixes.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [revenue]
 
   - id: SH-005
@@ -58,7 +58,7 @@ constraints:
       imported or its date was set by an app, and reports book it at
       processed_at. Daily series that use created_at will not reconcile with
       Shopify's.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [revenue]
 
   - id: SH-006
@@ -70,7 +70,7 @@ constraints:
       Count the sale at the order's processed_at and the return at each Refund's
       processed_at, or use current_total_price as the net; using
       current_total_price and also subtracting Refunds counts the return twice.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [revenue]
 
   - id: SH-007
@@ -82,5 +82,5 @@ constraints:
       Buying a gift card creates a liability; Shopify excludes it from total sales
       and counts the sale when the card is redeemed. Including it double counts
       when the redemption order is also counted.
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [revenue]

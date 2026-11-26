@@ -13,7 +13,7 @@ properties:
   status:              { type: enum, values: [requested, approved, in_transit, received, refunded, rejected] }
   refund_amount_usd:   { type: number, unit: USD, description: "Amount Support approved, before any restocking fee" }
 relationships:
-  for_order: { to: Order, cardinality: many-to-one }
+  for_order: { to: Order, cardinality: many-to-one, description: "A Return sends back goods from one Order." }
 source:
   connection: shop_files
   table: returns

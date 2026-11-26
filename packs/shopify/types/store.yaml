@@ -26,7 +26,7 @@ types:
       tool: get_shop
       params:
         graphql: "{ shop { id name myshopifyDomain primaryDomain { host } currencyCode ianaTimezone billingAddress { countryCodeV2 } plan { displayName } taxesIncluded enabledPresentmentCurrencies } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, store]
 
   - type: Product
@@ -57,7 +57,7 @@ types:
       params:
         limit: 50
         graphql: "{ products(first: 50) { nodes { id title handle productType vendor status tags publishedAt createdAt updatedAt } } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, catalogue]
 
   - type: Variant
@@ -91,5 +91,5 @@ types:
       params:
         product_id: "<Product.product_id>"
         graphql: "{ product(id: \"gid://shopify/Product/<Product.product_id>\") { variants(first: 100) { nodes { id sku title price compareAtPrice inventoryQuantity inventoryPolicy inventoryItem { id tracked } barcode position } } } }"
-    owner: ecommerce@stella.example
+    owner: ecommerce@yourcompany.example
     tags: [shopify, catalogue]

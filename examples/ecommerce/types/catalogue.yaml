@@ -30,7 +30,7 @@ types:
       price_usd:  { type: number, unit: USD }
       status:     { type: enum, values: [active, discontinued] }
     relationships:
-      variant_of: { to: Product, cardinality: many-to-one }
+      variant_of: { to: Product, cardinality: many-to-one, description: "A Variant is one colour or size of one Product." }
     source:
       connection: shop_files
       table: variants
@@ -52,8 +52,8 @@ types:
       reorder_point: { type: integer, description: "Below this, Planning raises a purchase order" }
       hazardous:     { type: boolean, description: "Copied from Product.hazardous" }
     relationships:
-      of_variant: { to: Variant, cardinality: many-to-one }
-      held_at:    { to: Warehouse, cardinality: many-to-one }
+      of_variant: { to: Variant, cardinality: many-to-one, description: "An Inventory row counts the units of one Variant." }
+      held_at:    { to: Warehouse, cardinality: many-to-one, description: "An Inventory row is stock held at one Warehouse." }
     source:
       connection: shop_files
       table: inventory

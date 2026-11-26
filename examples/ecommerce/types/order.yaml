@@ -15,7 +15,7 @@ properties:
   payment_method_id: { type: string, description: "The card or wallet charged; see PaymentMethod" }
   destination_region: { type: enum, values: [east, central, west], description: "Shipping region of the address" }
 relationships:
-  placed_by:  { to: Customer, cardinality: many-to-one }
+  placed_by:  { to: Customer, cardinality: many-to-one, description: "An Order is placed by one Customer." }
   paid_with:  { to: PaymentMethod, cardinality: many-to-one, description: "The payment method charged at checkout; refunds go back to it" }
 source:
   connection: shop_files

@@ -24,5 +24,5 @@ source:
   connection: meta_ads
   tool: get_ad_accounts
   params: { user_id: me, limit: 25 }
-owner: measurement@stella.example
+owner: measurement@yourcompany.example
 tags: [meta, structure]

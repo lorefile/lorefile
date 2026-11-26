@@ -5,19 +5,275 @@
 //! Every space is served under `/s/<id>/` (page and API alike); a bare `/api/...`
 //! goes to the default space so single-folder set-ups keep working.
 
-use crate::edit::{self, Change, EditConfig, Outcome};
-use crate::mcp::Server as McpServer;
+//!
+//! Every route but the login itself needs the server's token: the page keeps it
+//! as a cookie, API and MCP clients send `Authorization: Bearer <token>`.
+//! `POST /mcp` speaks MCP's Streamable HTTP transport through the same `Hub`
+//! as `lorefile mcp` does over stdio.
+
+use crate::edit::{self, Change, EditConfig, Note, Outcome, PAGE};
+use crate::mcp::{Hub, Server as McpServer};
 use crate::patch;
 use crate::proposals;
 use crate::spaces::{Loaded, Registry, Space};
 use anyhow::Result;
 use serde_json::{json, Value as Json};
 use std::collections::HashMap;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
 
 const INDEX_HTML: &str = include_str!("ui/index.html");
 
 type State = Loaded;
+
+// ---------------------------------------------------------------------------
+// Login: one token, the way Jupyter and code-server do it
+// ---------------------------------------------------------------------------
+
+pub const TOKEN_ENV: &str = "LOREFILE_TOKEN";
+
+/// Where the server's token came from, for the start-up lines.
+pub enum TokenFrom {
+    Flag,
+    Env,
+    File(PathBuf),
+    /// Made on this start and saved to the file.
+    New(PathBuf),
+    /// Made on this start, but the file could not be written: it lasts until the server stops.
+    Unsaved(PathBuf, String),
+}
+
+/// The login the server runs with. `token: None` is `--no-auth`.
+pub struct Login {
+    pub token: Option<String>,
+    pub from: Option<TokenFrom>,
+}
+
+/// `<root>/.lorefile/auth.toml`, where a generated token is kept between starts.
+pub fn auth_file(root: &Path) -> PathBuf {
+    root.join(".lorefile").join("auth.toml")
+}
+
+/// What a token may hold: the characters of base64, base64url, hex and UUIDs,
+/// all safe in a cookie and a header.
+fn token_ok(t: &str) -> Result<(), String> {
+    if t.is_empty() {
+        return Err("the token is empty".into());
+    }
+    if let Some(c) = t.chars().find(|c| !(c.is_ascii_alphanumeric() || "-._~+/=".contains(*c))) {
+        return Err(format!("the token holds `{}`; use letters, digits and - . _ ~ + / = only", c));
+    }
+    Ok(())
+}
+
+fn read_auth_file(path: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(path).ok()?;
+    text.lines().find_map(|line| {
+        let rest = line.trim().strip_prefix("token")?.trim_start().strip_prefix('=')?;
+        let v = rest.trim().trim_matches('"').trim_matches('\'').trim();
+        (!v.is_empty()).then(|| v.to_string())
+    })
+}
+
+/// Save the token where only this user can read it (mode 0600 on Unix).
+fn write_auth_file(root: &Path, token: &str) -> std::io::Result<PathBuf> {
+    use std::io::Write;
+    let path = crate::spaces::lorefile_dir(root).join("auth.toml");
+    let body = format!(
+        "# Lorefile's login token for this folder. Anyone who has it can open the page and call\n# the API and MCP (and write, when the server runs with --allow-edit).\n# Delete this file and restart to get a new one; LOREFILE_TOKEN or --token take precedence.\ntoken = \"{}\"\n",
+        token
+    );
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+    let mut f = opts.open(&path)?;
+    f.write_all(body.as_bytes())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    Ok(path)
+}
+
+/// Unpadded base64url, the alphabet that is safe in URLs, headers and cookies.
+fn base64url(bytes: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = (chunk[0] as u32) << 16 | (*chunk.get(1).unwrap_or(&0) as u32) << 8 | *chunk.get(2).unwrap_or(&0) as u32;
+        for i in 0..=chunk.len() {
+            out.push(A[((n >> (18 - 6 * i)) & 63) as usize] as char);
+        }
+    }
+    out
+}
+
+/// 32 random bytes from the operating system, as 43 characters of base64url.
+pub fn new_token() -> Result<String> {
+    let mut b = [0u8; 32];
+    getrandom::getrandom(&mut b).map_err(|e| anyhow::anyhow!("the operating system gave no random bytes for the login token: {}", e))?;
+    Ok(base64url(&b))
+}
+
+/// The token, in this order: `--token`, `LOREFILE_TOKEN`, `<root>/.lorefile/auth.toml`,
+/// else a new one saved there. `--no-auth` turns the login off.
+pub fn resolve_login(root: &Path, flag: Option<String>, no_auth: bool) -> Result<Login> {
+    if no_auth {
+        return Ok(Login { token: None, from: None });
+    }
+    let checked = |t: &str, what: &str, from: TokenFrom| -> Result<Login> {
+        token_ok(t).map_err(|e| anyhow::anyhow!("{}: {}", what, e))?;
+        Ok(Login { token: Some(t.to_string()), from: Some(from) })
+    };
+    if let Some(t) = flag {
+        return checked(t.trim(), "--token", TokenFrom::Flag);
+    }
+    if let Ok(t) = std::env::var(TOKEN_ENV) {
+        if !t.trim().is_empty() {
+            return checked(t.trim(), TOKEN_ENV, TokenFrom::Env);
+        }
+    }
+    let path = auth_file(root);
+    if let Some(t) = read_auth_file(&path) {
+        let what = format!("{} (fix it, or delete it to get a new token)", path.display());
+        return checked(&t, &what, TokenFrom::File(path));
+    }
+    let t = new_token()?;
+    let from = match write_auth_file(root, &t) {
+        Ok(p) => TokenFrom::New(p),
+        Err(e) => TokenFrom::Unsaved(path, e.to_string()),
+    };
+    Ok(Login { token: Some(t), from: Some(from) })
+}
+
+/// 127.0.0.1, ::1 and localhost: addresses only this machine can reach.
+pub fn is_loopback(host: &str) -> bool {
+    let h = host.trim().trim_start_matches('[').trim_end_matches(']');
+    h.eq_ignore_ascii_case("localhost") || h.parse::<std::net::IpAddr>().map(|ip| ip.is_loopback()).unwrap_or(false)
+}
+
+/// Equal tokens, compared in time that does not depend on where they differ.
+fn same_token(given: &str, want: &str) -> bool {
+    let (a, b) = (given.as_bytes(), want.as_bytes());
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b) {
+        diff |= x ^ y;
+    }
+    std::hint::black_box(diff) == 0
+}
+
+fn bearer(req: &Request) -> Option<String> {
+    let v = header_value(req, "Authorization")?;
+    let (scheme, rest) = v.trim().split_once(' ')?;
+    scheme.eq_ignore_ascii_case("bearer").then(|| rest.trim().to_string())
+}
+
+fn cookie_values(req: &Request, name: &str) -> Vec<String> {
+    req.headers()
+        .iter()
+        .filter(|h| h.field.equiv("Cookie"))
+        .flat_map(|h| h.value.as_str().split(';').map(|p| p.trim().to_string()).collect::<Vec<_>>())
+        .filter_map(|p| p.split_once('=').filter(|(k, _)| k.trim() == name).map(|(_, v)| v.trim().trim_matches('"').to_string()))
+        .collect()
+}
+
+/// Whether the request carries the token: a bearer header, or (when `cookie_ok`) the page's cookie.
+fn signed_in(req: &Request, ctx: &Ctx, cookie_ok: bool) -> bool {
+    let Some(want) = &ctx.token else { return true };
+    if bearer(req).map(|t| same_token(&t, want)).unwrap_or(false) {
+        return true;
+    }
+    cookie_ok && cookie_values(req, &ctx.cookie).iter().any(|t| same_token(t, want))
+}
+
+/// The page's cookie, or (with `None`) the header that clears it. One name per
+/// port, because browsers share cookies across the ports of one host.
+fn cookie_header(req: &Request, ctx: &Ctx, value: Option<&str>) -> Header {
+    let secure = header_value(req, "X-Forwarded-Proto").map(|p| p.trim().eq_ignore_ascii_case("https")).unwrap_or(false);
+    let (v, age) = match value {
+        Some(t) => (t, 400 * 24 * 3600),
+        None => ("", 0),
+    };
+    header("Set-Cookie", &format!("{}={}; Path=/; HttpOnly; SameSite=Strict; Max-Age={}{}", ctx.cookie, v, age, if secure { "; Secure" } else { "" }))
+}
+
+/// A path on this server to land on after signing in; anything else lands on `/`.
+fn local_path(next: &str) -> String {
+    let ok = next.starts_with('/') && !next.starts_with("//") && next.chars().all(|c| c.is_ascii_graphic() && c != '\\');
+    if ok { next.to_string() } else { "/".to_string() }
+}
+
+fn redirect(to: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+    Response::from_string(String::new())
+        .with_status_code(StatusCode(303))
+        .with_header(header("Location", &local_path(to)))
+        .with_header(header("Cache-Control", "no-store"))
+}
+
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
+}
+
+const SIGN_IN_FIRST: &str = "sign in first: open the link the server printed (it ends in ?token=…), or send Authorization: Bearer <token>";
+const WRONG_TOKEN: &str = "That is not this server's token. Check for a missing character, or for a newer token if the server was started again with another one.";
+
+/// The login screen: one box, plain and light like the page.
+fn login_page(next: &str, error: Option<&str>) -> Response<std::io::Cursor<Vec<u8>>> {
+    let err = error.map(|e| format!("<div class=\"err\">{}</div>", html_escape(e))).unwrap_or_default();
+    let html = LOGIN_HTML.replace("{{error}}", &err).replace("{{next}}", &html_escape(&local_path(next)));
+    text_response(401, "text/html; charset=utf-8", html)
+}
+
+const LOGIN_HTML: &str = r##"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light">
+<title>Lorefile · sign in</title>
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--ink:#1a1a1f;--muted:#6e6e78;--line:#e6e6e2;--line2:#d9d9d4;--accent:#2b5cff;--block:#b91c1c;--block-bg:#fde8e8;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans)}
+body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+main{width:100%;max-width:440px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px;display:flex;flex-direction:column;gap:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px}
+.logo{width:28px;height:28px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center}
+label{font-weight:600}
+.row{display:flex;gap:8px;margin-top:6px}
+input{flex:1;min-width:0;font:inherit;font-family:var(--mono);font-size:13px;padding:8px 10px;border:1px solid var(--line2);border-radius:9px;background:var(--panel);color:inherit}
+button{font:inherit;padding:7px 16px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:9px;cursor:pointer;min-height:36px}
+p{margin:0;font-size:13px;color:var(--muted)}code{font-family:var(--mono);font-size:12px}
+.err{background:var(--block-bg);color:var(--block);border-radius:10px;padding:8px 12px;font-size:13px}
+</style></head>
+<body><main>
+<div class="brand"><div class="logo"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="20" r="2"/><path d="M7 7l3 3M17 7l-3 3M12 15v3"/></svg></div>Lorefile</div>
+{{error}}
+<form method="post" action="/api/login">
+<label for="token">Paste the token printed in the terminal</label>
+<div class="row"><input id="token" name="token" type="password" autocomplete="current-password" spellcheck="false" autofocus required><button type="submit">Go</button></div>
+<input type="hidden" name="next" value="{{next}}">
+</form>
+<p>Running in Docker? It is in <code>LOREFILE_TOKEN</code>.</p>
+<p>Started it yourself? It is also saved in <code>.lorefile/auth.toml</code> in the folder the server was started on.</p>
+</main>
+<script>
+// A link from another site arrives without the cookie (it is SameSite=Strict). Ask once from
+// this page, where the cookie is sent, and come back in if it is already there.
+(async () => { try {
+  const k = 'lorefile-auth-retry', last = +(sessionStorage.getItem(k) || 0);
+  if (Date.now() - last < 10000) return;
+  const r = await fetch('/api/auth', { credentials: 'same-origin' }); const j = await r.json();
+  if (j.signed_in) { sessionStorage.setItem(k, String(Date.now())); location.replace(location.pathname + location.hash); }
+} catch (e) {} })();
+</script>
+</body></html>
+"##;
 
 fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
@@ -27,7 +283,7 @@ fn percent_decode(s: &str) -> String {
         match bytes[i] {
             b'+' => out.push(b' '),
             b'%' if i + 2 < bytes.len() => {
-                let hex = &s[i + 1..i + 3];
+                let hex = s.get(i + 1..i + 3).unwrap_or("");
                 if let Ok(v) = u8::from_str_radix(hex, 16) {
                     out.push(v);
                     i += 2;
@@ -61,12 +317,10 @@ fn json_response(status: u16, body: &Json) -> Response<std::io::Cursor<Vec<u8>>>
     Response::from_string(text)
         .with_status_code(StatusCode(status))
         .with_header(header("Content-Type", "application/json; charset=utf-8"))
-        .with_header(header("Access-Control-Allow-Origin", "*"))
         .with_header(header("Cache-Control", "no-store"))
 }
 
-/// Like `json_response` but without the open CORS header: replies to writes
-/// are for the page itself, never for another site.
+/// The same shape, kept separate so a write's reply is never confused with a read's.
 fn json_response_private(status: u16, body: &Json) -> Response<std::io::Cursor<Vec<u8>>> {
     let text = serde_json::to_string(body).unwrap_or_default();
     Response::from_string(text)
@@ -130,12 +384,14 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
                 "source_kind": t.source.as_ref().and_then(|s| ont.sources.get(&s.connection)).map(|s| s.kind.clone()),
                 "source_connection": t.source.as_ref().map(|s| s.connection.clone()),
                 "source_table": t.source.as_ref().map(|s| s.table.clone()),
-                "owner": t.owner, "tags": t.tags,
+                "owner": t.owner, "tags": t.tags, "iri": ont.iri_type(&t.name),
             })
         })
         .collect();
     let pending = proposals::list(&st.dir).into_iter().filter(|p| p.status == "pending").count();
+    let trust = trust_json(ont);
     json!({
+        "trust": trust,
         "manifest": ont.manifest,
         "stats": ont.stats(),
         "types": types,
@@ -147,6 +403,12 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
         "actions": ont.actions.values().collect::<Vec<_>>(),
         "sources": ont.sources.values().collect::<Vec<_>>(),
         "glossary": ont.glossary,
+        "metrics": ont.metrics.values().collect::<Vec<_>>(),
+        "functions": ont.functions.values().collect::<Vec<_>>(),
+        "files": ont.files,
+        "version": env!("CARGO_PKG_VERSION"),
+        "namespace": ont.iris.namespace,
+        "rdf": cfg!(feature = "rdf"),
         "diagnostics": st.report.diags,
         "ok": st.report.ok(),
         "dir": st.dir.display().to_string(),
@@ -159,34 +421,91 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
     })
 }
 
-/// Is this write request coming from our own page? A browser sends `Origin`
-/// on every cross-site POST, so a request from another site is refused even
-/// though the server only listens on 127.0.0.1.
-fn same_origin(req: &Request, addr: &str) -> bool {
-    let Some(origin) = header_value(req, "Origin") else { return true };
-    let host = origin.trim_start_matches("http://").trim_start_matches("https://");
-    let port = addr.rsplit(':').next().unwrap_or("");
-    host == addr || host == format!("localhost:{}", port) || host == format!("[::1]:{}", port)
+/// Every graded kind with its resolved grade: what the page's chips show and `GET /api/trust` answers.
+fn trust_json(ont: &crate::ontology::Ontology) -> Json {
+    let orphans: Vec<Json> = ont.graded.orphans.iter().map(|(k, n, r)| json!({ "kind": k, "name": n, "grade": r.grade.word() })).collect();
+    json!({ "file": ont.graded.has_file, "counts": ont.graded.counts(), "items": ont.graded.list(), "orphans": orphans })
 }
 
+/// The `by` words for a write from the page: "Priya via page" when the page sent a name (Settings), else "person via page".
+fn page_by(body: &Json) -> String {
+    let name = body.get("by").and_then(|v| v.as_str());
+    crate::trust::by_words(name, "page")
+}
+
+/// Writes must come from our own page or a deliberate client. The page sends
+/// `X-Lorefile: write`: a custom header, so a cross-site browser request needs a
+/// preflight that this server never grants. When the browser also sends
+/// `Origin`, it has to match the `Host` the page was loaded from, whatever
+/// address the server is bound to or proxied behind.
+fn write_allowed(req: &Request) -> bool {
+    let marked = header_value(req, "X-Lorefile").map(|v| v.trim() == "write").unwrap_or(false);
+    marked && origin_matches(req)
+}
+
+/// No `Origin` (a client that is not a browser), or one that names the `Host`.
+fn origin_matches(req: &Request) -> bool {
+    match (header_value(req, "Origin"), header_value(req, "Host")) {
+        (Some(origin), Some(host)) => {
+            let o = origin.trim().trim_start_matches("http://").trim_start_matches("https://").trim_end_matches('/');
+            o.eq_ignore_ascii_case(host.trim())
+        }
+        _ => true,
+    }
+}
+
+const SHIPPED_READ_ONLY: &str = "this is a shipped example and stays read-only; copy it into a space of your own to change it";
+const SHIPPED_HISTORY: &str = "off (shipped example, read-only)";
+
+const WRITE_REFUSED: &str = "writes need the `X-Lorefile: write` header the page sends, and an Origin that matches the Host; cross-site requests are refused";
+
+/// Bodies larger than this are refused before they are read.
+const MAX_BODY: usize = 4 * 1024 * 1024;
+
 /// The write endpoints. Takes the write lock, applies the change, reloads.
+#[allow(clippy::too_many_arguments)] // one call site per transport; a struct would only rename the arguments
 fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path: &str, params: &HashMap<String, String>, body: &Json, as_tool: bool) -> Response<std::io::Cursor<Vec<u8>>> {
     if builtin {
-        return json_response_private(403, &json!({ "error": "this is a shipped example and stays read-only; copy it into a space of your own to change it", "editable": false, "builtin": true }));
+        return json_response_private(403, &json!({ "error": SHIPPED_READ_ONLY, "editable": false, "builtin": true }));
     }
     // an agent's proposal is validated and queued even when edit mode is off
     if as_tool {
         let args = body.get("arguments").cloned().unwrap_or(json!({}));
-        let (out, queued) = McpServer::propose(&st.dir, edit, &st.report, str_field(&args, "file"), str_field(&args, "content"), str_field(&args, "reason"), "agent via API");
+        let reason = str_field(&args, "reason").to_string();
+        if str_field(body, "name") == "propose_patch" && str_field(&args, "op") == "record_check" {
+            return json_response_private(200, &McpServer::record_check(&st.ont, &args, "agent via API"));
+        }
+        let (out, queued, summary) = if str_field(body, "name") == "propose_patch" && args.get("ops").map(|o| o.is_array()).unwrap_or(false) {
+            let ops = args["ops"].as_array().cloned().unwrap_or_default();
+            match patch::plan_many(&st.ont, &ops) {
+                Ok(plan) => {
+                    let summary = if plan.summaries.len() == 1 { plan.summaries[0].clone() } else { format!("{} changes: {}", plan.summaries.len(), plan.summaries.join("; ")) };
+                    let (o, q) = McpServer::propose_many(&st.dir, edit, &st.report, &plan, &reason, "agent via API");
+                    (o, q, summary)
+                }
+                Err(e) => return json_response_private(200, &McpServer::text(format!("{} (nothing was written)", e), true)),
+            }
+        } else if str_field(body, "name") == "propose_patch" {
+            match patch::plan(&st.ont, &args) {
+                Ok(p) => {
+                    let (o, q) = McpServer::propose(&st.dir, edit, &st.report, &p.file, &p.text, &reason, "agent via API", Some((&p.kind, &p.name)), &p.summary);
+                    (o, q, p.summary)
+                }
+                Err(e) => return json_response_private(200, &McpServer::text(format!("{} (nothing was written)", e), true)),
+            }
+        } else {
+            let (o, q) = McpServer::propose(&st.dir, edit, &st.report, str_field(&args, "file"), str_field(&args, "content"), &reason, "agent via API", None, "");
+            (o, q, String::new())
+        };
         if out.written {
             st.reload();
         }
-        return json_response_private(200, &McpServer::propose_change_result(&out, edit, queued.as_ref()));
+        return json_response_private(200, &McpServer::propose_change_result(&out, edit, queued.as_ref(), &summary));
     }
     if path == "/api/proposals/dismiss" {
         return match proposals::set_status(&st.dir, str_field(body, "id"), "dismissed") {
             Ok(p) => {
-                proposals::log(&st.dir, "person via UI", &format!("set aside the proposed change to {}", p.file), &p.file);
+                proposals::log(&st.dir, PAGE, &format!("set aside the proposed change to {}", p.file), &p.file);
                 json_response_private(200, &json!({ "ok": true, "proposal": p }))
             }
             Err(e) => json_response_private(404, &json!({ "error": e })),
@@ -196,31 +515,100 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
         return json_response_private(403, &json!({ "error": "edit mode is off; start the server with --allow-edit", "editable": false }));
     }
     let mut extra = json!({});
-    let outcome: Outcome = if *method == Method::Delete {
+    let by = page_by(body);
+    let outcome: Outcome = if path == "/api/trust" {
+        let kind_word = str_field(body, "kind");
+        let kind = crate::trust::Kind::parse(kind_word);
+        if !kind_word.trim().is_empty() && kind.is_none() {
+            return json_response_private(400, &json!({ "error": format!("kind is metric, binding, word or guardrail, not `{}`", kind_word) }));
+        }
+        let op = match str_field(body, "op") {
+            "vouch_all" => Ok(edit::GradeOp::VouchAll),
+            "accept" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Accept { kind, name }),
+            "check" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Check { kind, name, against: str_field(body, "against").to_string(), note: str_field(body, "note").to_string() }),
+            other => Err(format!("op is accept, check or vouch_all, not `{}`", other)),
+        };
+        match op {
+            Ok(op) => {
+                let out = edit::grade(&st.dir, edit, &st.report, &op, &by);
+                if out.written {
+                    let what = match &op {
+                        edit::GradeOp::Accept { kind, name } => format!("accepted {} {}", kind.word(), name),
+                        edit::GradeOp::Check { kind, name, against, .. } => format!("checked {} {} against {}", kind.word(), name, against),
+                        edit::GradeOp::VouchAll => format!("vouched for {} definitions", out.name),
+                    };
+                    proposals::log(&st.dir, &by, &what, crate::trust::FILE);
+                }
+                out
+            }
+            Err(e) => Outcome { file: crate::trust::FILE.into(), refused: Some(e), ..Default::default() },
+        }
+    } else if *method == Method::Delete {
         let file = params.get("file").cloned().unwrap_or_else(|| str_field(body, "file").to_string());
-        edit::apply(&st.dir, edit, &st.report, &file, Change::Delete, "UI", None, "")
+        edit::apply(&st.dir, edit, &st.report, &file, Change::Delete, &Note::via(&by), None)
     } else if path == "/api/create" {
         let (kind, name, content) = (str_field(body, "kind"), str_field(body, "name"), str_field(body, "content"));
         let file = body.get("file").and_then(|f| f.as_str()).filter(|f| !f.trim().is_empty());
         match edit::plan_create(&st.dir, kind, name, content, file) {
-            Ok((rel, text)) => edit::apply(&st.dir, edit, &st.report, &rel, Change::Write(text), "UI", Some((kind, name)), ""),
+            Ok((rel, text)) => edit::apply(&st.dir, edit, &st.report, &rel, Change::Write(text), &Note::via(&by), Some((kind, name))),
             Err(e) => Outcome { file: file.unwrap_or("").to_string(), refused: Some(e), ..Default::default() },
         }
     } else if path == "/api/patch" {
         match patch::plan(&st.ont, body) {
             Ok(p) => {
                 extra["summary"] = json!(p.summary);
-                edit::apply(&st.dir, edit, &st.report, &p.file, Change::Write(p.text), "UI", Some((&p.kind, &p.name)), &p.summary)
+                edit::apply(&st.dir, edit, &st.report, &p.file, Change::Write(p.text), &Note { via: &by, summary: &p.summary, ..Default::default() }, Some((&p.kind, &p.name)))
             }
             Err(e) => Outcome { file: str_field(body, "type").to_string(), refused: Some(e), ..Default::default() },
         }
     } else if path == "/api/proposals/accept" {
         match proposals::get(&st.dir, str_field(body, "id")) {
-            Some(p) => {
-                let out = edit::apply(&st.dir, edit, &st.report, &p.file, Change::Write(p.content.clone()), "UI (accepting an agent's proposal)", Some((&p.kind, &p.name)), &p.reason);
+            Some(p) if p.status != "pending" => Outcome { refused: Some(format!("proposal {} is already {}", p.id, p.status)), ..Default::default() },
+            // an agent's report of a check: the person's click makes it checked, in their name
+            Some(p) if p.check.is_some() => {
+                let c = p.check.clone().unwrap_or_default();
+                let note = format!("{} (reported by {})", c.note, if p.via.is_empty() { "an agent" } else { p.via.as_str() });
+                let op = edit::find_graded(&st.ont, crate::trust::Kind::parse(&c.kind), &c.name).and_then(|(kind, name)| {
+                    // the agent compared one recipe; if the definition changed since, that comparison says nothing about the new one
+                    let now = crate::trust::things(&st.ont, kind).get(&name).map(crate::trust::fingerprint).unwrap_or_default();
+                    if c.of.is_empty() || c.of != now {
+                        return Err(format!("{} {} has changed since the agent compared it, so this report is about an older definition; set it aside and ask the agent to compare again", kind.word(), name));
+                    }
+                    Ok(edit::GradeOp::Check { kind, name, against: c.against.clone(), note })
+                });
+                let out = match op {
+                    Ok(op) => edit::grade(&st.dir, edit, &st.report, &op, &by),
+                    Err(e) => Outcome { file: crate::trust::FILE.into(), refused: Some(e), ..Default::default() },
+                };
                 if out.written {
                     let _ = proposals::set_status(&st.dir, &p.id, "accepted");
-                    proposals::log(&st.dir, "person via UI", &format!("accepted the change to {} proposed by an agent", p.file), &p.file);
+                    proposals::log(&st.dir, &by, &format!("confirmed the check of {} {} against {} reported by an agent", c.kind, c.name, c.against), crate::trust::FILE);
+                }
+                extra["proposal_id"] = json!(p.id);
+                out
+            }
+            Some(p) => {
+                // the file moved on since the agent looked at it: accepting would drop those changes
+                let parts: Vec<(String, String, String)> = if p.files.is_empty() { vec![(p.file.clone(), p.content.clone(), p.before.clone())] } else { p.files.iter().map(|f| (f.file.clone(), f.content.clone(), f.before.clone())).collect() };
+                for (file, _, before) in &parts {
+                    let now_text = std::fs::read_to_string(st.dir.join(file)).unwrap_or_default();
+                    if &now_text != before {
+                        return json_response_private(409, &json!({ "error": format!("{} has changed since this was proposed, so accepting it would drop the newer changes; ask the agent to propose it again", file), "stale": true }));
+                    }
+                }
+                // the agent stays the author; the person who accepted is the committer
+                let via = if p.via.trim().is_empty() { "agent" } else { p.via.as_str() };
+                let line = edit::agent_line(via, &p.summary);
+                let note = Note { via, summary: &line, reason: &p.reason, accepted_by: Some(&by), ..Default::default() };
+                let out = if parts.len() == 1 {
+                    edit::apply(&st.dir, edit, &st.report, &p.file, Change::Write(p.content.clone()), &note, Some((&p.kind, &p.name)))
+                } else {
+                    let files: Vec<(String, String)> = parts.iter().map(|(f, t, _)| (f.clone(), t.clone())).collect();
+                    edit::apply_many(&st.dir, edit, &st.report, &files, &note, None)
+                };
+                if out.written {
+                    let _ = proposals::set_status(&st.dir, &p.id, "accepted");
+                    proposals::log(&st.dir, &by, &format!("accepted the change to {} proposed by an agent", p.file), &p.file);
                 }
                 extra["proposal_id"] = json!(p.id);
                 out
@@ -228,15 +616,15 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
             None => Outcome { refused: Some("no such proposal".into()), ..Default::default() },
         }
     } else {
-        edit::apply(&st.dir, edit, &st.report, str_field(body, "file"), Change::Write(str_field(body, "content").to_string()), "UI", None, str_field(body, "reason"))
+        edit::apply(&st.dir, edit, &st.report, str_field(body, "file"), Change::Write(str_field(body, "content").to_string()), &Note { via: &by, reason: str_field(body, "reason"), ..Default::default() }, None)
     };
     if outcome.written {
         if path == "/api/patch" {
-            proposals::log(&st.dir, "person via UI", extra["summary"].as_str().unwrap_or("edited"), &outcome.file);
+            proposals::log(&st.dir, &by, extra["summary"].as_str().unwrap_or("edited"), &outcome.file);
         } else if path == "/api/edit" || path == "/api/create" {
-            proposals::log(&st.dir, "person via UI", &format!("edited {}", outcome.file), &outcome.file);
+            proposals::log(&st.dir, &by, &format!("edited {}", outcome.file), &outcome.file);
         } else if *method == Method::Delete {
-            proposals::log(&st.dir, "person via UI", &format!("deleted {}", outcome.file), &outcome.file);
+            proposals::log(&st.dir, &by, &format!("deleted {}", outcome.file), &outcome.file);
         }
         st.reload();
     }
@@ -249,6 +637,9 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
     if outcome.written {
         j["git"] = edit::git_status(&st.dir).unwrap_or(Json::Null);
         j["stats"] = json!(st.ont.stats());
+        j["trust"] = trust_json(&st.ont);
+        // the words history and trust.yaml got: a name the page sent may not have been usable
+        j["by"] = json!(by);
     }
     json_response_private(outcome.status(), &j)
 }
@@ -275,218 +666,519 @@ fn spaces_json(reg: &mut Registry, edit: EditConfig) -> Json {
     })
 }
 
-pub fn run(mut reg: Registry, host: &str, port: u16, edit: EditConfig) -> Result<()> {
+/// `+`, `/` and `=` would change meaning in a query string; base64url tokens have none.
+fn url_token(t: &str) -> String {
+    t.replace('+', "%2B").replace('/', "%2F").replace('=', "%3D")
+}
+
+pub fn run(reg: Registry, host: &str, port: u16, edit: EditConfig, login: Login) -> Result<()> {
     let addr = format!("{}:{}", host, port);
     let server = Server::http(&addr).map_err(|e| anyhow::anyhow!("cannot bind {}: {}", addr, e))?;
     let mine = reg.user_spaces().len();
     let shipped = reg.spaces.len() - mine;
-    eprintln!("UI      → http://{}", addr);
-    eprintln!("API     → http://{}/api/spaces", addr);
-    if reg.single {
-        eprintln!("Space   → {} (one ontology folder){}", reg.root.display(), if shipped > 0 { format!(", plus {} shipped examples to look at", shipped) } else { String::new() });
-    } else {
-        eprintln!("Spaces  → {} of yours in {}{}", mine, reg.root.display(), if shipped > 0 { format!(", plus {} shipped examples", shipped) } else { String::new() });
+    // the address to open from this machine: 0.0.0.0 listens everywhere, 127.0.0.1 reaches it
+    let shown = if host == "0.0.0.0" || host == "::" || host == "[::]" { "127.0.0.1".to_string() } else { host.to_string() };
+    let base = format!("http://{}:{}", shown, port);
+    let examples = if shipped > 0 { format!(", plus {} shipped examples", shipped) } else { String::new() };
+    let what = if reg.single { format!("one ontology folder, {}{}", reg.root.display(), examples) } else { format!("{} space{} of yours in {}{}", mine, if mine == 1 { "" } else { "s" }, reg.root.display(), examples) };
+    eprintln!("Lorefile {} · {} · edit mode {}", env!("CARGO_PKG_VERSION"), what, if edit.allow { "on" } else { "off" });
+    let mcp_url = format!("{}/mcp", base);
+    match (&login.token, &login.from) {
+        (Some(t), Some(from)) => {
+            let (open, bearer, note) = match from {
+                TokenFrom::Env => (format!("{}/", base), format!("${}", TOKEN_ENV), format!("sign in with the token in {}", TOKEN_ENV)),
+                TokenFrom::Flag => (format!("{}/", base), "<the token given to --token>".to_string(), "sign in with the token given to --token".to_string()),
+                TokenFrom::File(p) => (format!("{}/?token={}", base, url_token(t)), t.clone(), format!("(token from {})", p.display())),
+                TokenFrom::New(p) => (format!("{}/?token={}", base, url_token(t)), t.clone(), format!("(first run: token saved to {})", p.display())),
+                TokenFrom::Unsaved(p, e) => (format!("{}/?token={}", base, url_token(t)), t.clone(), format!("(could not save the token to {}: {}; it lasts until the server stops)", p.display(), e)),
+            };
+            eprintln!("Open    {}   {}", open, note);
+            eprintln!("MCP     {}   Authorization: Bearer {}", mcp_url, bearer);
+            eprintln!("        claude mcp add --transport http lorefile {} --header \"Authorization: Bearer {}\"", mcp_url, bearer);
+            if matches!(from, TokenFrom::Env | TokenFrom::Flag) && t.len() < 16 {
+                eprintln!("Warning: a token shorter than 16 characters is easy to guess; `openssl rand -base64 32` makes a good one");
+            }
+        }
+        _ => {
+            eprintln!("Open    {}/", base);
+            eprintln!("Login   off (--no-auth): anyone who can reach this port can read these spaces{}", if edit.allow { " and, with edit mode on, change them" } else { "" });
+            eprintln!("MCP     {}", mcp_url);
+            eprintln!("        claude mcp add --transport http lorefile {}", mcp_url);
+        }
     }
-    eprintln!("MCP     → stella-ontology mcp --dir {}", reg.root.display());
+    eprintln!("        or over stdio on this machine: lorefile mcp --dir {}", reg.root.display());
     if edit.allow {
-        eprintln!("Edit    → on: the page writes YAML into the spaces{}", if edit.commit { " and commits each change" } else { " (changes stay uncommitted)" });
+        let commits = match edit.policy {
+            edit::CommitPolicy::Auto => " and saves each change to the space's git history (a space inside another repository stays uncommitted)",
+            edit::CommitPolicy::Always => " and commits each change (--commit-edits)",
+            edit::CommitPolicy::Never => " (changes stay uncommitted: --no-commit-edits)",
+        };
+        eprintln!("Edit    on: the page and agents write YAML into the spaces{}", commits);
     } else {
-        eprintln!("Edit    → off (start with --allow-edit to edit from the page)");
+        eprintln!("Edit    off (start with --allow-edit to edit from the page)");
     }
-    let root_s = reg.root.display().to_string();
+    let root_s = std::fs::canonicalize(&reg.root).unwrap_or_else(|_| reg.root.clone()).display().to_string();
     let single = reg.single;
 
-    for mut req in server.incoming_requests() {
-        let (full_path, params) = query_params(req.url());
-        let (prefix_space, path) = split_space(&full_path);
-        let method = req.method().clone();
-        let has_body = method == Method::Post || method == Method::Delete || method == Method::Put;
-        let mut body_text = String::new();
-        if has_body {
-            let _ = req.as_reader().read_to_string(&mut body_text);
-        }
-        let body: Json = if has_body { serde_json::from_str(&body_text).unwrap_or(json!({})) } else { json!({}) };
-        let json_body = header_value(&req, "Content-Type").map(|c| c.to_ascii_lowercase().contains("application/json")).unwrap_or(false);
-
-        // the page itself, for any space
-        if method == Method::Get && (path == "/" || path == "/index.html" || path.is_empty()) {
-            let _ = req.respond(text_response(200, "text/html; charset=utf-8", INDEX_HTML.to_string()));
-            continue;
-        }
-
-        // the list of spaces, and creating one
-        if path == "/api/spaces" {
-            let resp = match method {
-                Method::Get => json_response(200, &spaces_json(&mut reg, edit)),
-                Method::Post if !same_origin(&req, &addr) => json_response_private(403, &json!({ "error": "cross-origin writes are refused" })),
-                Method::Post if !json_body => json_response_private(415, &json!({ "error": "send the body as application/json" })),
-                Method::Post if !edit.allow => json_response_private(403, &json!({ "error": "edit mode is off; start the server with --allow-edit to create spaces", "editable": false })),
-                Method::Post => match reg.create(str_field(&body, "name"), str_field(&body, "from")) {
-                    Ok(space) => {
-                        proposals::log(&space.dir, "person via UI", &format!("created the space {}{}", space.id, if str_field(&body, "from").is_empty() { String::new() } else { format!(" from {}", str_field(&body, "from")) }), "ontology.yaml");
-                        json_response_private(200, &json!({ "ok": true, "written": true, "space": space, "summary": format!("Created the space {}", space.id), "spaces": spaces_json(&mut reg, edit) }))
-                    }
-                    Err(e) => json_response_private(400, &json!({ "error": e })),
-                },
-                _ => json_response(405, &json!({ "error": "method not allowed" })),
-            };
-            let _ = req.respond(resp);
-            continue;
-        }
-
-        // which space does this request mean?
-        let want = prefix_space.clone().or_else(|| params.get("space").cloned()).or_else(|| reg.default_id());
-        let Some(space_id) = want else {
-            let _ = req.respond(json_response(404, &json!({ "error": "no space yet: create one in the page (or start the server on an ontology folder)", "no_spaces": true })));
-            continue;
-        };
-        let Some(space) = reg.info(&space_id).cloned() else {
-            let _ = req.respond(json_response(404, &json!({ "error": format!("no space named '{}'", space_id), "spaces": reg.spaces.keys().collect::<Vec<_>>() })));
-            continue;
-        };
-        // shipped examples never take writes, whatever the flags say
-        let space_edit = if space.builtin { EditConfig::default() } else { edit };
-
-        if method == Method::Post && path == "/api/reload" {
-            reg.rescan();
-            reg.touched(&space_id);
-            let resp = match reg.get(&space_id) {
-                Ok(st) => {
-                    st.reload();
-                    json_response(200, &json!({ "ok": st.report.ok(), "stats": st.ont.stats(), "diagnostics": st.report.diags }))
-                }
-                Err(e) => json_response(500, &json!({ "error": e.to_string() })),
-            };
-            let _ = req.respond(resp);
-            continue;
-        }
-
-        let st = match reg.get(&space_id) {
-            Ok(st) => st,
-            Err(e) => {
-                let _ = req.respond(json_response(500, &json!({ "error": format!("{} could not be loaded: {:#}", space_id, e), "space": space_id })));
-                continue;
-            }
-        };
-
-        // writes: edit, create, delete, and propose_change through /api/tool
-        let as_tool = method == Method::Post && path == "/api/tool" && str_field(&body, "name") == "propose_change";
-        let is_write = as_tool
-            || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss"))
-            || (method == Method::Delete && path == "/api/file");
-        if is_write {
-            let resp = if !same_origin(&req, &addr) {
-                json_response_private(403, &json!({ "error": "cross-origin writes are refused" }))
-            } else if method == Method::Post && !json_body {
-                json_response_private(415, &json!({ "error": "send the body as application/json" }))
-            } else {
-                mutate(st, space.builtin, space_edit, &method, &path, &params, &body, as_tool)
-            };
-            reg.touched(&space_id);
-            let _ = req.respond(resp);
-            continue;
-        }
-
-        let ont = &st.ont;
-        let mcp = McpServer::with_data(ont, st.data());
-        let resp = match (method.clone(), path.as_str()) {
-            (Method::Get, "/api/summary") => json_response(200, &overview(st, &space, &root_s, single, space_edit)),
-            (Method::Get, "/api/summary.md") => text_response(200, "text/markdown; charset=utf-8", ont.summary_markdown()),
-            (Method::Get, "/api/describe") => {
-                let name = params.get("name").cloned().unwrap_or_default();
-                match ont.describe(&name) {
-                    Some(j) => json_response(200, &j),
-                    None => json_response(404, &json!({ "error": format!("nothing named {}", name) })),
-                }
-            }
-            (Method::Get, "/api/search") => {
-                let q = params.get("q").cloned().unwrap_or_default();
-                let limit = params.get("limit").and_then(|l| l.parse().ok()).unwrap_or(20);
-                json_response(200, &json!(ont.search(&q, limit)))
-            }
-            (Method::Get, "/api/neighbors") => {
-                let name = params.get("name").cloned().unwrap_or_default();
-                let depth = params.get("depth").and_then(|d| d.parse().ok()).unwrap_or(1);
-                match ont.neighbors(&name, depth) {
-                    Some(sg) => json_response(200, &json!(sg)),
-                    None => json_response(404, &json!({ "error": "unknown type" })),
-                }
-            }
-            (Method::Get, "/api/rules") => {
-                let name = params.get("name").cloned().unwrap_or_default();
-                json_response(200, &json!(ont.constraints_for(&name)))
-            }
-            (Method::Get, "/api/where") => {
-                let name = params.get("name").cloned().unwrap_or_default();
-                let data = st.data();
-                match data.where_is(&name) {
-                    Ok(j) => json_response(200, &j),
-                    Err(e) => json_response(404, &json!({ "error": e.to_string() })),
-                }
-            }
-            (Method::Get, "/api/instances") => {
-                let name = params.get("name").cloned().unwrap_or_default();
-                let limit: usize = params.get("limit").and_then(|l| l.parse().ok()).unwrap_or(50);
-                let data = st.data();
-                match data.instances(&name) {
-                    Ok(rows) => {
-                        let total = rows.len();
-                        let shown: Vec<_> = rows.into_iter().take(limit).collect();
-                        json_response(200, &json!({ "type": name, "total": total, "rows": shown }))
-                    }
-                    Err(e) => json_response(404, &json!({ "error": e.to_string() })),
-                }
-            }
-            (Method::Get, "/api/yaml") => {
-                let file = params.get("file").cloned().unwrap_or_default();
-                let safe = !file.contains("..") && (file.ends_with(".yaml") || file.ends_with(".yml")) && ont.files.contains(&file);
-                if safe {
-                    match std::fs::read_to_string(ont.root.join(&file)) {
-                        Ok(s) => text_response(200, "text/yaml; charset=utf-8", s),
-                        Err(e) => json_response(404, &json!({ "error": e.to_string() })),
-                    }
-                } else {
-                    json_response(400, &json!({ "error": "unknown file" }))
-                }
-            }
-            (Method::Get, "/api/templates") => json_response(200, &edit::templates()),
-            (Method::Get, "/api/proposals") => json_response(200, &json!({ "proposals": proposals::list(&st.dir), "activity": proposals::activity(&st.dir, 50), "editable": space_edit.allow })),
-            (Method::Get, "/api/activity") => json_response(200, &json!({ "activity": proposals::activity(&st.dir, 100) })),
-            (Method::Get, "/api/tools") => json_response(200, &crate::mcp::tool_definitions()),
-            (Method::Get, "/api/tables") => match st.data().sql_catalog() {
-                Ok(j) => json_response(200, &j),
-                Err(e) => json_response(500, &json!({ "error": e.to_string() })),
-            },
-            (Method::Get, "/api/query") | (Method::Post, "/api/query") => {
-                let (sql, limit) = if method == Method::Post {
-                    (
-                        body.get("sql").and_then(|s| s.as_str()).unwrap_or("").to_string(),
-                        body.get("limit").and_then(|l| l.as_u64()).unwrap_or(crate::data::MAX_QUERY_ROWS as u64) as usize,
-                    )
-                } else {
-                    (params.get("sql").cloned().unwrap_or_default(), params.get("limit").and_then(|l| l.parse().ok()).unwrap_or(crate::data::MAX_QUERY_ROWS))
-                };
-                match st.data().query(&sql, limit) {
-                    Ok(res) => json_response(200, &json!(res)),
-                    Err(e) => json_response(400, &json!({ "error": e.to_string() })),
-                }
-            }
-            (Method::Post, "/api/check") => json_response(200, &mcp.call_tool("validate", &body)),
-            (Method::Post, "/api/tool") => {
-                let name = body.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                let args = body.get("arguments").cloned().unwrap_or(json!({}));
-                json_response(200, &mcp.call_tool(name, &args))
-            }
-            _ => json_response(404, &json!({ "error": "not found" })),
-        };
-        let _ = req.respond(resp);
+    let ctx = Arc::new(Ctx { edit, root_s, single, token: login.token, cookie: format!("lorefile-{}", port) });
+    let reg = Arc::new(Mutex::new(reg));
+    for req in server.incoming_requests() {
+        let (reg, ctx) = (Arc::clone(&reg), Arc::clone(&ctx));
+        // a thread per request: a slow or stalled client holds its own thread, not the server
+        std::thread::spawn(move || handle(req, &reg, &ctx));
     }
     Ok(())
 }
 
+/// What every request handler needs besides the registry.
+struct Ctx {
+    edit: EditConfig,
+    root_s: String,
+    single: bool,
+    /// The login token; `None` with `--no-auth`.
+    token: Option<String>,
+    /// The page's cookie name, `lorefile-<port>`.
+    cookie: String,
+}
+
+fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
+    let (edit, single) = (ctx.edit, ctx.single);
+    let root_s: &str = &ctx.root_s;
+    let (full_path, params) = query_params(req.url());
+    let (prefix_space, path) = split_space(&full_path);
+    let method = req.method().clone();
+    let is_page = method == Method::Get && (path == "/" || path == "/index.html" || path.is_empty());
+
+    // open to everyone: the health check, and signing in and out
+    if method == Method::Get && full_path == "/healthz" {
+        let _ = req.respond(json_response(200, &json!({ "ok": true })));
+        return;
+    }
+    if method == Method::Get && path == "/api/auth" {
+        let me = signed_in(&req, ctx, true);
+        let mut j = json!({ "required": ctx.token.is_some(), "signed_in": me });
+        if me {
+            // the page shows it masked in Settings, with a copy button; only someone who already has it gets it
+            j["token"] = json!(ctx.token);
+        }
+        let _ = req.respond(json_response(200, &j));
+        return;
+    }
+    // the link the terminal printed: keep the token as a cookie and take it out of the address bar
+    if is_page && ctx.token.is_some() {
+        if let Some(t) = params.get("token") {
+            let resp = if ctx.token.as_deref().map(|want| same_token(t.trim(), want)).unwrap_or(false) {
+                redirect(&full_path).with_header(cookie_header(&req, ctx, ctx.token.as_deref()))
+            } else {
+                login_page(&full_path, Some(WRONG_TOKEN))
+            };
+            let _ = req.respond(resp);
+            return;
+        }
+    }
+    let is_login = method == Method::Post && path == "/api/login";
+    let is_logout = method == Method::Post && path == "/api/logout";
+    if path == "/mcp" {
+        // MCP clients send the bearer header; the page's cookie does not open it
+        if !signed_in(&req, ctx, false) {
+            let resp = json_response(401, &json!({ "error": "send Authorization: Bearer <token>, the token the server printed when it started" })).with_header(header("WWW-Authenticate", "Bearer"));
+            let _ = req.respond(resp);
+            return;
+        }
+    } else if !is_login && !is_logout && !signed_in(&req, ctx, true) {
+        // checked before the body is read: no one without the token gets 4 MB of our time
+        let resp = if is_page { login_page(&full_path, None) } else { json_response(401, &json!({ "error": SIGN_IN_FIRST })).with_header(header("WWW-Authenticate", "Bearer")) };
+        let _ = req.respond(resp);
+        return;
+    }
+
+    let has_body = method == Method::Post || method == Method::Delete || method == Method::Put;
+    let mut body_text = String::new();
+    if has_body {
+        if req.body_length().map(|n| n > MAX_BODY).unwrap_or(false) {
+            let _ = req.respond(json_response(413, &json!({ "error": "the request body is larger than 4 MB" })));
+            return;
+        }
+        let _ = req.as_reader().take(MAX_BODY as u64 + 1).read_to_string(&mut body_text);
+        if body_text.len() > MAX_BODY {
+            let _ = req.respond(json_response(413, &json!({ "error": "the request body is larger than 4 MB" })));
+            return;
+        }
+    }
+    let body: Json = if has_body { serde_json::from_str(&body_text).unwrap_or(json!({})) } else { json!({}) };
+    let content_type = header_value(&req, "Content-Type").map(|c| c.to_ascii_lowercase()).unwrap_or_default();
+    let json_body = content_type.contains("application/json");
+
+    // sign in: the login screen's form (a redirect back), or a script's JSON (a JSON answer)
+    if is_login || is_logout {
+        let form = content_type.contains("application/x-www-form-urlencoded");
+        let fields = if form { query_params(&format!("?{}", body_text)).1 } else { HashMap::new() };
+        let next = fields.get("next").map(|n| local_path(n)).unwrap_or_else(|| "/".to_string());
+        let resp = if is_logout {
+            let r = if form { redirect("/") } else { json_response_private(200, &json!({ "ok": true, "signed_in": false })) };
+            r.with_header(cookie_header(&req, ctx, None))
+        } else {
+            let given = if form { fields.get("token").cloned().unwrap_or_default() } else { str_field(&body, "token").to_string() };
+            match &ctx.token {
+                None => if form { redirect(&next) } else { json_response_private(200, &json!({ "ok": true, "required": false })) },
+                Some(want) if same_token(given.trim(), want) => {
+                    let r = if form { redirect(&next) } else { json_response_private(200, &json!({ "ok": true, "signed_in": true })) };
+                    r.with_header(cookie_header(&req, ctx, Some(want)))
+                }
+                Some(_) => if form { login_page(&next, Some(WRONG_TOKEN)) } else { json_response_private(401, &json!({ "error": WRONG_TOKEN })) },
+            }
+        };
+        let _ = req.respond(resp);
+        return;
+    }
+
+    // the page itself, for any space
+    if is_page {
+        let _ = req.respond(text_response(200, "text/html; charset=utf-8", INDEX_HTML.to_string()));
+        return;
+    }
+
+    // MCP over Streamable HTTP: one JSON-RPC message or a batch per POST, answered as plain JSON
+    if path == "/mcp" {
+        let resp = match method {
+            Method::Post => mcp_http(&req, reg, ctx, prefix_space.as_deref(), json_body, &body_text),
+            // no server-to-client stream and no sessions: this server only answers what it is asked
+            Method::Get => json_response(405, &json!({ "error": "this MCP server sends no event stream; POST JSON-RPC messages to /mcp" })).with_header(header("Allow", "POST, DELETE")),
+            Method::Delete => Response::from_string(String::new()).with_status_code(StatusCode(204)),
+            _ => json_response(405, &json!({ "error": "method not allowed" })).with_header(header("Allow", "POST, DELETE")),
+        };
+        let _ = req.respond(resp);
+        return;
+    }
+
+    // everything from here touches the registry: one request at a time, bodies already read
+    let mut reg = reg.lock().unwrap_or_else(|e| e.into_inner());
+
+    // the list of spaces, and creating one
+    if path == "/api/spaces" {
+        let resp = match method {
+            Method::Get => json_response(200, &spaces_json(&mut reg, edit)),
+            Method::Post if !write_allowed(&req) => json_response_private(403, &json!({ "error": WRITE_REFUSED })),
+            Method::Post if !json_body => json_response_private(415, &json!({ "error": "send the body as application/json" })),
+            Method::Post if !edit.allow => json_response_private(403, &json!({ "error": "edit mode is off; start the server with --allow-edit to create spaces", "editable": false })),
+            Method::Post => match reg.create(str_field(&body, "name"), str_field(&body, "from")) {
+                Ok(space) => {
+                    proposals::log(&space.dir, PAGE, &format!("created the space {}{}", space.id, if str_field(&body, "from").is_empty() { String::new() } else { format!(" from {}", str_field(&body, "from")) }), "ontology.yaml");
+                    json_response_private(200, &json!({ "ok": true, "written": true, "space": space, "history": space.history, "summary": format!("Created the space {}", space.id), "spaces": spaces_json(&mut reg, edit) }))
+                }
+                Err(e) => json_response_private(400, &json!({ "error": e })),
+            },
+            _ => json_response(405, &json!({ "error": "method not allowed" })),
+        };
+        let _ = req.respond(resp);
+        return;
+    }
+
+    // which space does this request mean?
+    let want = prefix_space.clone().or_else(|| params.get("space").cloned()).or_else(|| reg.default_id());
+    let Some(space_id) = want else {
+        let _ = req.respond(json_response(404, &json!({ "error": "no space yet: create one in the page (or start the server on an ontology folder)", "no_spaces": true })));
+        return;
+    };
+    let Some(space) = reg.info(&space_id).cloned() else {
+        let _ = req.respond(json_response(404, &json!({ "error": format!("no space named '{}'", space_id), "spaces": reg.spaces.keys().collect::<Vec<_>>() })));
+        return;
+    };
+    // shipped examples never take writes, whatever the flags say
+    let base_edit = if space.builtin { EditConfig::default() } else { edit };
+    let spaces_root = reg.root.clone();
+    // what the flags mean for this space (commit or not) asks git, so it is only worked out where it matters
+    let space_edit = || if base_edit.allow { base_edit.for_space(&space.dir, &spaces_root) } else { base_edit };
+
+    // history: start it, commit, undo a change, share with a remote, push and pull
+    if method == Method::Post && path.starts_with("/api/git/") {
+        let what = path["/api/git/".len()..].to_string();
+        let resp = if !write_allowed(&req) {
+            json_response_private(403, &json!({ "error": WRITE_REFUSED }))
+        } else if !json_body {
+            json_response_private(415, &json!({ "error": "send the body as application/json" }))
+        } else if space.builtin {
+            json_response_private(403, &json!({ "error": SHIPPED_READ_ONLY, "editable": false, "builtin": true }))
+        } else if !base_edit.allow {
+            json_response_private(403, &json!({ "error": "edit mode is off; start the server with --allow-edit", "editable": false }))
+        } else if what == "undo" {
+            let cfg = space_edit();
+            match reg.get(&space_id) {
+                Ok(st) => {
+                    let out = edit::undo(&st.dir, cfg, &st.report, str_field(&body, "hash"), PAGE);
+                    let mut j = out.to_json();
+                    if out.written {
+                        j["summary"] = json!(format!("Put back how things were before '{}'", out.name));
+                        proposals::log(&st.dir, PAGE, &format!("undid '{}'", out.name), &out.file);
+                        st.reload();
+                        j["git"] = edit::git_status(&st.dir).unwrap_or(Json::Null);
+                        j["stats"] = json!(st.ont.stats());
+                    }
+                    json_response_private(out.status(), &j)
+                }
+                Err(e) => json_response_private(500, &json!({ "error": format!("{} could not be loaded: {:#}", space_id, e) })),
+            }
+        } else {
+            let r = match what.as_str() {
+                "init" => match edit::init_space(&space.dir, &spaces_root, PAGE).as_str() {
+                    "on" => Ok("History is on: every change from now on is saved as a commit".to_string()),
+                    other => Err(format!("history is {}", other)),
+                },
+                "commit" => edit::git_commit_all(&space.dir, str_field(&body, "message")).map(|h| format!("Committed {}", h)),
+                "push" => edit::git_push(&space.dir),
+                "remote" => edit::git_set_remote(&space.dir, &spaces_root, str_field(&body, "url")),
+                "pull" => edit::git_pull(&space.dir, &spaces_root),
+                _ => Err(format!("unknown git action `{}`", what)),
+            };
+            match r {
+                Ok(s) => {
+                    proposals::log(&space.dir, PAGE, &s, "");
+                    if what == "pull" {
+                        // the files changed under us: read them again now rather than on the next request
+                        if let Ok(st) = reg.get(&space_id) {
+                            st.reload();
+                        }
+                    }
+                    json_response_private(200, &json!({ "ok": true, "written": true, "summary": s }))
+                }
+                Err(e) => json_response_private(400, &json!({ "error": e })),
+            }
+        };
+        reg.touched(&space_id);
+        let _ = req.respond(resp);
+        return;
+    }
+
+    if method == Method::Post && path == "/api/reload" {
+        reg.rescan();
+        reg.touched(&space_id);
+        let resp = match reg.get(&space_id) {
+            Ok(st) => {
+                st.reload();
+                json_response(200, &json!({ "ok": st.report.ok(), "stats": st.ont.stats(), "diagnostics": st.report.diags }))
+            }
+            Err(e) => json_response(500, &json!({ "error": e.to_string() })),
+        };
+        let _ = req.respond(resp);
+        return;
+    }
+
+    let st = match reg.get(&space_id) {
+        Ok(st) => st,
+        Err(e) => {
+            let _ = req.respond(json_response(500, &json!({ "error": format!("{} could not be loaded: {:#}", space_id, e), "space": space_id })));
+            return;
+        }
+    };
+
+    // writes: edit, create, delete, and propose_change through /api/tool
+    let as_tool = method == Method::Post && path == "/api/tool" && matches!(str_field(&body, "name"), "propose_change" | "propose_patch");
+    let is_write = as_tool
+        || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/trust"))
+        || (method == Method::Delete && path == "/api/file");
+    if is_write {
+        let resp = if !write_allowed(&req) {
+            json_response_private(403, &json!({ "error": WRITE_REFUSED }))
+        } else if method == Method::Post && !json_body {
+            json_response_private(415, &json!({ "error": "send the body as application/json" }))
+        } else {
+            mutate(st, space.builtin, space_edit(), &method, &path, &params, &body, as_tool)
+        };
+        reg.touched(&space_id);
+        let _ = req.respond(resp);
+        return;
+    }
+
+    let ont = &st.ont;
+    let mcp = McpServer::with_data(ont, st.data()).with_history(if space.builtin { None } else { Some(spaces_root.clone()) });
+    let resp = match (method.clone(), path.as_str()) {
+        (Method::Get, "/api/summary") => {
+            let mut j = overview(st, &space, root_s, single, space_edit());
+            j["history"] = json!(if space.builtin { SHIPPED_HISTORY } else { edit::home(&st.dir, &spaces_root).word() });
+            json_response(200, &j)
+        }
+        (Method::Get, "/api/summary.md") => text_response(200, "text/markdown; charset=utf-8", ont.summary_markdown()),
+        (Method::Get, "/api/describe") => {
+            let name = params.get("name").cloned().unwrap_or_default();
+            match ont.describe(&name) {
+                Some(j) => json_response(200, &j),
+                None => json_response(404, &json!({ "error": format!("nothing named {}", name) })),
+            }
+        }
+        (Method::Get, "/api/search") => {
+            let q = params.get("q").cloned().unwrap_or_default();
+            let limit = params.get("limit").and_then(|l| l.parse().ok()).unwrap_or(20);
+            json_response(200, &json!(ont.search(&q, limit)))
+        }
+        (Method::Get, "/api/neighbors") => {
+            let name = params.get("name").cloned().unwrap_or_default();
+            let depth = params.get("depth").and_then(|d| d.parse().ok()).unwrap_or(1);
+            match ont.neighbors(&name, depth) {
+                Some(sg) => json_response(200, &json!(sg)),
+                None => json_response(404, &json!({ "error": "unknown type" })),
+            }
+        }
+        (Method::Get, "/api/rules") => {
+            let name = params.get("name").cloned().unwrap_or_default();
+            json_response(200, &json!(ont.constraints_for(&name)))
+        }
+        (Method::Get, "/api/where") => {
+            let name = params.get("name").cloned().unwrap_or_default();
+            let data = st.data();
+            match data.where_is(&name) {
+                Ok(j) => json_response(200, &j),
+                Err(e) => json_response(404, &json!({ "error": e.to_string() })),
+            }
+        }
+        (Method::Get, "/api/instances") => {
+            let name = params.get("name").cloned().unwrap_or_default();
+            let limit: usize = params.get("limit").and_then(|l| l.parse().ok()).unwrap_or(50);
+            let data = st.data();
+            match data.instances(&name) {
+                Ok(rows) => {
+                    let total = rows.len();
+                    let shown: Vec<_> = rows.into_iter().take(limit).collect();
+                    json_response(200, &json!({ "type": name, "total": total, "rows": shown }))
+                }
+                Err(e) => json_response(404, &json!({ "error": e.to_string() })),
+            }
+        }
+        (Method::Get, "/api/yaml") => {
+            let file = params.get("file").cloned().unwrap_or_default();
+            let safe = !file.contains("..") && (file.ends_with(".yaml") || file.ends_with(".yml")) && ont.files.contains(&file);
+            if safe {
+                match std::fs::read_to_string(ont.root.join(&file)) {
+                    Ok(s) => text_response(200, "text/yaml; charset=utf-8", s),
+                    Err(e) => json_response(404, &json!({ "error": e.to_string() })),
+                }
+            } else {
+                json_response(400, &json!({ "error": "unknown file" }))
+            }
+        }
+        (Method::Get, "/api/templates") => json_response(200, &edit::templates()),
+        (Method::Get, "/api/export") => match params.get("format").map(|f| f.as_str()).unwrap_or("ossie") {
+            "ossie" => match crate::ossie::export(ont) {
+                Ok(ex) => json_response(200, &ex.bundle()).with_header(header("Content-Disposition", &format!("attachment; filename=\"{}.ossie.json\"", ex.base))),
+                Err(e) => json_response(500, &json!({ "error": e.to_string() })),
+            },
+            #[cfg(feature = "rdf")]
+            f @ ("turtle" | "ttl" | "jsonld" | "json-ld" | "ntriples" | "nt" | "rdfxml") => {
+                let fmt = crate::rdf::Format::parse(f).unwrap_or(crate::rdf::Format::Turtle);
+                match crate::rdf::export(ont).write(fmt) {
+                    Ok(text) => text_response(200, fmt.mime(), text)
+                        .with_header(header("Content-Disposition", &format!("attachment; filename=\"{}.{}\"", crate::iri::slug(&ont.manifest.name), fmt.extension()))),
+                    Err(e) => json_response(500, &json!({ "error": e.to_string() })),
+                }
+            }
+            other => json_response(400, &json!({ "error": format!("unknown export format `{}`: ossie (Apache Ossie), or turtle, jsonld, ntriples, rdfxml (OWL, SKOS and SHACL)", other) })),
+        },
+        (Method::Get, "/api/git") if space.builtin => json_response(200, &json!({ "repo": false, "builtin": true, "history": SHIPPED_HISTORY, "commits": 0 })),
+        (Method::Get, "/api/git") => json_response(200, &edit::git_info(&st.dir, &spaces_root)),
+        (Method::Get, "/api/git/log") | (Method::Get, "/api/git/show") if space.builtin => json_response(403, &json!({ "error": SHIPPED_READ_ONLY, "builtin": true, "history": SHIPPED_HISTORY })),
+        (Method::Get, "/api/git/log") => {
+            let home = edit::home(&st.dir, &spaces_root);
+            let limit = params.get("limit").and_then(|l| l.parse().ok()).unwrap_or(50);
+            match home {
+                edit::Home::NoGit | edit::Home::Nowhere => json_response(200, &json!({ "history": home.word(), "commits": [], "total": 0 })),
+                _ => match edit::git_log(&st.dir, limit, params.get("file").map(|f| f.as_str())) {
+                    Ok(mut j) => {
+                        j["history"] = json!(home.word());
+                        json_response(200, &j)
+                    }
+                    Err(e) => json_response(400, &json!({ "error": e, "history": home.word() })),
+                },
+            }
+        }
+        (Method::Get, "/api/git/show") => match edit::git_show(&st.dir, params.get("hash").map(|h| h.as_str()).unwrap_or("")) {
+            Ok(j) => json_response(200, &j),
+            Err(e) => json_response(404, &json!({ "error": e })),
+        },
+        (Method::Get, "/api/trust") => json_response(200, &trust_json(ont)),
+        (Method::Get, "/api/proposals") => json_response(200, &json!({ "proposals": proposals::list(&st.dir), "activity": proposals::activity(&st.dir, 50), "editable": base_edit.allow })),
+        (Method::Get, "/api/activity") => json_response(200, &json!({ "activity": proposals::activity(&st.dir, 100) })),
+        (Method::Get, "/api/tools") => json_response(200, &crate::mcp::tool_definitions()),
+        (Method::Get, "/api/tables") => match st.data().sql_catalog() {
+            Ok(j) => json_response(200, &j),
+            Err(e) => json_response(500, &json!({ "error": e.to_string() })),
+        },
+        (Method::Post, "/api/query") => {
+            let sql = body.get("sql").and_then(|s| s.as_str()).unwrap_or("").to_string();
+            let limit = body.get("limit").and_then(|l| l.as_u64()).unwrap_or(crate::data::MAX_QUERY_ROWS as u64) as usize;
+            match st.data().query(&sql, limit) {
+                Ok(res) => json_response(200, &json!(res)),
+                Err(e) => json_response(400, &json!({ "error": e.to_string() })),
+            }
+        }
+        (Method::Post, "/api/check") => json_response(200, &mcp.call_tool("validate", &body)),
+        (Method::Post, "/api/tool") => {
+            let name = body.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let args = body.get("arguments").cloned().unwrap_or(json!({}));
+            json_response(200, &mcp.call_tool(name, &args))
+        }
+        _ => json_response(404, &json!({ "error": "not found" })),
+    };
+    let _ = req.respond(resp);
+}
+
+/// `POST /mcp`: the same `Hub` the stdio server runs, one body at a time, so
+/// `initialize`, `tools/list` and `tools/call` (with `space`, and with
+/// `--allow-edit` deciding whether proposals are written) answer identically.
+/// `/s/<id>/mcp` serves that one space, like `lorefile mcp --space <id>`.
+fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>, json_body: bool, body: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+    // the MCP spec asks servers to check Origin; the bearer header already keeps other sites out
+    if !origin_matches(req) {
+        return json_response(403, &json!({ "error": "cross-site requests are refused: the Origin does not match the Host" }));
+    }
+    if !json_body {
+        return json_response(415, &json!({ "error": "send the JSON-RPC message as application/json" }));
+    }
+    let msg: Json = match serde_json::from_str(body) {
+        Ok(m) => m,
+        Err(e) => return json_response(400, &json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": format!("parse error: {}", e) } })),
+    };
+    let mut reg = reg.lock().unwrap_or_else(|e| e.into_inner());
+    let only = match space {
+        None => None,
+        Some(id) => match reg.resolve(Some(id)) {
+            Ok(s) => Some(s),
+            Err(_) => {
+                // a space created since the server started: look again before giving up
+                reg.rescan();
+                match reg.resolve(Some(id)) {
+                    Ok(s) => Some(s),
+                    Err(e) => return json_response(404, &json!({ "error": e })),
+                }
+            }
+        },
+    };
+    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only };
+    match hub.handle_body(&msg) {
+        Some(reply) => json_response(200, &reply),
+        // notifications only: accepted, nothing to answer
+        None => Response::from_string(String::new()).with_status_code(StatusCode(202)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::split_space;
+    use super::{base64url, is_loopback, local_path, same_token, split_space, token_ok};
+
+    #[test]
+    fn tokens_are_base64url_compared_whole_and_checked_for_safe_characters() {
+        assert_eq!(base64url(b"Man"), "TWFu");
+        assert_eq!(base64url(b"Ma"), "TWE");
+        assert_eq!(base64url(b"M"), "TQ");
+        assert_eq!(base64url(&[0xfb, 0xff]), "-_8");
+        assert_eq!(super::new_token().unwrap().len(), 43, "32 bytes, unpadded");
+        assert!(same_token("abc", "abc") && !same_token("abc", "abd") && !same_token("abc", "abcd"));
+        assert!(token_ok("k3f9-_.~+/=").is_ok());
+        assert!(token_ok("has space").is_err() && token_ok("semi;colon").is_err() && token_ok("").is_err());
+        assert!(is_loopback("127.0.0.1") && is_loopback("localhost") && is_loopback("::1") && is_loopback("[::1]"));
+        assert!(!is_loopback("0.0.0.0") && !is_loopback("192.168.1.4") && !is_loopback("example.com"));
+        assert_eq!(local_path("/s/acme/"), "/s/acme/");
+        assert_eq!(local_path("//evil.example"), "/");
+        assert_eq!(local_path("https://evil.example"), "/");
+    }
 
     #[test]
     fn the_space_prefix_is_split_off_the_path() {

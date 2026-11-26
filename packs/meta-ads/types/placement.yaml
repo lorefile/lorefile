@@ -32,5 +32,5 @@ instances:
   - { placement_id: audience_network/rewarded_video, publisher_platform: audience_network, platform_position: rewarded_video,  device_platform: mobile,  note: "Rewarded video in games" }
   - { placement_id: messenger/messenger_inbox,  publisher_platform: messenger,        platform_position: messenger_inbox,      device_platform: mobile,  note: "Messenger inbox" }
   - { placement_id: messenger/messenger_stories, publisher_platform: messenger,       platform_position: messenger_stories,    device_platform: mobile,  note: "Messenger Stories" }
-owner: measurement@stella.example
+owner: measurement@yourcompany.example
 tags: [meta, delivery, reference]

@@ -1,0 +1,94 @@
+name: ci
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain: ["1.87", stable]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # DuckDB is compiled from source the first time (several minutes); the cache keeps later runs short.
+      - run: cargo build --locked
+      - run: cargo test --locked
+      - name: the CSV-only build still compiles
+        run: cargo build --locked --no-default-features
+      - name: every shipped folder compiles clean
+        run: |
+          for d in examples/* packs/*; do
+            ./target/debug/lorefile validate --no-examples --dir "$d"
+          done
+      # Optional: Apache Ossie's own validator on the ecommerce export. Ossie is a
+      # draft that still moves, so a failure here is shown but does not fail the build.
+      - name: the Ossie export passes Apache Ossie's validator (skipped without uv)
+        if: matrix.toolchain == 'stable'
+        continue-on-error: true
+        run: |
+          if ! command -v uv >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+            echo "uv or Python is not installed; skipping"; exit 0
+          fi
+          git clone --depth 1 https://github.com/apache/ossie "$RUNNER_TEMP/ossie"
+          OSSIE_DIR="$RUNNER_TEMP/ossie" cargo test --locked --test ossie ossies_own_validator -- --nocapture
+      - run: cargo clippy --locked -- -D warnings
+        if: matrix.toolchain == 'stable'
+
+  # The npm launcher (npm/bin/lorefile.js) and scripts/install.sh, run against a
+  # binary built here, so both are tested without a release.
+  launcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The slim build is enough to exercise the launcher and skips compiling DuckDB.
+      - run: cargo build --locked --no-default-features
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18 # the oldest Node the launcher supports
+      - name: the launcher runs a local build and passes its exit code through
+        run: |
+          LOREFILE_BINARY=target/debug/lorefile node npm/bin/lorefile.js --help
+          LOREFILE_BINARY=target/debug/lorefile node npm/bin/lorefile.js --version
+          code=0
+          LOREFILE_BINARY=target/debug/lorefile node npm/bin/lorefile.js no-such-command || code=$?
+          test "$code" = 2 # clap's exit code for a usage error
+      - name: the launcher and the install script download, check and install a release asset
+        run: |
+          # A fake release folder holding this build, served on localhost.
+          version=$(node -p "require('./npm/package.json').version")
+          name="lorefile-$version-x86_64-unknown-linux-gnu"
+          assets="$RUNNER_TEMP/assets"
+          mkdir -p "$assets/$name"
+          cp target/debug/lorefile LICENSE NOTICE "$assets/$name/"
+          tar -C "$assets" -czf "$assets/$name.tar.gz" "$name"
+          (cd "$assets" && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$assets" >/dev/null 2>&1 &
+          sleep 1
+          export LOREFILE_DOWNLOAD_URL=http://127.0.0.1:8765 LOREFILE_VERSION="$version"
+
+          XDG_CACHE_HOME="$RUNNER_TEMP/cache" node npm/bin/lorefile.js --version
+          test -x "$RUNNER_TEMP/cache/lorefile/$version/lorefile"
+          XDG_CACHE_HOME="$RUNNER_TEMP/cache" node npm/bin/lorefile.js --version # from the cache now
+
+          LOREFILE_INSTALL_DIR="$RUNNER_TEMP/bin" sh scripts/install.sh
+          "$RUNNER_TEMP/bin/lorefile" --version
+
+          # A wrong checksum must be refused by both, and nothing installed.
+          echo "0000000000000000000000000000000000000000000000000000000000000000  $name.tar.gz" > "$assets/$name.tar.gz.sha256"
+          if XDG_CACHE_HOME="$RUNNER_TEMP/cache2" node npm/bin/lorefile.js --version; then
+            echo "::error::the launcher ran a binary whose checksum did not match"; exit 1
+          fi
+          test ! -e "$RUNNER_TEMP/cache2/lorefile/$version/lorefile"
+          if LOREFILE_INSTALL_DIR="$RUNNER_TEMP/bin2" sh scripts/install.sh; then
+            echo "::error::the install script installed a binary whose checksum did not match"; exit 1
+          fi
+          test ! -e "$RUNNER_TEMP/bin2/lorefile"
+      - name: shellcheck the install script
+        run: shellcheck scripts/install.sh

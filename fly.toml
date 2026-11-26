@@ -1,0 +1,62 @@
+# Fly.io config for the Lorefile app: the one long-running binary that
+# serves the web page and the JSON API, with the spaces folder on a persistent
+# volume. It builds the Dockerfile in this folder; nothing here changes the code.
+# Commands and the honest status are in DEPLOY.md, "Vercel, Fly.io and friends".
+# Written, not yet deployed on our side: check it against your Fly account.
+
+# The app's name on Fly. Names are global across Fly, so `fly launch` may ask
+# for another one and rewrite this line.
+app = "lorefile"
+
+# Where the machine and its volume live; the volume must be in the same region.
+# lhr is London. `fly platform regions` lists the others.
+primary_region = "lhr"
+
+[build]
+  # The same multi-stage Dockerfile as `docker build`: it compiles the binary
+  # (5-10 minutes the first time, on Fly's builder) and ships a small image that
+  # runs as the non-root user `lorefile`. .dockerignore keeps target/, spaces/,
+  # docs/ and .git/ out of the upload.
+  dockerfile = "Dockerfile"
+
+[processes]
+  # The command the machine runs, after the image's ENTRYPOINT (`lorefile`).
+  # --host 0.0.0.0 is needed so Fly's proxy can reach the server; on its own it
+  # listens on 127.0.0.1 only. Read-only on purpose: the page has no login yet,
+  # so add --allow-edit only once an SSO proxy (Cloudflare Access) is in front.
+  app = "serve --dir /spaces --port 7070 --host 0.0.0.0"
+
+[mounts]
+  # The persistent disk. Create it once with `fly volumes create spaces --size 1`.
+  # Everything the app keeps lives here: one sub-folder per space, plus .lorefile/
+  # (proposals, the activity log, the shipped examples written out at start).
+  # The image runs as uid 10001. If a fresh volume turns out to be owned by root
+  # (check with `fly ssh console -C "ls -ld /spaces"`), hand it over once with
+  # `fly ssh console -C "chown -R 10001:10001 /spaces"`; it stays that way.
+  source = "spaces"
+  destination = "/spaces"
+
+[http_service]
+  # Fly's proxy takes HTTPS on 443 and forwards to the binary on port 7070.
+  internal_port = 7070
+  force_https = true
+  # Stop the machine when nobody is using it and start it again on the next
+  # request (a second or two). The volume keeps the files while it is stopped.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    # Healthy when the list of spaces answers (a plain GET, no login needed).
+    grace_period = "15s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+[[vm]]
+  # One small machine. Keep it to one (`fly deploy --ha=false`): one volume
+  # belongs to one machine, and two servers must never share a spaces folder.
+  # 512 MB leaves room for DuckDB.
+  size = "shared-cpu-1x"
+  memory = "512mb"

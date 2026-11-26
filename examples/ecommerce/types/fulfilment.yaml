@@ -18,8 +18,8 @@ types:
       shipped_on:         date
       delivered_on:       date
     relationships:
-      fulfils:      { to: Order, cardinality: many-to-one }
-      shipped_from: { to: Warehouse, cardinality: many-to-one }
+      fulfils:      { to: Order, cardinality: many-to-one, description: "A Shipment carries goods for one Order." }
+      shipped_from: { to: Warehouse, cardinality: many-to-one, description: "A Shipment leaves from one Warehouse." }
     source:
       connection: shop_files
       table: shipments

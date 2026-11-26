@@ -21,7 +21,7 @@ Invoice is bound to `stripe_bigquery`, which the binary cannot read, so `where_i
 ## Validate
 
 ```bash
-./target/debug/stella-ontology validate --dir examples/saas-pricing
+./target/debug/lorefile validate --dir examples/saas-pricing
 ```
 
 ```
@@ -35,7 +35,7 @@ Invoice is bound to `stripe_bigquery`, which the binary cannot read, so `where_i
 SUB-3011 is 8 seats on Starter, billed monthly, with no contract. Enterprise fails three rules; Growth is the only other active plan that fits.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/saas-pricing upgrade_plan subscription=SUB-3011 from=PLAN-STARTER to=PLAN-ENT
+./target/debug/lorefile check --dir examples/saas-pricing upgrade_plan subscription=SUB-3011 from=PLAN-STARTER to=PLAN-ENT
 ```
 
 ```
@@ -64,7 +64,7 @@ Exit code 2.
 A 40% strategic-partner discount on Atlas Freight's annual Growth subscription. Nothing blocks it, but Deal Desk's authority stops at 30%.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/saas-pricing apply_discount subscription=SUB-3004 discount=DSC-PARTNER40
+./target/debug/lorefile check --dir examples/saas-pricing apply_discount subscription=SUB-3004 discount=DSC-PARTNER40
 ```
 
 ```
@@ -86,7 +86,7 @@ Exit code 0.
 Copperline's contract expired in January, so cancelling at the end of the current period is a plain billing change. CN-003 is informational: cancellation only turns auto-renew off.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/saas-pricing cancel_subscription subscription=SUB-3007 contract=CT-507
+./target/debug/lorefile check --dir examples/saas-pricing cancel_subscription subscription=SUB-3007 contract=CT-507
 ```
 
 ```
@@ -106,7 +106,7 @@ Exit code 0.
 Crediting invoice INV-9021 needs the invoice. It lives in the finance warehouse, so the first attempt says what to fetch:
 
 ```bash
-./target/debug/stella-ontology check --dir examples/saas-pricing issue_credit invoice=INV-9021 account=ACC-1004
+./target/debug/lorefile check --dir examples/saas-pricing issue_credit invoice=INV-9021 account=ACC-1004
 ```
 
 ```
@@ -130,7 +130,7 @@ note: `invoice` = INV-9021 could not be loaded (Invoice data is not readable her
 Exit code 2.
 
 ```bash
-./target/debug/stella-ontology where --dir examples/saas-pricing Invoice
+./target/debug/lorefile where --dir examples/saas-pricing Invoice
 ```
 
 ```
@@ -164,7 +164,7 @@ Exit code 2.
 With the row fetched and passed inline, the $600 credit is allowed at Support Lead level:
 
 ```bash
-./target/debug/stella-ontology check --dir examples/saas-pricing issue_credit account=ACC-1004 \
+./target/debug/lorefile check --dir examples/saas-pricing issue_credit account=ACC-1004 \
   invoice='{"invoice_id":"INV-9021","account_id":"ACC-1004","subscription_id":"SUB-3004","amount_usd":3980.0,"status":"paid","issued_on":"2026-03-18","due_on":"2026-04-17","credit_usd":600.0}'
 ```
 
@@ -184,7 +184,7 @@ Exit code 0.
 Quill & Co is still on trial and already at Starter's 10-seat cap. Adding seats would bill an account with no payment method.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/saas-pricing add_seats subscription=SUB-3002 plan=PLAN-STARTER account=ACC-1002
+./target/debug/lorefile check --dir examples/saas-pricing add_seats subscription=SUB-3002 plan=PLAN-STARTER account=ACC-1002
 ```
 
 ```
@@ -204,5 +204,5 @@ Exit code 2.
 ## Browse it
 
 ```bash
-./target/debug/stella-ontology serve --dir examples/saas-pricing --port 7074
+./target/debug/lorefile serve --dir examples/saas-pricing --port 7074
 ```

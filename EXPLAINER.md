@@ -1,4 +1,4 @@
-# Stella Ontology, explained in plain English
+# Lorefile, explained in plain English
 
 This page answers three questions: what did we build, how do the pieces fit together, and what does it change for a person or an AI agent. No code knowledge needed. The technical reference is [README.md](README.md); the design decisions are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -38,11 +38,11 @@ Claude answers in one turn: *"No. Beta Ltd is tier 3 and not IATF-certified, whi
 
 Nobody wrote a prompt for that. The rules, the rationale, and the approver all came from the folder.
 
-### Stella's own tools
+### A measurement company's own tools
 
-**Before.** Stella's MMM, geo-experiment, and attribution products each carry their own private definition of "channel", "campaign", "pre-period". An agent using Stella's tools learns the differences by trial and error, and a customer's agent never learns them at all.
+**Before.** A marketing-measurement company's MMM, geo-experiment, and attribution products each carry their own private definition of "channel", "campaign", "pre-period". An agent using its tools learns the differences by trial and error, and a customer's agent never learns them at all.
 
-**After.** One `marketing-measurement` folder defines Channel, Campaign, Experiment, KPI, Model, with rules such as *"a geo experiment needs at least 4 weeks of pre-period data"*. Every Stella product and every agent reads the same definitions. When the rule changes, it changes in one file, reviewed in one pull request.
+**After.** One `marketing-measurement` folder defines Channel, Campaign, Experiment, KPI, Model, with rules such as *"a geo experiment needs at least 4 weeks of pre-period data"*. Every product it ships and every agent reads the same definitions. When the rule changes, it changes in one file, reviewed in one pull request.
 
 ---
 
@@ -54,9 +54,9 @@ Nobody wrote a prompt for that. The rules, the rationale, and the approver all c
 | **The compiler** | Reads every file, checks that nothing is misspelled or missing, builds a graph in memory. Takes milliseconds. | inside the binary |
 | **The rules engine** | Evaluates a rule like `tier == 1` against a real row and says pass or fail, and why. | inside the binary |
 | **The data door** | Fetches real rows when a rule needs them. CSV files directly; Parquet, Postgres, and others through DuckDB. | inside the binary |
-| **The MCP server** | What Claude or any agent talks to. Nine lookup tools plus `validate` and `query`. | `stella-ontology mcp` |
-| **The web page** | What you see in the browser. Same lookups, drawn for people. | `stella-ontology serve` |
-| **The command line** | Same lookups for scripts and CI. | `stella-ontology check …` |
+| **The MCP server** | What Claude or any agent talks to. Nine lookup tools plus `validate` and `query`. | `lorefile mcp` |
+| **The web page** | What you see in the browser. Same lookups, drawn for people. | `lorefile serve` |
+| **The command line** | Same lookups for scripts and CI. | `lorefile check …` |
 
 All three doors call the same functions. If the web page shows a rule, the agent sees the same rule.
 
@@ -111,7 +111,7 @@ Snowflake and BigQuery are declared as sources today so an agent can learn *wher
 │  ⛔ SC-041    │  Supplier ─supplies→ Part          │ types/supplier.yaml      │
 │  ⚠  SC-042    │  Supplier ─located_in→ Region      │                          │
 ├───────────────┴───────────────────────────────────┴──────────────────────────┤
-│ ✓ valid · 0 errors · 0 warnings      MCP: stella-ontology mcp --dir …        │  ← compiler status
+│ ✓ valid · 0 errors · 0 warnings      MCP: lorefile mcp --dir …        │  ← compiler status
 └──────────────────────────────────────────────────────────────────────────────┘
    ▲                        ▲                                   ▲
    ontology.yaml            types/supplier.yaml                 constraints/**/*.yaml,
@@ -153,7 +153,7 @@ The agent never loads all 18 rules at once. It asks for the ones that matter for
 | MCP over stdio, tested with Claude's protocol | MCP over HTTP (needed for a hosted version) |
 | Web page, command line | MySQL, Snowflake, BigQuery read from inside the binary |
 | CSV, Parquet, local DuckDB, Postgres, S3 via DuckDB | Hosted multi-tenant version with SSO and audit log |
-| Supply-chain example in CSV and Parquet flavours | Stella marketing-measurement example |
+| Supply-chain example in CSV and Parquet flavours | A marketing-measurement example |
 
 ---
 
@@ -180,19 +180,19 @@ cargo build --release
 ```
 
 ```bash
-./target/release/stella-ontology validate --dir examples/supply-chain
+./target/release/lorefile validate --dir examples/supply-chain
 ```
 
 ```bash
-./target/release/stella-ontology check --dir examples/supply-chain switch_supplier part=BRK-220 from=V-10001 to=V-10422
+./target/release/lorefile check --dir examples/supply-chain switch_supplier part=BRK-220 from=V-10001 to=V-10422
 ```
 
 ```bash
-./target/release/stella-ontology serve --dir examples/supply-chain-parquet --port 7071
+./target/release/lorefile serve --dir examples/supply-chain-parquet --port 7071
 ```
 
 ```bash
-claude mcp add stella-ontology -- ./target/release/stella-ontology mcp --dir ./examples/supply-chain
+claude mcp add lorefile -- ./target/release/lorefile mcp --dir ./examples/supply-chain
 ```
 
 The third command is the "after" story from section 2, run by hand. The fourth opens the Parquet flavour, where DuckDB does the reading. The fifth hands the same thing to Claude.

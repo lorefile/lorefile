@@ -1,0 +1,565 @@
+# Release: the binaries, the Docker image, the npm launcher and the crate.
+#
+# A tag like v0.2.0 makes a real release. Bump `version` in Cargo.toml first,
+# commit, then: git tag -a v0.2.0 -m "What changed" && git push origin v0.2.0
+#   - builds `lorefile` (with DuckDB) and `lorefile-slim` (without) for every
+#     target in the build matrix and attaches them, each with a .sha256 and one
+#     checksums.txt, to a GitHub Release whose notes are the tag's message;
+#   - pushes ghcr.io/<owner>/lorefile:<version> and :latest (linux/amd64, linux/arm64);
+#   - publishes the npm launcher if the NPM_TOKEN secret exists, and the crate if
+#     CARGO_REGISTRY_TOKEN exists. Without a secret its job is skipped and the run
+#     shows a notice saying which secret to add.
+#
+# Running it by hand (Actions > release > Run workflow) is the dry run: the same
+# builds, the assets kept as workflow artifacts instead of a release,
+# `npm publish --dry-run`, `cargo publish --dry-run`, and the image pushed as :edge.
+# Do one on a branch before the first tag.
+#
+# Re-running a tag's run is safe: an existing release keeps its assets, and a
+# version already on npm or crates.io is not published again. So after adding a
+# missing secret, re-run the tag's workflow and only what is missing goes out.
+
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  # The GitHub org/repo the npm launcher and the install script download from.
+  # npm/bin/lorefile.js, npm/package.json and scripts/install.sh carry the same
+  # value at their top; change all of them together. The release and the image
+  # themselves always go to the repository this workflow runs in.
+  LOREFILE_REPO: lorefile/lorefile
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      image: ${{ steps.version.outputs.image }}
+      npm: ${{ steps.secrets.outputs.npm }}
+      cargo: ${{ steps.secrets.outputs.cargo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: work out the version
+        id: version
+        shell: bash
+        run: |
+          crate_version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "lorefile") | .version')
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            tag=$GITHUB_REF_NAME
+            version=${tag#v}
+            if [ "$version" != "$crate_version" ]; then
+              echo "::error title=Version mismatch::The tag says $version but Cargo.toml says $crate_version. Bump Cargo.toml, commit, and tag that commit."
+              exit 1
+            fi
+          else
+            # A dry run gets a version of its own so its assets are never mistaken for a release.
+            tag=""
+            version="$crate_version-dev.${GITHUB_SHA::7}"
+          fi
+          case $version in *-*) prerelease=true ;; *) prerelease=false ;; esac
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "prerelease=$prerelease"
+            echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/lorefile"
+          } >> "$GITHUB_OUTPUT"
+          echo "Lorefile $version (prerelease: $prerelease)"
+          if [ "${GITHUB_REPOSITORY,,}" != "${LOREFILE_REPO,,}" ]; then
+            echo "::warning title=LOREFILE_REPO is another repository::This run is in $GITHUB_REPOSITORY but LOREFILE_REPO is $LOREFILE_REPO, so the npm launcher and install script would download from $LOREFILE_REPO. Fine for a dry run; change LOREFILE_REPO here, in npm/ and in scripts/install.sh before releasing."
+          fi
+
+      - name: check which publishing secrets exist
+        id: secrets
+        shell: bash
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          # For each registry: publish (tag + secret), dry-run (run by hand) or skip (tag, no secret).
+          mode() {
+            if [ "$GITHUB_EVENT_NAME" != push ]; then echo dry-run
+            elif [ -n "$1" ]; then echo publish
+            else echo skip
+            fi
+          }
+          npm=$(mode "$NPM_TOKEN")
+          cargo=$(mode "$CARGO_REGISTRY_TOKEN")
+          echo "npm=$npm" >> "$GITHUB_OUTPUT"
+          echo "cargo=$cargo" >> "$GITHUB_OUTPUT"
+          if [ "$npm" = skip ]; then
+            echo "::notice title=npm publish skipped::The NPM_TOKEN secret is not set, so the lorefile npm package was not published. Add it under Settings > Secrets and variables > Actions, then re-run this workflow."
+          fi
+          if [ "$cargo" = skip ]; then
+            echo "::notice title=crates.io publish skipped::The CARGO_REGISTRY_TOKEN secret is not set, so the lorefile crate was not published. Add it under Settings > Secrets and variables > Actions, then re-run this workflow."
+          fi
+
+      # Every archive carries the licences of the crates compiled into it, and
+      # DuckDB's (MIT) for the full build. Collected once here for all targets.
+      - name: collect third-party licences
+        shell: bash
+        run: |
+          cargo fetch --locked
+          cargo metadata --locked --format-version 1 > "$RUNNER_TEMP/metadata.json"
+          python3 - "$RUNNER_TEMP/metadata.json" <<'PY'
+          import hashlib, json, pathlib, sys
+
+          meta = json.load(open(sys.argv[1]))
+          root = meta["resolve"]["root"]
+          used = {node["id"] for node in meta["resolve"]["nodes"]} - {root}
+          crates = sorted((p for p in meta["packages"] if p["id"] in used), key=lambda p: (p["name"], p["version"]))
+          out = [
+              "Third-party software in the Lorefile binaries",
+              "",
+              "Lorefile itself is Apache-2.0: see LICENSE and NOTICE. It is built from the Rust",
+              "crates below (a few are build-time tools that do not end up in the binary); each",
+              "licence text is copied from the crate's own source package.",
+              "A text that repeats one already shown is named instead of copied again.",
+              "",
+              "The full build (the archives without -slim) also contains DuckDB, compiled from",
+              "source by the libduckdb-sys crate. https://github.com/duckdb/duckdb",
+              "",
+              "MIT License. Copyright Stichting DuckDB Foundation.",
+              "",
+              "Permission is hereby granted, free of charge, to any person obtaining a copy of",
+              "this software and associated documentation files (the \"Software\"), to deal in",
+              "the Software without restriction, including without limitation the rights to",
+              "use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of",
+              "the Software, and to permit persons to whom the Software is furnished to do so,",
+              "subject to the following conditions:",
+              "",
+              "The above copyright notice and this permission notice shall be included in all",
+              "copies or substantial portions of the Software.",
+              "",
+              "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR",
+              "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS",
+              "FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR",
+              "COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER",
+              "IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN",
+              "CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
+              "",
+          ]
+          seen = {}
+          for p in crates:
+              out += ["=" * 78, f"{p['name']} {p['version']}: {p.get('license') or 'licence not declared, see its files'}"]
+              if p.get("repository"):
+                  out.append(p["repository"])
+              folder = pathlib.Path(p["manifest_path"]).parent
+              for f in sorted(folder.iterdir()):
+                  if f.is_file() and f.name.upper().startswith(("LICENSE", "LICENCE", "COPYING", "NOTICE", "UNLICENSE")):
+                      text = f.read_text(errors="replace").strip()
+                      key = hashlib.sha256(text.encode()).hexdigest()
+                      if key in seen:
+                          out += ["", f"{f.name}: the same text as {seen[key]}."]
+                      else:
+                          seen[key] = f"{f.name} of {p['name']} {p['version']}"
+                          out += ["", f"--- {f.name}", text]
+              out.append("")
+          pathlib.Path("THIRD-PARTY-LICENSES.txt").write_text("\n".join(out) + "\n")
+          print(f"{len(crates)} crates listed")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: third-party-licences
+          path: THIRD-PARTY-LICENSES.txt
+          if-no-files-found: error
+
+  build:
+    name: build ${{ matrix.target }}
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      # Keep this list in step with the asset check in the release job, the
+      # TARGETS table in npm/bin/lorefile.js and the case table in scripts/install.sh.
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          # Cross-compiled on the Apple-silicon runner (GitHub's Intel macOS
+          # runners are being retired), so it cannot be smoke-run there.
+          - target: x86_64-apple-darwin
+            os: macos-14
+            cross: true
+          # Built on Ubuntu 22.04 so the binaries need only glibc 2.35 or newer.
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          # GitHub's native arm64 runner: free for public repositories. For a
+          # private one it needs a paid plan, or cross-compile with `cross`.
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+          # Best effort: if the bundled DuckDB build fails on Windows, that step
+          # may fail, Windows ships lorefile-slim only, and the release job says so
+          # in a warning. The npm launcher falls back to the slim build when the
+          # full one is not published. crt-static: no Visual C++ runtime needed.
+          - target: x86_64-pc-windows-msvc
+            os: windows-2022
+            exe: .exe
+            full_best_effort: true
+            rustflags: -C target-feature=+crt-static
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TARGET: ${{ matrix.target }}
+      EXE: ${{ matrix.exe }}
+      RUSTFLAGS: ${{ matrix.rustflags }}
+      # DuckDB is C++17; macOS 11 is the oldest release its build supports cleanly.
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: third-party-licences
+
+      # No build cache on purpose: release binaries come from a clean build.
+      # Slim leaves out DuckDB only; the OWL/SKOS/SHACL bridge (`rdf`) is small and stays.
+      - name: build lorefile-slim (no DuckDB)
+        shell: bash
+        run: |
+          cargo build --release --locked --target "$TARGET" --no-default-features --features rdf
+          mkdir -p out/slim && cp "target/$TARGET/release/lorefile$EXE" out/slim/
+
+      - name: build lorefile (with DuckDB, compiled from source; 5 to 15 minutes)
+        continue-on-error: ${{ matrix.full_best_effort == true }}
+        shell: bash
+        run: |
+          cargo build --release --locked --target "$TARGET"
+          mkdir -p out/full && cp "target/$TARGET/release/lorefile$EXE" out/full/
+
+      - name: smoke-run the binaries
+        if: matrix.cross != true
+        shell: bash
+        run: |
+          for variant in full slim; do
+            if [ -f "out/$variant/lorefile$EXE" ]; then
+              "out/$variant/lorefile$EXE" --version
+              "out/$variant/lorefile$EXE" validate --no-examples --dir examples/supply-chain >/dev/null
+            fi
+          done
+
+      - name: package
+        shell: bash
+        run: |
+          mkdir -p dist
+          for variant in full slim; do
+            if [ ! -f "out/$variant/lorefile$EXE" ]; then
+              echo "::warning title=No $variant build for $TARGET::The $variant build failed on $TARGET (allowed for this target), so only the other variant is released for it."
+              continue
+            fi
+            suffix=""
+            if [ "$variant" = slim ]; then suffix="-slim"; fi
+            name="lorefile-$VERSION-$TARGET$suffix"
+            mkdir -p "stage/$name"
+            cp "out/$variant/lorefile$EXE" LICENSE NOTICE README.md THIRD-PARTY-LICENSES.txt "stage/$name/"
+            if [ "$RUNNER_OS" = Windows ]; then
+              file="$name.zip"
+              (cd stage && 7z a -tzip "../dist/$file" "$name" >/dev/null)
+            else
+              file="$name.tar.gz"
+              tar -C stage -czf "dist/$file" "$name"
+            fi
+            if command -v sha256sum >/dev/null; then hash=$(sha256sum "dist/$file" | cut -d ' ' -f 1)
+            else hash=$(shasum -a 256 "dist/$file" | cut -d ' ' -f 1)
+            fi
+            printf '%s  %s\n' "$hash" "$file" > "dist/$file.sha256"
+            echo "$file  $(du -h "dist/$file" | cut -f 1)  sha256 $hash"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: release assets
+    needs: [plan, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      PRERELEASE: ${{ needs.plan.outputs.prerelease }}
+      IMAGE: ${{ needs.plan.outputs.image }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: assets-*
+          path: dist
+          merge-multiple: true
+
+      - name: check every asset is there and matches its checksum
+        working-directory: dist
+        run: |
+          missing=0
+          # The build matrix's targets.
+          for target in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-pc-windows-msvc; do
+            ext=tar.gz
+            case $target in *windows*) ext=zip ;; esac
+            for suffix in "" -slim; do
+              file="lorefile-$VERSION-$target$suffix.$ext"
+              if [ -f "$file" ]; then continue; fi
+              if [ "$target" = x86_64-pc-windows-msvc ] && [ -z "$suffix" ]; then
+                echo "::warning title=Windows ships slim only::The full Windows build (with DuckDB) failed, so this release has only lorefile-slim for Windows. npx falls back to it there."
+              else
+                echo "::error title=Missing asset::$file was not built."
+                missing=1
+              fi
+            done
+          done
+          if [ "$missing" != 0 ]; then exit 1; fi
+          sha256sum -c ./*.sha256
+          cat ./*.sha256 | sort -k 2 > checksums.txt
+          {
+            echo "### Lorefile $VERSION assets"
+            echo '```'
+            ls -lh | awk 'NR > 1 { print $5 "\t" $9 }'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: write the release notes from the tag's message
+        if: github.event_name == 'push'
+        run: |
+          # actions/checkout keeps the tag's commit but not its annotation; fetch the tag itself.
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
+          if [ "$(git cat-file -t "$TAG")" = tag ]; then
+            git for-each-ref --format='%(contents:subject)%0a%0a%(contents:body)' "refs/tags/$TAG" > notes.md
+          else
+            echo "::warning title=Lightweight tag::$TAG has no message, so the release notes are a stock line. Next time tag with: git tag -a $TAG -m \"What changed\""
+            echo "Lorefile $VERSION" > notes.md
+          fi
+          cat >> notes.md <<EOF
+
+          ---
+          **Install:** \`npx lorefile@$VERSION serve\` ·\`docker run -p 7070:7070 -v lorefile-spaces:/spaces $IMAGE:$VERSION\` · \`cargo install lorefile --version $VERSION --locked\` · or a binary below.
+
+          Each archive has a \`.sha256\` next to it and \`checksums.txt\` lists them all. The \`-slim\` builds leave out DuckDB: everything works except SQL over local CSV, Parquet and DuckDB files. Third-party licences are in each archive.
+          EOF
+          cat notes.md
+
+      - name: create the GitHub release
+        if: github.event_name == 'push'
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # A re-run: keep what was published, so the checksums baked into an
+            # already-published npm package stay true. Use its checksums.txt below.
+            echo "::notice title=Release already exists::$TAG already has a release; its assets were left as they are."
+            gh release download "$TAG" --pattern checksums.txt --dir dist --clobber
+          else
+            flags=()
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$TAG" dist/* --verify-tag --title "Lorefile $VERSION" --notes-file notes.md "${flags[@]}"
+          fi
+
+      # The npm job bakes these checksums into the package it publishes.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: dist/checksums.txt
+          if-no-files-found: error
+
+  npm:
+    name: npm (${{ needs.plan.outputs.npm }})
+    needs: [plan, release]
+    if: needs.plan.outputs.npm != 'skip'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm provenance: the package page links back to this run
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      MODE: ${{ needs.plan.outputs.npm }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: checksums
+          path: npm
+
+      - name: check the launcher downloads from this repository
+        run: |
+          launcher=$(sed -n "s/^const DEFAULT_REPO = '\(.*\)';.*/\1/p" npm/bin/lorefile.js)
+          package=$(node -p "require('./npm/package.json').repository.url")
+          problem=""
+          if [ "$launcher" != "$LOREFILE_REPO" ]; then problem="npm/bin/lorefile.js downloads from '$launcher' but LOREFILE_REPO is '$LOREFILE_REPO'."; fi
+          case $package in *"github.com/$LOREFILE_REPO.git") ;; *) problem="$problem npm/package.json's repository is '$package', not $LOREFILE_REPO." ;; esac
+          if [ "${GITHUB_REPOSITORY,,}" != "${LOREFILE_REPO,,}" ]; then problem="$problem This run is in $GITHUB_REPOSITORY, where the release is, not $LOREFILE_REPO."; fi
+          if [ -n "$problem" ]; then
+            if [ "$MODE" = publish ]; then echo "::error title=Launcher points elsewhere::$problem"; exit 1; fi
+            echo "::warning title=Launcher points elsewhere::$problem"
+          fi
+
+      - name: stamp the version and add the licence files
+        working-directory: npm
+        run: |
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          cp ../LICENSE ../NOTICE .
+
+      - name: publish
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          dist_tag=latest
+          case $VERSION in *-dev.*) dist_tag=dev ;; *-*) dist_tag=next ;; esac
+          if [ "$MODE" = dry-run ]; then
+            npm publish --dry-run --tag "$dist_tag"
+          elif npm view "lorefile@$VERSION" version >/dev/null 2>&1; then
+            echo "::notice title=Already on npm::lorefile@$VERSION is already published; nothing to do."
+          else
+            npm publish --access public --provenance --tag "$dist_tag"
+          fi
+
+  crate:
+    name: crates.io (${{ needs.plan.outputs.cargo }})
+    needs: [plan, release]
+    if: needs.plan.outputs.cargo != 'skip'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      MODE: ${{ needs.plan.outputs.cargo }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: publish (cargo builds the packaged crate first, DuckDB included)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          cargo package --locked --list
+          if [ "$MODE" = dry-run ]; then
+            cargo publish --locked --dry-run
+          elif curl -fsS https://index.crates.io/lo/re/lorefile 2>/dev/null | grep -q "\"vers\":\"$VERSION\""; then
+            echo "::notice title=Already on crates.io::lorefile $VERSION is already published; nothing to do."
+          else
+            cargo publish --locked
+          fi
+
+  # The image is built from the Dockerfile, from source, once per platform on a
+  # native runner (compiling DuckDB under emulation would take hours), pushed by
+  # digest, and then tagged as one multi-platform image by docker-tags.
+  docker:
+    name: image ${{ matrix.platform }}
+    needs: plan
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            slug: amd64
+          # Native arm64 runner: free for public repositories (see the build job).
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            slug: arm64
+    env:
+      IMAGE: ${{ needs.plan.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+      - name: keep the digest for docker-tags
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p digests
+          touch "digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.slug }}
+          path: digests/*
+          if-no-files-found: error
+
+  docker-tags:
+    name: image tags
+    # Waits for the release too, so :latest never points at a version whose binaries failed.
+    needs: [plan, docker, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ${{ needs.plan.outputs.image }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ needs.plan.outputs.version }},enable=${{ github.event_name == 'push' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && needs.plan.outputs.prerelease == 'false' }}
+            type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
+      - name: tag both platforms as one image
+        working-directory: digests
+        run: |
+          tags=$(jq -r '.tags[] | "--tag " + .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          refs=""
+          for digest in *; do refs="$refs $IMAGE@sha256:$digest"; done
+          # shellcheck disable=SC2086 # split on purpose: one argument per tag and per digest
+          docker buildx imagetools create $tags $refs
+          docker buildx imagetools inspect "$IMAGE:${{ steps.meta.outputs.version }}"
+      - name: smoke-run the image (amd64)
+        env:
+          REF: ${{ env.IMAGE }}:${{ steps.meta.outputs.version }}
+        run: |
+          docker run --rm "$REF" --version
+          uid=$(docker run --rm --entrypoint id "$REF" -u)
+          echo "runs as uid $uid"
+          if [ "$uid" = 0 ]; then echo "::error::The image runs as root."; exit 1; fi

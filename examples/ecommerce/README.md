@@ -21,7 +21,7 @@ PaymentMethod is bound to `payments_bigquery`, which the binary cannot read, so 
 ## Validate
 
 ```bash
-./target/debug/stella-ontology validate --dir examples/ecommerce
+./target/debug/lorefile validate --dir examples/ecommerce
 ```
 
 ```
@@ -35,7 +35,7 @@ PaymentMethod is bound to `payments_bigquery`, which the binary cannot read, so 
 Parcel SHP-3004 contains a lithium-battery lantern. Moving it to SkyParcel (air) is blocked, and the engine lists the carriers that satisfy every rule for this parcel.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/ecommerce reroute_shipment shipment=SHP-3004 from=CAR-GRN to=CAR-AIR
+./target/debug/lorefile check --dir examples/ecommerce reroute_shipment shipment=SHP-3004 from=CAR-GRN to=CAR-AIR
 ```
 
 ```
@@ -62,7 +62,7 @@ Exit code 2.
 ORD-1012 is a $2,450 first order. The promotion itself is fine; the order trips the fraud-review rule.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/ecommerce apply_promotion order=ORD-1012 promotion=PROMO-SPRING15
+./target/debug/lorefile check --dir examples/ecommerce apply_promotion order=ORD-1012 promotion=PROMO-SPRING15
 ```
 
 ```
@@ -86,7 +86,7 @@ Exit code 0.
 ORD-1003 has not shipped, so cancelling it needs nobody's approval.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/ecommerce cancel_order order=ORD-1003
+./target/debug/lorefile check --dir examples/ecommerce cancel_order order=ORD-1003
 ```
 
 ```
@@ -102,7 +102,7 @@ Exit code 0.
 Refunding ORD-1007 needs the card it was paid with. PaymentMethod lives in the payments warehouse, so the first attempt tells the agent what to fetch:
 
 ```bash
-./target/debug/stella-ontology check --dir examples/ecommerce refund_order order=ORD-1007 rma=RET-501 payment_method=PM-88213
+./target/debug/lorefile check --dir examples/ecommerce refund_order order=ORD-1007 rma=RET-501 payment_method=PM-88213
 ```
 
 ```
@@ -126,7 +126,7 @@ Exit code 2.
 `where_is` says where that row is:
 
 ```bash
-./target/debug/stella-ontology where --dir examples/ecommerce PaymentMethod
+./target/debug/lorefile where --dir examples/ecommerce PaymentMethod
 ```
 
 ```
@@ -159,7 +159,7 @@ Exit code 2.
 The agent fetches the row with its own BigQuery connector and passes it inline:
 
 ```bash
-./target/debug/stella-ontology check --dir examples/ecommerce refund_order order=ORD-1007 rma=RET-501 \
+./target/debug/lorefile check --dir examples/ecommerce refund_order order=ORD-1007 rma=RET-501 \
   payment_method='{"payment_method_id":"PM-88213","customer_id":"CUS-0107","kind":"card","brand":"visa","last4":"4242","expires":"2028-09","status":"active"}'
 ```
 
@@ -183,7 +183,7 @@ Exit code 0.
 INV-2007 is a negative, hazardous stock record at a warehouse with no dangerous-goods licence. Nothing can be booked against it until the warehouse recounts.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/ecommerce restock inventory=INV-2007 warehouse=WH-SEA
+./target/debug/lorefile check --dir examples/ecommerce restock inventory=INV-2007 warehouse=WH-SEA
 ```
 
 ```
@@ -203,5 +203,5 @@ Exit code 2.
 ## Browse it
 
 ```bash
-./target/debug/stella-ontology serve --dir examples/ecommerce --port 7073
+./target/debug/lorefile serve --dir examples/ecommerce --port 7073
 ```

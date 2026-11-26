@@ -1,0 +1,40 @@
+# What counts as a win for Lumen Home, and where the number comes from.
+# Agents read this before they report performance, so Monday's and Tuesday's
+# numbers agree. A metric like this is usually saved from a conversation with
+# `propose_patch` the first time an agent does the reporting, then reviewed here.
+metrics:
+  - metric: success
+    description: >
+      The one number the business is run on: paid orders. Not sessions, not
+      add-to-carts, not the conversions the ad platforms report. Money state
+      is payment_status; fulfilment state is status, and cancelled or returned
+      orders do not count. "Per day" is placed_on in the store's time zone
+      (Europe/London); a week is Monday to Sunday.
+    source:
+      connection: shop_bigquery
+      table: orders
+      filter: payment_status = 'paid' and status not in ('cancelled', 'returned')
+      measure: count distinct order_id, by date(placed_on, 'Europe/London')
+    grain: day
+    basis: transactional   # counted from the shop's own records, not attributed or modelled
+    owner: growth@lumenhome
+    caveats: >
+      Platform-reported conversions (Meta, Google) are attributed and modelled,
+      not the same thing. Compare them to this number; never add them to it.
+      The csv in shop_files is an 18-row sample for demos, not the history.
+  - metric: paid_performance
+    description: >
+      Paid media spend next to success, by day and channel. channel is which
+      platform the spend row came from (meta, google); both variants return
+      one row per campaign per day for the date range the agent asks for, and
+      the join to orders is lower(utm_campaign) = lower(campaign_name).
+    variants:
+      - when: channel == "meta"
+        description: Campaign-level spend from the Meta Ads MCP, one row per campaign per day.
+        source: { connection: meta_ads, tool: get_insights, params: { level: campaign, fields: [campaign_name, spend], time_increment: 1, time_range: "{{date_range}}" } }
+      - when: channel == "google"
+        description: Campaign cost from the Google Ads MCP, one row per campaign per day; cost_micros is micro-units of the account currency.
+        source: { connection: google_ads, tool: campaign_report, params: { fields: [campaign.name], metrics: [cost_micros], segments: [date], date_range: "{{date_range}}" } }
+    grain: day
+    owner: growth@lumenhome
+    caveats: Unmatched spend (no campaign name match) is reported on its own line, never dropped.

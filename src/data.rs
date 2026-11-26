@@ -400,6 +400,10 @@ impl<'a> DataLayer<'a> {
                 j["table"] = json!(b.table);
                 j["key_column"] = json!(b.key);
                 j["columns"] = json!(b.columns);
+                // who stands behind this binding: an agent's guess at a table is not a fact yet
+                if self.ont.graded.has_file {
+                    j["trust"] = self.ont.grade_of(crate::trust::Kind::Binding, &t.name).to_json(crate::trust::Kind::Binding);
+                }
                 if let Some(s) = src {
                     if s.kind.eq_ignore_ascii_case("csv") {
                         j["path"] = json!(self.file_path(s, &b.table).display().to_string());

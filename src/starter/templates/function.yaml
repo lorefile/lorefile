@@ -1,0 +1,15 @@
+# An operation agents can run: what goes in, what comes out, and where it runs.
+# The ontology never runs it; the agent calls the tool named here with its own login.
+functions:
+  - function: {{name}}
+    description: What this does for the business, in one or two sentences.
+    inputs: { order: Order, reason: string }      # entities or string/integer/number/boolean/date/json
+    outputs: { result: json }
+    runs:
+      kind: mcp                                   # mcp | http | manual
+      server: a_connection                        # a `kind: mcp` source under sources/
+      tool: the_tool_name
+      args: { id: "{{order.order_id}}", note: "{{reason}}" }
+    may_be_called_by: [support_agent]
+    owner: someone@company
+    caveats: What the result cannot tell you.

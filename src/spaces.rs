@@ -6,7 +6,7 @@
 //!   space: `spaces/acme/`, `spaces/brand-two/`. New spaces are created there.
 //! * The examples and packs compiled into the binary are shipped spaces: their
 //!   ids start with `@` (`@supply-chain`, `@meta-ads`), they are read-only, and
-//!   they are written out under `<root>/.stella/examples/` at start-up so the
+//!   they are written out under `<root>/.lorefile/examples/` at start-up so the
 //!   loader and DuckDB can read them like any folder.
 
 use crate::data::DataLayer;
@@ -28,7 +28,7 @@ mod builtin {
     include!(concat!(env!("OUT_DIR"), "/builtin.rs"));
 }
 
-/// Files `stella-ontology init` writes, also the "starter" choice for a new space.
+/// Files `lorefile init` writes, also the "starter" choice for a new space.
 pub const STARTER: [(&str, &str); 5] = [
     ("ontology.yaml", include_str!("starter/ontology.yaml")),
     ("glossary.yaml", include_str!("starter/glossary.yaml")),
@@ -51,6 +51,9 @@ pub struct Space {
     /// Filled lazily from the manifest: title, description, counts, validity.
     #[serde(flatten)]
     pub stats: Option<Json>,
+    /// Set when the space was just created: `on`, or why history is off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history: Option<String>,
 }
 
 /// One compiled space plus its DuckDB, when that feature is on.
@@ -58,6 +61,8 @@ pub struct Loaded {
     pub dir: PathBuf,
     pub ont: Ontology,
     pub report: Report,
+    /// What the YAML files looked like when this was loaded (count, bytes, newest change).
+    pub fp: Fingerprint,
     #[cfg(feature = "duckdb")]
     pub db: Option<Arc<Db>>,
     with_db: bool,
@@ -80,12 +85,24 @@ impl Loaded {
         };
         Ok(Loaded {
             dir: dir.to_path_buf(),
+            fp: fingerprint(dir),
             ont,
             report,
             #[cfg(feature = "duckdb")]
             db,
             with_db,
         })
+    }
+
+    /// Re-read the folder if any YAML file changed since it was loaded: the
+    /// page, an agent over MCP, git and a text editor all write the same files.
+    pub fn refresh(&mut self) -> bool {
+        let now = fingerprint(&self.dir);
+        if now == self.fp {
+            return false;
+        }
+        self.reload();
+        true
     }
 
     pub fn data(&self) -> DataLayer<'_> {
@@ -116,13 +133,49 @@ pub struct Registry {
     with_db: bool,
 }
 
+/// (files, bytes, newest modification) over the YAML files of a folder. Cheap
+/// enough to compute per request: an ontology is a few dozen small files.
+pub type Fingerprint = (usize, u64, u128);
+
+pub fn fingerprint(dir: &Path) -> Fingerprint {
+    let mut n = 0usize;
+    let mut bytes = 0u64;
+    let mut newest = 0u128;
+    for e in walkdir::WalkDir::new(dir)
+        .into_iter()
+        .filter_entry(|e| {
+            let name = e.file_name().to_string_lossy();
+            !(name.starts_with('.') || name == "data" || name == "target")
+        })
+        .filter_map(|e| e.ok())
+    {
+        if !e.file_type().is_file() {
+            continue;
+        }
+        let name = e.file_name().to_string_lossy();
+        if !(name.ends_with(".yaml") || name.ends_with(".yml")) {
+            continue;
+        }
+        if let Ok(m) = e.metadata() {
+            n += 1;
+            bytes += m.len();
+            if let Ok(t) = m.modified() {
+                if let Ok(d) = t.duration_since(std::time::UNIX_EPOCH) {
+                    newest = newest.max(d.as_nanos());
+                }
+            }
+        }
+    }
+    (n, bytes, newest)
+}
+
 fn has_manifest(dir: &Path) -> bool {
     dir.join("ontology.yaml").is_file() || dir.join("ontology.yml").is_file()
 }
 
-/// `<root>/.stella`, created with a `.gitignore` that hides itself from git.
-pub fn stella_dir(root: &Path) -> PathBuf {
-    let d = root.join(".stella");
+/// `<root>/.lorefile`, created with a `.gitignore` that hides itself from git.
+pub fn lorefile_dir(root: &Path) -> PathBuf {
+    let d = root.join(".lorefile");
     if std::fs::create_dir_all(&d).is_ok() {
         let gi = d.join(".gitignore");
         if !gi.exists() {
@@ -167,7 +220,7 @@ fn extract_builtin(dest: &Path) -> Result<Vec<Space>> {
     }
     Ok(seen
         .into_iter()
-        .map(|(name, group)| Space { id: format!("@{}", name), name: name.clone(), dir: dest.join(&name), builtin: true, group, stats: None })
+        .map(|(name, group)| Space { id: format!("@{}", name), name: name.clone(), dir: dest.join(&name), builtin: true, group, stats: None, history: None })
         .collect())
 }
 
@@ -182,11 +235,11 @@ impl Registry {
         let mut reg = Registry { root: root.to_path_buf(), single, spaces: IndexMap::new(), examples_dir: None, loaded: HashMap::new(), with_db };
         reg.scan_user_spaces();
         if with_examples {
-            let mut dest = stella_dir(root).join("examples");
+            let mut dest = lorefile_dir(root).join("examples");
             let mut shipped = extract_builtin(&dest);
             if shipped.is_err() {
                 // a read-only folder: fall back to the temp dir
-                dest = std::env::temp_dir().join("stella-ontology").join("examples");
+                dest = std::env::temp_dir().join("lorefile").join("examples");
                 shipped = extract_builtin(&dest);
             }
             match shipped {
@@ -218,7 +271,7 @@ impl Registry {
         if self.single {
             let name = self.root.canonicalize().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).unwrap_or_else(|| "ontology".into());
             let id = { let s = slug(&name); if s.is_empty() { "ontology".to_string() } else { s } };
-            found.push(Space { id, name, dir: self.root.clone(), builtin: false, group: "space".into(), stats: None });
+            found.push(Space { id, name, dir: self.root.clone(), builtin: false, group: "space".into(), stats: None, history: None });
         } else if let Ok(rd) = std::fs::read_dir(&self.root) {
             let mut dirs: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect();
             dirs.sort();
@@ -227,7 +280,7 @@ impl Registry {
                 if name.starts_with('.') || !has_manifest(&d) {
                     continue;
                 }
-                found.push(Space { id: name.clone(), name, dir: d, builtin: false, group: "space".into(), stats: None });
+                found.push(Space { id: name.clone(), name, dir: d, builtin: false, group: "space".into(), stats: None, history: None });
             }
         }
         // user spaces first, shipped ones after
@@ -289,7 +342,13 @@ impl Registry {
             let l = Loaded::open(&space.dir, self.with_db)?;
             self.loaded.insert(id.to_string(), l);
         }
-        Ok(self.loaded.get_mut(id).unwrap())
+        let l = self.loaded.get_mut(id).unwrap();
+        if l.refresh() {
+            if let Some(s) = self.spaces.get_mut(id) {
+                s.stats = None;
+            }
+        }
+        Ok(l)
     }
 
     /// Drop the cached stats of one space (after a write).
@@ -327,11 +386,12 @@ impl Registry {
     }
 
     /// Create a space folder under the root. `from` is `blank`, `starter`, or
-    /// the id of a space to copy (a shipped example, or one of yours).
+    /// the id of a space to copy (a shipped example, or one of yours). The new
+    /// folder starts its own git history when it can (`Space::history` says).
     pub fn create(&mut self, name: &str, from: &str) -> Result<Space, String> {
         if self.single {
             return Err(format!(
-                "this server was started on one ontology folder ({}). To hold several spaces, start it on a folder that contains them: stella-ontology serve --dir ./spaces",
+                "this server was started on one ontology folder ({}). To hold several spaces, start it on a folder that contains them: lorefile serve --dir ./spaces",
                 self.root.display()
             ));
         }
@@ -347,7 +407,11 @@ impl Registry {
             "" | "blank" => write_blank(&dir, &id, name.trim()),
             "starter" => write_starter(&dir).and_then(|_| rename_manifest(&dir, &id, name.trim())),
             other => match self.spaces.get(other).cloned() {
-                Some(src) => copy_tree(&src.dir, &dir).and_then(|_| rename_manifest(&dir, &id, name.trim())),
+                // a copy is a new place: nobody has stood behind its definitions there, so trust.yaml stays behind
+                Some(src) => copy_tree(&src.dir, &dir).and_then(|_| rename_manifest(&dir, &id, name.trim())).map(|_| {
+                    let _ = std::fs::remove_file(dir.join(crate::trust::FILE));
+                    let _ = std::fs::remove_file(dir.join("trust.yml"));
+                }),
                 None => Err(anyhow!("nothing to copy: no space named '{}'", other)),
             },
         };
@@ -361,7 +425,9 @@ impl Registry {
             let _ = std::fs::remove_dir_all(&dir);
             return Err(format!("the new space does not compile: {:#}", e));
         }
-        let space = Space { id: id.clone(), name: id.clone(), dir, builtin: false, group: "space".into(), stats: None };
+        // history starts with the space: its own git repository and a first commit
+        let history = crate::edit::init_space(&dir, &self.root, crate::edit::PAGE);
+        let space = Space { id: id.clone(), name: id.clone(), dir, builtin: false, group: "space".into(), stats: None, history: Some(history) };
         let at = self.user_spaces().len();
         self.spaces.shift_insert(at, id, space.clone());
         Ok(space)
@@ -463,7 +529,7 @@ mod tests {
     use super::*;
 
     fn scratch(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("stella-spaces-{}-{}", tag, std::process::id()));
+        let d = std::env::temp_dir().join(format!("lorefile-spaces-{}-{}", tag, std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }
@@ -495,7 +561,7 @@ mod tests {
         assert!(reg.user_spaces().is_empty());
         assert!(reg.spaces.contains_key("@supply-chain"), "shipped examples are listed");
         assert!(reg.spaces.contains_key("@meta-ads"), "packs too");
-        assert!(root.join(".stella/.gitignore").exists(), ".stella hides itself from git");
+        assert!(root.join(".lorefile/.gitignore").exists(), ".lorefile hides itself from git");
         // nothing of yours yet: a caller has to name the example
         assert!(reg.resolve(None).is_err());
         assert_eq!(reg.resolve(Some("supply-chain")).unwrap(), "@supply-chain");
@@ -503,6 +569,10 @@ mod tests {
         let s = reg.create("Brand One", "blank").unwrap();
         assert_eq!(s.id, "brand-one");
         assert!(root.join("brand-one/ontology.yaml").exists());
+        if crate::edit::git_available() {
+            assert_eq!(s.history.as_deref(), Some("on"), "a new space starts its own history");
+            assert!(root.join("brand-one/.git").is_dir());
+        }
         assert_eq!(reg.resolve(None).unwrap(), "brand-one", "one space of yours is implied");
         assert_eq!(reg.spaces.keys().next().unwrap(), "brand-one", "yours come first");
 
@@ -510,7 +580,9 @@ mod tests {
         let manifest = std::fs::read_to_string(root.join("brand-two/ontology.yaml")).unwrap();
         assert!(manifest.starts_with("name: brand-two\n"), "copied manifest is renamed: {}", manifest);
         assert!(root.join("brand-two/types").is_dir());
-        assert!(!root.join("brand-two/.stella").exists(), "state folders are not copied");
+        // state folders are not copied; the new space's own holds only the line that hides it from git
+        let state: Vec<String> = std::fs::read_dir(root.join("brand-two/.lorefile")).map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().to_string()).collect()).unwrap_or_default();
+        assert!(state.iter().all(|f| f == ".gitignore"), "state folders are not copied: {:?}", state);
         assert_eq!(c.group, "space");
         assert!(reg.resolve(None).is_err(), "two of yours: the caller must say which");
         assert!(reg.create("brand two", "blank").is_err(), "same slug twice is refused");

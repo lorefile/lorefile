@@ -15,5 +15,5 @@ properties:
   new_amount:     { type: integer, description: "Minor units" }
   currency:       { type: string, description: "Must equal the account currency" }
   reason:         string
-owner: measurement@stella.example
+owner: measurement@yourcompany.example
 tags: [meta, change]

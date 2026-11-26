@@ -1,8 +1,8 @@
 connection: shop_bigquery
 kind: bigquery
 description: >
-  The analytics warehouse that holds the full order history. Declared so agents
-  know where the big tables live; nothing in this folder binds to it yet.
+  The analytics warehouse that holds the full order history. The success
+  metric reads from it; agents query it with their own BigQuery login.
 project: ${GCP_PROJECT}
 dataset: shop
 auth: env

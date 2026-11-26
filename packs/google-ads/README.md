@@ -23,7 +23,7 @@ The pack holds no data and never calls Google. `where_is("Campaign")` answers wi
       "env": { "GOOGLE_ADS_CREDENTIALS_PATH": "...", "GOOGLE_ADS_DEVELOPER_TOKEN": "...", "GOOGLE_ADS_LOGIN_CUSTOMER_ID": "..." }
     },
     "google-ads-ontology": {
-      "command": "/absolute/path/to/stella-ontology",
+      "command": "/absolute/path/to/lorefile",
       "args": ["mcp", "--dir", "/absolute/path/to/packs/google-ads"]
     }
   }
@@ -68,5 +68,5 @@ google-ads-ontology  validate("change_bid_target", {campaign: {bidding_strategy_
 ## Validate
 
 ```bash
-./target/debug/stella-ontology validate --dir packs/google-ads
+./target/debug/lorefile validate --dir packs/google-ads
 ```

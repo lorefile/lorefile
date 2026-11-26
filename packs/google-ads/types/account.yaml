@@ -29,5 +29,5 @@ source:
   params:
     customer_id: "<customer_id>"
     query: "SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account, customer.status, customer.auto_tagging_enabled, customer.conversion_tracking_setting.conversion_tracking_id, customer.conversion_tracking_setting.conversion_tracking_status FROM customer"
-owner: measurement@stella.example
+owner: measurement@yourcompany.example
 tags: [google, structure]

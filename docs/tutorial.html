@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lorefile Tutorial</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;650&display=swap">
+<style>
+/* Layout: a fixed contents rail on wide screens, one column on phones; wireframes are monospace blocks that scroll sideways. */
+:root{--bg:#fbfbf9;--panel:#ffffff;--ink:#1b1b20;--muted:#6b6b75;--line:#e5e5e0;--accent:#2b5cff;--accent-soft:#eef2ff;--code-bg:#f3f3ef;--wire-bg:#1f2230;--wire-ink:#e8e8f0;--sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141518;--panel:#1b1c21;--ink:#ececf0;--muted:#9b9ba6;--line:#2b2c33;--accent:#8aa2ff;--accent-soft:#1e2540;--code-bg:#22242b;--wire-bg:#0f1017;--wire-ink:#e8e8f0;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141518;--panel:#1b1c21;--ink:#ececf0;--muted:#9b9ba6;--line:#2b2c33;--accent:#8aa2ff;--accent-soft:#1e2540;--code-bg:#22242b;--wire-bg:#0f1017;--wire-ink:#e8e8f0;color-scheme:dark}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+.wrap{display:grid;grid-template-columns:240px minmax(0,1fr);gap:40px;max-width:1180px;margin:0 auto}
+.toc{position:sticky;top:0;align-self:start;max-height:100vh;overflow:auto;padding:28px 0;font-size:13.5px;display:flex;flex-direction:column;gap:4px}
+.toc-h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.toc a{color:var(--ink);text-decoration:none;padding:4px 8px;border-radius:7px}.toc a:hover{background:var(--accent-soft)}
+main{min-width:0;padding:28px 0 80px;max-width:78ch}
+h1{font-size:40px;line-height:1.1;margin:8px 0 10px;letter-spacing:-.02em;text-wrap:balance}
+h2{font-size:26px;margin:52px 0 10px;letter-spacing:-.01em;text-wrap:balance;padding-top:18px;border-top:1px solid var(--line)}
+h3{font-size:19px;margin:30px 0 8px}h4{font-size:16px;margin:22px 0 6px}
+p{margin:0 0 14px}a{color:var(--accent)}
+blockquote{margin:0 0 16px;padding:10px 14px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 10px 10px 0;color:var(--ink)}
+code{font-family:var(--mono);font-size:.9em;background:var(--code-bg);padding:1px 5px;border-radius:5px}
+pre{margin:0 0 16px;background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;overflow-x:auto;font-size:13px;line-height:1.5}pre code{background:transparent;padding:0;font-size:inherit}
+pre.wire{background:var(--wire-bg);color:var(--wire-ink);border-color:transparent;font-size:12.5px;line-height:1.35}
+ul,ol{margin:0 0 14px;padding-left:22px}li{margin:4px 0}
+.tbl{overflow-x:auto;margin:0 0 18px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-weight:600;font-size:12px;letter-spacing:.04em;text-transform:uppercase}tr:last-child td{border-bottom:0}
+strong{font-weight:650}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;gap:0}.toc{position:static;max-height:none;padding:18px 0 0;flex-direction:row;flex-wrap:wrap}.toc-h{width:100%}h1{font-size:30px}h2{font-size:22px}}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+</head>
+<body>
+<div class="wrap"><nav class="toc" aria-label="Contents"><div class="toc-h">Contents</div><a href="#the-problem-in-one-monday">The problem, in one Monday</a><a href="#what-it-is-in-one-picture">What it is, in one picture</a><a href="#the-words">The words</a><a href="#install">Install</a><a href="#end-to-end-in-ten-steps">End to end, in ten steps</a><a href="#the-page-screen-by-screen">The page, screen by screen</a><a href="#what-an-agent-can-ask">What an agent can ask</a><a href="#standards-ossie-owl-skos-shacl">Standards: Ossie, OWL, SKOS, SHACL</a><a href="#reference">Reference</a><a href="#the-file-format">The file format</a><a href="#data-sources-the-duckdb-door">Data sources: the DuckDB door</a><a href="#the-web-page">The web page</a><a href="#cli">CLI</a><a href="#tests">Tests</a><a href="#validation-codes">Validation codes</a><a href="#packs">Packs</a><a href="#roadmap">Roadmap</a><a href="#before-the-first-release">Before the first release</a><a href="#license">License</a></nav><main><h1 id="lorefile">Lorefile</h1>
+<p>Your business, written down once, so every AI agent reads the same thing and acts the same way tomorrow.</p>
+<p><strong>Lore</strong> is what a team knows and newcomers have to be told: what counts as a sale, where the orders live, which number the business is run on, what an agent may never do. A <strong>Lorefile</strong> is that lore written down in plain files that agents read.</p>
+<blockquote>Status, 2026-11-26: open source under Apache-2.0, working on a laptop and in Docker. Built and tested: the format and its strict compiler (an unknown key in any file is an error), the web page, the MCP server over stdio and over HTTP, a login token, spaces, the save-what-you-learned loop, metrics and functions, evidence grades (proposed, accepted, checked, kept in <code>trust.yaml</code>; the gate, the API, the CLI and the exports are covered by tests, the page's grade buttons were checked by hand in a browser), local git history from day one (every change a commit, History with Undo, Share / Push / Pull to any git address), Apache Ossie import and export, OWL, SKOS and SHACL import and export with an IRI on everything, tests and CI. Ready in the repository but not yet published: <code>npx lorefile</code>, the Docker image on ghcr.io, <code>cargo install lorefile</code> and the install script all wait for the first release tag (see <a href="#before-the-first-release">Before the first release</a>); until then, build from this checkout. Not yet: accounts and single sign-on (one shared token for now), OAuth for Claude Desktop's and ChatGPT's connectors. A hosted version may come later. <a href="BACKLOG.md">BACKLOG.md</a> has the honest list; <a href="PRODUCTION.md">PRODUCTION.md</a> has what a team server still needs. This file is also a web page: <code>python3 scripts/build-tutorial.py</code> writes <a href="docs/tutorial.html">docs/tutorial.html</a>.</blockquote>
+<h2 id="the-problem-in-one-monday">The problem, in one Monday</h2>
+<p><strong>Before.</strong> Monday morning a marketer asks Claude: "Give me last week's campaign performance." Claude has the Meta Ads MCP, the Google Ads MCP and the BigQuery MCP installed. It explores. It finds the Meta insights tool and guesses a date range. It finds the GA4 export in BigQuery and decides that <code>purchase</code> is the conversion that matters. It joins spend to orders by campaign name, roughly. Thirty tool calls and three clarifying questions later, there is a report. Tuesday a colleague asks the same question. Claude explores again, guesses differently, and the numbers do not match Monday's. Nobody can say which report is right, because the definition of "performance" lived in two chat windows and nowhere else.</p>
+<p><strong>After.</strong> Same Monday, but the Lorefile MCP is installed next to the data MCPs. Claude reads one short summary first: what the entities are, which number counts as success and where it comes from, which guardrails apply, which operations exist. It makes four tool calls instead of thirty. At the end it says: "I used three things worth remembering: the success metric, where spend comes from, and how campaigns are joined. Save them?" The marketer says yes. On Tuesday the colleague's question runs against the same files and gives the same number. Nothing was typed into a config, and nothing left the company's own tools: Claude fetched the rows with the marketer's own BigQuery and Meta logins, as it always did.</p>
+<pre class="wire"><code> BEFORE                                          AFTER
+ ┌──────────────┐    explore, guess, join       ┌──────────────┐   summary → four calls
+ │ Claude + the │ ───────────────────────────►  │ Claude + the │ ─────────────────────►  same number
+ │ data MCPs    │   Mon ≠ Tue                   │ data MCPs    │   Mon = Tue              every day
+ └──────────────┘                               └──────┬───────┘
+                                                       │ &quot;save what we settled?&quot;
+                                                ┌──────▼───────┐
+                                                │ the ontology │  entities · links · guardrails · actions
+                                                │ (YAML, git)  │  sources · words · metrics · functions
+                                                └──────────────┘</code></pre>
+<h2 id="what-it-is-in-one-picture">What it is, in one picture</h2>
+<p>A folder of small YAML files describes the business. One Rust binary compiles the folder, checks it, and opens three doors into it. The ontology holds what matters and where it lives; it never holds rows, never runs anything, and never holds a credential.</p>
+<pre class="wire"><code> your folder of YAML ───► lorefile ──────────► MCP server ───► Claude, ChatGPT*, Cursor, your own agents
+   entities  links        compiles,          ───► web page   ───► people: build, review, accept, demo
+   guardrails  actions    checks,            ───► CLI        ───► scripts and CI
+   sources  words         serves
+   metrics  functions
+                                              agents fetch rows from YOUR data MCPs (BigQuery, Snowflake,
+                                              Meta Ads, Shopify…) with their own logins, and run functions
+                                              on YOUR tools (a model&#x27;s MCP, an endpoint). The ontology
+                                              only says what things mean, where they are, and what may be done.
+ * ChatGPT&#x27;s connectors reach a server from OpenAI&#x27;s cloud, so they need a public HTTPS address
+   and OAuth sign-in, which is not built yet. Claude Code connects over HTTP with the token today.</code></pre>
+<h2 id="the-words">The words</h2>
+<div class="tbl"><table><thead><tr><th>Word on the page</th><th>In the files</th><th>What it is</th><th>Example</th></tr></thead><tbody><tr><td><strong>Entity</strong></td><td><code>type:</code> under <code>types/</code></td><td>A noun of the business, with its fields in plain words and where its rows live</td><td>Order, Customer, Campaign</td></tr><tr><td><strong>Link</strong></td><td><code>relationships:</code> inline or under <code>relationships/</code></td><td>How two entities connect, with a sentence and a cardinality</td><td>an Order <em>is placed by</em> one Customer</td></tr><tr><td><strong>Guardrail</strong></td><td><code>constraints/</code></td><td>What must hold before an action, as a sentence first and an expression second, with a severity and an owner</td><td>only unshipped orders can be cancelled</td></tr><tr><td><strong>Action</strong></td><td><code>actions/</code></td><td>What an agent may do: inputs, what changes, which guardrails to check, who must approve</td><td>cancel_order</td></tr><tr><td><strong>Source</strong></td><td><code>sources/</code></td><td>Where rows live: a warehouse, files, or an MCP server. Never a credential</td><td>shop_bigquery, meta_ads</td></tr><tr><td><strong>Word</strong></td><td><code>glossary.yaml</code></td><td>What people say and which entity they mean</td><td>"basket" means Order</td></tr><tr><td><strong>Metric</strong></td><td><code>logic/</code></td><td>What counts, and the recipe for where the number comes from</td><td>success = paid orders in shop_bigquery.orders</td></tr><tr><td><strong>Function</strong></td><td><code>logic/</code></td><td>What an agent can run: inputs, outputs, and which tool does it</td><td>forecast_success → the measurement MCP</td></tr><tr><td><strong>Space</strong></td><td>a folder of these folders</td><td>One ontology per brand, business unit or client; one server holds many</td><td>brand-one, brand-two, @ecommerce</td></tr><tr><td><strong>Proposal</strong></td><td><code>.lorefile/proposals/</code></td><td>Something an agent learned and wants to save, waiting for a person to accept</td><td>"An agent learned: added metric success"</td></tr></tbody></table></div>
+<h2 id="install">Install</h2>
+<p>Every way gives you the same <code>lorefile</code> command: one file, no runtime to install first.</p>
+<div class="tbl"><table><thead><tr><th>Way</th><th>Command</th><th>Needs</th></tr></thead><tbody><tr><td>npx</td><td><code>npx lorefile serve --dir spaces</code></td><td>Node.js 18 or newer</td></tr><tr><td>Docker</td><td><code>docker run -p 7070:7070 -v lorefile-spaces:/spaces -e LOREFILE_TOKEN=… ghcr.io/lorefile/lorefile</code></td><td>Docker</td></tr><tr><td>cargo</td><td><code>cargo install lorefile --locked</code></td><td>Rust 1.87 or newer</td></tr><tr><td>Install script</td><td>the <code>curl</code> line below</td><td>macOS or Linux</td></tr><tr><td>From this checkout</td><td><code>cargo build --release</code>, then <code>./target/release/lorefile</code></td><td>Rust 1.87 or newer</td></tr></tbody></table></div>
+<p><strong>npx</strong> downloads the binary built for your computer from the project's GitHub Releases on first use, checks its SHA-256 against the checksum published with the package, and keeps it in <code>~/.cache/lorefile/&lt;version&gt;/</code>. Nothing runs at install time. For Claude Code over stdio: <code>claude mcp add lorefile -- npx -y lorefile mcp --dir /path/to/spaces</code>.</p>
+<p><strong>Docker</strong> keeps your spaces on the <code>/spaces</code> volume and runs as a non-root user. Pick the token yourself with <code>LOREFILE_TOKEN</code>; the container starts read-only, and to let the page and agents write you pass the command:</p>
+<pre><code>docker run -d -p 7070:7070 -v lorefile-spaces:/spaces -e LOREFILE_TOKEN=choose-a-long-secret \
+  ghcr.io/lorefile/lorefile serve --dir /spaces --host 0.0.0.0 --allow-edit</code></pre>
+<p><strong>The install script</strong>, for machines without Node, downloads the latest release, checks the checksum and puts <code>lorefile</code> in <code>~/.local/bin</code> (<code>LOREFILE_SLIM=1</code> for the slim build, <code>LOREFILE_VERSION=…</code> for another version):</p>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/lorefile/lorefile/main/scripts/install.sh | sh</code></pre>
+<p><strong>Full or slim.</strong> Each release has two builds per platform. The full one (about 70 MB) includes DuckDB, so the <code>query</code> tool and the Data &amp; SQL page can run SQL over local CSV, Parquet and DuckDB files. The slim one (<code>-slim</code>, about 10 MB) leaves DuckDB out; everything else works the same, Ossie and RDF export and import included. <code>npx</code> uses the full build. From source: <code>cargo install lorefile --locked --no-default-features --features rdf</code> builds the slim one in a minute or two.</p>
+<p>The rest of this page writes <code>lorefile</code>; from a checkout, read it as <code>./target/release/lorefile</code>.</p>
+<h2 id="end-to-end-in-ten-steps">End to end, in ten steps</h2>
+<p>Everything below was run on a laptop.</p>
+<h3 id="1-open-the-page">1. Open the page</h3>
+<pre><code>lorefile serve --dir ./spaces --port 7070 --allow-edit</code></pre>
+<p>The first run prints a login link and saves the token it made in <code>spaces/.lorefile/auth.toml</code> (readable by you only):</p>
+<pre><code>Lorefile 0.1.0 · 0 spaces of yours in ./spaces · edit mode on
+Open    http://127.0.0.1:7070/?token=k3f9…   (first run: token saved to ./spaces/.lorefile/auth.toml)
+MCP     http://127.0.0.1:7070/mcp   Authorization: Bearer k3f9…
+        claude mcp add --transport http lorefile http://127.0.0.1:7070/mcp --header &quot;Authorization: Bearer k3f9…&quot;</code></pre>
+<p>Open that link once; the browser keeps you signed in (Settings has Sign out). Without the token the page shows a box asking for it, and the API answers 401. This is the Jupyter way of doing it: one token per server, no accounts. To choose the token yourself, set <code>LOREFILE_TOKEN</code> or pass <code>--token</code>; that is how Docker and servers get theirs. On your own laptop, <code>--no-auth</code> turns the login off (it is refused on an address other machines can reach unless you add <code>--i-know</code>, for a proxy that already signs people in).</p>
+<p>The <code>spaces</code> folder is created empty, and the page opens on "Your first space". The picker at the top already lists the examples and packs that ship inside the binary, read-only, so you can look at how things are done before you make anything.</p>
+<pre class="wire"><code>┌────────────────────────────────────────────────────────────────────────────┐
+│ [Pick a space… ▾]   Lorefile                               edit mode        │
+├──────────────┬─────────────────────────────────────────────────────────────┤
+│ A space is   │  Your first space                                            │
+│ one ontology:│  A space is one ontology: one brand, one business unit, one  │
+│ one brand…   │  client. It becomes a folder under spaces/.                  │
+│              │                                                              │
+│              │  Name        [ Brand One                       ]             │
+│              │  Start from  (•) Blank    ( ) Starter                        │
+│              │              ( ) Copy of ecommerce (shipped example)         │
+│              │              ( ) Copy of meta-ads (shipped pack)             │
+│              │                                            [ Create space ]  │
+└──────────────┴─────────────────────────────────────────────────────────────┘</code></pre>
+<h3 id="2-make-a-space">2. Make a space</h3>
+<p>Name it after the brand and start blank, from the starter, or as a copy of an example. A copy of <code>ecommerce</code> is the fastest way to see every page with real content. Each space is a folder under <code>spaces/</code>; <code>.lorefile/</code> inside it holds the server's own state and hides itself from git.</p>
+<h3 id="3-look-at-an-example-to-see-how-it-is-done">3. Look at an example to see how it is done</h3>
+<p>Pick <code>ecommerce</code> in the picker. It is read-only, which the banner says, and a nudge on the map offers to copy it into a space of your own. The rail on the left is the order of work: Sources, Entities, Links, Logic, Guardrails, Actions. Each step shows what is still missing, in words.</p>
+<pre class="wire"><code>┌──────────────────────────────────────────────────────────────────────────────┐
+│ [ecommerce · 12 entities ▾]  lumen-ecommerce   12 entities · 13 links ·      │
+│                              25 guardrails · 5 actions   ▰▰▰▰▰▱▱▱ 55% ready  │
+├────────────────────┬─────────────────────────────────────────────────────────┤
+│ BUILD              │  shipped example · read-only · copy it to change it     │
+│ ✓ Sources  6       │                                                         │
+│ 2 Entities 12 · 12 │   ┌─────────┐      ┌─────────┐      ┌─────────┐         │
+│   need plain words │   │Customer │──────│ Order   │──────│ Product │         │
+│ 3 Links 13 · 10    │   │3 need   │placed│ 6 stop  │has   │3 need   │         │
+│   without sentence │   │words    │by    │ rules   │line  │words    │         │
+│ ✓ Logic 2 · 2      │   └─────────┘      └────┬────┘      └─────────┘         │
+│ 5 Guardrails 25    │                         │ shipped as                     │
+│ ✓ Actions 5        │                    ┌────▼────┐          WHAT TO DO NEXT  │
+│ USE                │                    │Shipment │          12 entities have │
+│ How to use it      │                    │4 stop   │          fields without   │
+│ Map · Agents       │                    └─────────┘          plain words      │
+│ Data &amp; SQL         │                                         [Add words]      │
+│ Files · Settings   │  ● Customers &amp; orders ● Catalogue ● Fulfilment          │
+└────────────────────┴─────────────────────────────────────────────────────────┘</code></pre>
+<h3 id="4-connect-your-ai-tool">4. Connect your AI tool</h3>
+<p>Claude Code, on the same machine (stdio; the agent starts its own Lorefile, no token needed):</p>
+<pre><code>claude mcp add lorefile -- lorefile mcp --dir ./spaces</code></pre>
+<p>Claude Code, against a server or a container (MCP over HTTP, with the server's token):</p>
+<pre><code>claude mcp add --transport http lorefile http://127.0.0.1:7070/mcp --header &quot;Authorization: Bearer &lt;token&gt;&quot;</code></pre>
+<p>Settings › MCP for agents shows both commands with the token masked and a Copy button that copies the real one.</p>
+<p>Claude Desktop, in <code>claude_desktop_config.json</code>, with absolute paths:</p>
+<pre><code>{
+  &quot;mcpServers&quot;: {
+    &quot;lorefile&quot;: {
+      &quot;command&quot;: &quot;/absolute/path/to/lorefile&quot;,
+      &quot;args&quot;: [&quot;mcp&quot;, &quot;--dir&quot;, &quot;/absolute/path/to/spaces&quot;, &quot;--allow-edit&quot;]
+    }
+  }
+}</code></pre>
+<p>One server holds every space. With one space of your own the tools use it; with several, every tool takes <code>space: "brand-one"</code> and the tool list names the choices. Leave out <code>--allow-edit</code> and every save from an agent waits for a person in the page instead of being written. A <code>.mcp.json</code> in this repository does the same for any Claude Code session opened here. Claude Desktop's custom connectors and ChatGPT's connect from their vendor's cloud and need public HTTPS with OAuth, which is not built yet: on a laptop, Desktop uses the stdio config above.</p>
+<h3 id="5-teach-it-by-using-it">5. Teach it by using it</h3>
+<p>Ask your AI tool, in your own words:</p>
+<blockquote>Give me last week's performance for Brand One. Spend is in the Meta Ads MCP; orders are in BigQuery, dataset <code>shop</code>.</blockquote>
+<p>The agent calls <code>summary</code> first, then works. When it settles something, it offers to save it. Say yes, and it calls <code>propose_patch</code> once, with everything it learned as one batch of ops, in the order they depend on each other:</p>
+<pre><code>propose_patch  reason: &quot;First reporting conversation.&quot;  ops:
+  - op: add_source   connection: shop_bigquery  kind: bigquery  project: acme  dataset: shop
+  - op: add_type     name: Order  domain: Core  description: One checkout, paid or not.
+  - op: set_source   type: Order  connection: shop_bigquery  table: orders  key: order_id
+  - op: add_metric   metric: success  connection: shop_bigquery  table: orders
+                     filter: payment_status = &#x27;paid&#x27;  measure: count distinct order_id
+                     grain: day  owner: growth@brand-one
+  - op: add_term     term: basket  means: Order</code></pre>
+<p>Each op is planned against the space as it would be after the ones before it, so the entity can be bound to a source that is new in the same batch. The whole set is compiled together. In edit mode it is written at once, as one change. Otherwise it is queued as one proposal, and a blank space can be taught in a single sitting.</p>
+<h3 id="6-accept-what-it-learned">6. Accept what it learned</h3>
+<p>Open Agents. Every proposal reads as a sentence, with the file change one click away.</p>
+<pre class="wire"><code>┌ Agents ─────────────────────────────────────────────────────────────────────┐
+│ WAITING FOR YOUR REVIEW                                                      │
+│ ┌──────────────────────────────────────────────────────────────────────────┐ │
+│ │ An agent learned: added metric success (shop_bigquery.orders)   metric   │ │
+│ │ The user said paid orders are the win.      agent via MCP · 11-26 09:14  │ │
+│ │ Show what changes                                   [Accept] [Not now]   │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│ ACTIVITY                                                                     │
+│ ● proposed added metric success (waiting for review) · agent via MCP        │
+│ ● created the space brand-one · person via UI                               │
+└──────────────────────────────────────────────────────────────────────────────┘</code></pre>
+<p>Accept writes the file through the same checked path. This is what got written:</p>
+<pre><code># logic/metrics.yaml
+metrics:
+  - metric: success
+    description: Paid orders. Not sessions, not platform-reported conversions.
+    source:
+      connection: shop_bigquery
+      table: orders
+      filter: payment_status = &#x27;paid&#x27;
+      measure: count distinct order_id
+    grain: day
+    owner: growth@brand-one</code></pre>
+<p>Accepting also records who stands behind the definition. Every metric, data binding, glossary word and guardrail carries a grade, kept in one file Lorefile writes, <code>trust.yaml</code>:</p>
+<pre><code> ungraded   nobody has said: files from before grades, hand-written YAML, imports, copies
+ proposed   an agent wrote it and no person has looked          agents call it &quot;unverified&quot;
+ accepted   a person stands behind the words                    Accept, Looks right, or an edit in the page
+ checked    a person ran it against real rows and it was right  who, when, which source, what was compared</code></pre>
+<p>A grade moves up only by a person's click and down by itself: when the definition changes, by hand, in a merge or by another tool, the grade stops counting until a person looks again (warning W113). When the server runs with <code>--allow-edit</code>, what an agent saves is written at once as <strong>proposed</strong> and listed under Agents › <em>Written by agents, not reviewed</em>, where <strong>Looks right</strong> makes it accepted. An agent's change to something a person accepted or checked is never written directly: it waits for a person, like any proposal. <strong>Mark as checked…</strong> on an accepted metric, binding or guardrail asks which source's rows you used and what you compared ("412 paid orders for 16–22 Nov, the same as Shopify's own report"); Lorefile records your word and runs nothing. An agent that did the comparing with the user can report it (<code>propose_patch</code> with <code>op: record_check</code>); that is always queued, and the card asks "Did you see this match yourself?". A space with no <code>trust.yaml</code> behaves exactly as before; <strong>Vouch for all</strong> on the Map grades everything nobody has graded yet in one change; what an agent proposed, and what changed since a person graded it, still need a look each. A reported check is tied to the definition the agent compared: if that definition changes before a person clicks, the click is refused. Settings › <em>Your name</em> puts your name on what you accept and check (<code>Priya via page</code>): up to 60 letters, digits, spaces and <code>. - ' _</code>, never "agent" or "via", and the page says so when a name cannot be used.</p>
+<h3 id="7-ask-again-tomorrow">7. Ask again tomorrow</h3>
+<blockquote>Show me yesterday's performance.</blockquote>
+<p>The agent reads <code>summary</code>, sees the metric and its recipe, fetches the rows through the BigQuery MCP with the user's own login, and reports. Same files, same definition, same number. The How-to-use-it page lists the questions a space can answer now, with the tool call behind each and a Try-it button that runs it.</p>
+<h3 id="8-put-a-guardrail-in">8. Put a guardrail in</h3>
+<p>Guardrails are what an agent checks before it acts. The builder writes the expression for you; the sentence comes first.</p>
+<pre class="wire"><code>┌ Guardrails · new ───────────────────────────────────────────────────────────┐
+│ About which entity   [ Order ▾ ]                                             │
+│ Field  [ status ▾ ]  is  [ in ▾ ]  [ placed, paid, packing ]                 │
+│ Expression   status in [&quot;placed&quot;, &quot;paid&quot;, &quot;packing&quot;]            (editable)   │
+│ Severity     (•) stop  ( ) warn  ( ) note                                    │
+│ Why          Shipped orders are returns, not cancellations.                  │
+│ Who signs    support-lead@brand-one                              [ Save ]    │
+└──────────────────────────────────────────────────────────────────────────────┘</code></pre>
+<p>Now an action that names it is checked against real rows:</p>
+<pre><code>lorefile check cancel_order order=ORD-1007 --dir spaces/brand-one</code></pre>
+<pre><code>✗ cancel_order is blocked by OR-001.
+ FAIL  OR-001   Only unshipped orders can be cancelled — violated for order=ORD-1007
+         why: Shipped orders are returns, not cancellations.
+approval: support-lead@brand-one</code></pre>
+<p>An agent gets the same answer from <code>validate</code>, with the reason and the approver, and tells the user "no" before anything is touched. A key that matches no row answers <code>unknown</code>, never "blocked".</p>
+<h3 id="9-add-the-numbers-and-the-operations">9. Add the numbers and the operations</h3>
+<p>Logic is two lists the business agrees on once. <strong>Metrics</strong> are the numbers: what counts and where it comes from. <strong>Functions</strong> are the operations: what an agent can run, with what goes in, what comes out and which tool does it. Nothing runs inside the ontology.</p>
+<pre><code># logic/forecast.yaml
+functions:
+  - function: forecast_success
+    description: Projects revenue for a weekly budget over N weeks, from the marketing mix model on the measurement MCP.
+    inputs: { study_id: string, total_budget: number, weeks: integer }
+    outputs: { forecast: json }
+    runs: { kind: mcp, server: measurement, tool: mmm_run_budget_optimizer,
+            args: { studyId: &quot;{{study_id}}&quot;, totalBudget: &quot;{{total_budget}}&quot;, timePeriodWeeks: &quot;{{weeks}}&quot; } }
+    owner: growth@brand-one
+    caveats: Asynchronous; poll with mmm_refresh_study. A model output, not a promise.</code></pre>
+<p>When someone says "run the forecast for a £40k week", the agent reads the contract, gathers the inputs, calls the measurement MCP itself, and reports with the confidence intervals the caveat asks for.</p>
+<h3 id="10-keep-the-history-and-share-it">10. Keep the history and share it</h3>
+<p>History starts with the space. Creating one runs <code>git init</code> in its folder (the <code>git</code> already on your machine; nothing to set up, no GitHub account) and makes the first commit, "Start the space". From then on every accepted change is one commit: the summary in words is the message ("Described Order.basket", "An agent learned: 5 changes: …") and the author says who, <code>person via page</code> or <code>agent via MCP</code>, so an agent's change and a person's look different. When a person accepts an agent's proposal, the agent stays the author and the person is the committer.</p>
+<p>The <strong>History</strong> page lists those changes, newest first. <strong>Show</strong> opens one line by line; <strong>Undo</strong> puts the files it touched back as they were just before it, through the same compiler check as a save, as a new commit "Undo: …" (so an undo can be undone). Later edits to the same file are kept; when they overlap the change being undone, nothing is written and the page says which file.</p>
+<p>To share, paste any git address into <strong>Settings › Share this space</strong>: GitHub, GitLab, Bitbucket, Gitea, or a folder holding a bare repository on a shared drive. Create an empty repository there first. <strong>Push</strong> and <strong>Pull</strong> (fast-forward only) use your own git login, your SSH key or the password helper git already has; Lorefile never asks for or keeps a token, and when git cannot sign in the page says so in words instead of waiting. Branches and pull requests stay where your team already reviews: the inbox on the Agents page is the local pull request, and Accept is the merge.</p>
+<p>A space inside some other project's repository (say <code>serve --dir ontology</code> inside your app's code) is left to that project: changes stay uncommitted for <code>git diff</code>, Settings lists them with a Commit box, and <code>--commit-edits</code> commits each one there. <code>--no-commit-edits</code> turns commits off everywhere. Without git on the machine everything else works and the page says history is off.</p>
+<p>To share the live server instead: run it for the team with a token (<code>LOREFILE_TOKEN</code>) behind HTTPS (Caddy, or your platform's proxy), give everyone the HTTP MCP command, and let the spaces picker do the rest. <a href="DEPLOY.md">DEPLOY.md</a> has Docker, Fly and a VM.</p>
+<h2 id="the-page-screen-by-screen">The page, screen by screen</h2>
+<div class="tbl"><table><thead><tr><th>Screen</th><th>What it is for</th></tr></thead><tbody><tr><td><strong>Sources</strong></td><td>Where rows live. Warehouses, files, MCP servers. Which entities and metrics use each.</td></tr><tr><td><strong>Entities</strong></td><td>Each noun: fields with plain words, links, guardrails, data binding, the YAML. Empty boxes are highlighted; type into them.</td></tr><tr><td><strong>Links</strong></td><td>A builder for new links and a sentence box for every existing one.</td></tr><tr><td><strong>Logic</strong></td><td>Metrics and functions as cards: the recipe, the owner, the caveat, the file, the metric's <code>basis</code>, and its grade chip (grey ungraded, amber proposed, blue accepted, green checked, amber ✎ changed since graded) with Looks right or Mark as checked…. Data bindings, glossary words (on the entity, "People also say") and guardrails carry the same chip.</td></tr><tr><td><strong>Guardrails</strong></td><td>Every rule grouped by what it applies to, a builder that writes the expression, the expression one click away.</td></tr><tr><td><strong>Actions</strong></td><td>What agents may do, with a try-it form that runs the same check an agent runs.</td></tr><tr><td><strong>How to use it</strong></td><td>The questions this space can answer now, which tool answers each, and Try-it buttons.</td></tr><tr><td><strong>Map</strong></td><td>The whole shape, by domain, with what to do next on the right: definitions written by agents and not reviewed, and ones changed since a person graded them, come first; ungraded ones get a Vouch for all button.</td></tr><tr><td><strong>Agents</strong></td><td>Proposals waiting for review (an agent's reported check gets its own card: "Yes, mark as checked"), Written by agents, not reviewed (with Looks right), the activity log, connect commands, the tool list with a Call-it-from-here box.</td></tr><tr><td><strong>History</strong></td><td>Every change to the space, newest first: who (agent or person), when, what. Show gives the diff; Undo puts it back through the compiler check.</td></tr><tr><td><strong>Data &amp; SQL</strong></td><td>One read-only SQL door across the ontology tables and any readable source, for engineers.</td></tr><tr><td><strong>Files</strong></td><td>Every YAML file with a note on what its folder is for; <code>trust.yaml</code> is shown to read, never to edit ("Who stands behind what. Written by Lorefile."). Where a space is read-only (a shipped example, or a server without <code>--allow-edit</code>), every Edit YAML button on the page becomes View YAML: the file opens to read, copy, or jump to here.</td></tr><tr><td><strong>Settings</strong></td><td>Your name (kept in the browser, shown on what you accept and check), history on or off and why, Share this space (any git address) with Push and Pull, what this server runs with, how agents connect (the stdio and HTTP commands, token masked, Copy), Sign out, and Export for other tools (Apache Ossie; OWL, SKOS and SHACL as Turtle or JSON-LD).</td></tr></tbody></table></div>
+<h2 id="what-an-agent-can-ask">What an agent can ask</h2>
+<div class="tbl"><table><thead><tr><th>The person says</th><th>The agent calls</th><th>What comes back</th></tr></thead><tbody><tr><td>What is an Order, and what do we track about it?</td><td><code>describe("Order")</code></td><td>Fields in plain words, links, guardrails, where the rows live</td></tr><tr><td>What does "basket" mean here?</td><td><code>describe("basket")</code></td><td>The entity it means</td></tr><tr><td>What was success yesterday?</td><td><code>describe("success")</code>, then the data MCP</td><td>The recipe, its <code>basis</code> and its grade, then the number from the real rows</td></tr><tr><td>How sure are you about that ROAS?</td><td><code>describe("blended_roas")</code></td><td><code>trust.say</code>: "Unverified: an agent proposed this definition on 24 Nov and no person has reviewed it."</td></tr><tr><td>Shopify says 412 too; note that we checked it</td><td><code>propose_patch(record_check)</code></td><td>Queued; a person confirms it in the page and it becomes checked in their name</td></tr><tr><td>Where does Campaign data live?</td><td><code>where_is("Campaign")</code></td><td>Server, tool and params, or warehouse and table, and whether it is readable here</td></tr><tr><td>Can I cancel order ORD-1007?</td><td><code>constraints_for</code>, <code>validate</code></td><td>pass, warn, blocked or unknown, with reasons and the approver</td></tr><tr><td>Run the forecast for a £40k week</td><td><code>describe("forecast_success")</code>, then the measurement MCP</td><td>The contract, then the forecast</td></tr><tr><td>Remember that "cart" means Order</td><td><code>propose_patch(add_term)</code></td><td>Written, or queued for a person</td></tr><tr><td>Which spaces do you have?</td><td><code>spaces</code></td><td>One line per brand with what it holds</td></tr></tbody></table></div>
+<h2 id="standards-ossie-owl-skos-shacl">Standards: Ossie, OWL, SKOS, SHACL</h2>
+<p>The YAML is Lorefile's own format, because agents write it, people read it and git diffs it. It also speaks the two families of standards the industry uses, both ways, so a company starts from what it already has and nothing is locked in. <a href="docs/standards-explained.md">docs/standards-explained.md</a> explains all of this with one order, start to finish.</p>
+<p><strong>Every thing has an IRI</strong>, a standard identity written like a web address. Without you doing anything it is the space's namespace plus the name (<code>https://lorefile.dev/ns/lumen-ecommerce#Order</code>); set <code>namespace:</code> in <code>ontology.yaml</code> to use your own. To say "our Order is schema.org's Order", write <code>iri: schema:Order</code> on the entity; fields, links, glossary words, guardrails and actions take <code>iri:</code> too. Common prefixes (<code>schema</code>, <code>owl</code>, <code>skos</code>, <code>foaf</code> …) are built in, and <code>prefixes:</code> in <code>ontology.yaml</code> adds yours. The compiler resolves every IRI and refuses one IRI on two things (E016) and a prefix nobody declared (E017); fields of different entities may share one, which is how <code>schema:name</code> is reused. <code>describe</code> shows each IRI; the summary names the namespace.</p>
+<p><strong>Apache Ossie</strong> is the semantic-layer world: Snowflake, dbt, Cube, Atlan, DataHub, Collibra and NVIDIA's Auto Ontology read and write it.</p>
+<pre><code>lorefile export --ossie --dir spaces/brand-one --out ossie/
+lorefile import --from-ossie sales.semantic_model.yaml --ontology sales.ontology.yaml --mapping sales.mapping.yaml --into spaces/sales --report</code></pre>
+<p>Entities with a table become datasets, fields become fields, metrics become SQL, links with key columns become joins, every entity becomes a concept carrying its IRI, and each link's sentence becomes a verbalization. Guardrails, actions, functions, sources, owners and anything else Ossie has no word for ride in a <code>lorefile</code> extension that Ossie readers must keep, so an export imported back is identical. Ossie's own validator accepts the exports of the examples; the packs' exports have no datasets, because their entities come from MCP tools, and the export says so.</p>
+<p><strong>OWL, SKOS and SHACL</strong> are the W3C's ontology world: Protégé, GraphDB, Stardog, TopBraid and LinkML read them, and so does any company's existing ontology file.</p>
+<pre><code>lorefile export --rdf --dir spaces/brand-one --out brand-one.ttl          # or --format jsonld | ntriples | rdfxml
+lorefile import --from-rdf acme-business.owl --into spaces/acme --report
+lorefile import --from-rdf schemaorg.ttl --only schema:Order,schema:Product --depth 1 --into spaces/shop</code></pre>
+<div class="tbl"><table><thead><tr><th>You can export and import</th><th>As</th></tr></thead><tbody><tr><td>The space</td><td>an <code>owl:Ontology</code>, with its namespace and prefixes</td></tr><tr><td>Entities</td><td>OWL classes with a label and a comment; glossary words as <code>skos:altLabel</code></td></tr><tr><td>Fields</td><td>OWL datatype properties with an XSD type</td></tr><tr><td>Links</td><td>OWL object properties with the sentence as their comment, functional when many-to-one</td></tr><tr><td>How each entity uses its fields and links</td><td>one SHACL shape per entity: name, order, datatype, required (<code>sh:minCount 1</code>), allowed values (<code>sh:in</code>), at most one</td></tr><tr><td>Guardrails</td><td>SHACL shapes with severity and message. Simple rules (allowed values, required, a number range) are real SHACL checks; every rule also travels as its CEL text in <code>lorefile:cel</code>. A guardrail an action checks is exported switched off (<code>sh:deactivated</code>), naming the action, so a SHACL tool does not flag every delivered order for a cancel rule</td></tr><tr><td>Actions, metrics, functions, sources, owners, data bindings</td><td>a small <code>lorefile:</code> vocabulary in the same graph: other tools store it, Lorefile reads it back</td></tr><tr><td>Grades (<code>trust.yaml</code>)</td><td><code>lorefile:trust lorefile:Checked</code> (or <code>Accepted</code>, <code>Proposed</code>) on the graded thing, <code>lorefile:bindingTrust</code> on an entity for its data binding, and a record that is also a PROV-O <code>prov:Activity</code>: <code>prov:wasAssociatedWith</code> the person or agent, <code>prov:endedAtTime</code>, <code>prov:used</code> the thing and the source it was checked against, the note as <code>rdfs:comment</code>. In Ossie the whole of <code>trust.yaml</code> rides in the <code>lorefile</code> extension, and a proposed metric or dataset also says "Unverified: …" in <code>ai_context.instructions</code>, where other tools' AI reads it</td></tr></tbody></table></div>
+<p>Coming in from another tool's file, classes become entities, datatype properties fields, object properties links, <code>owl:hasKey</code> the key, <code>skos:altLabel</code> glossary words, and SHACL property shapes guardrails (<code>sh:minCount</code>, <code>sh:in</code>, ranges, lengths and patterns become CEL). A class hierarchy (<code>rdfs:subClassOf</code>) becomes a tag, because Lorefile has no sub-kinds yet. Statements that exist only for reasoning engines are counted and dropped, and SHACL that has no CEL form (SPARQL, <code>sh:or</code> …) is listed for a person. <code>--report</code> says what was guessed, dropped or kept. Like every import, nothing is written unless the result compiles, and no existing file is overwritten. Lorefile has no reasoner and no triple store: the Turtle is just a file.</p>
+<p>An import starts with every definition ungraded, whatever grades the file claims: a grade is a statement by this team about this copy. The report says how many arrived with a grade, and how many claims it could not read. An object in the file that asks to be written as <code>trust.yaml</code> is never written there. <code>--keep-grades</code> brings back the grades of a team's own export where each still matches its definition, and lists the ones dropped.</p>
+<h2 id="reference">Reference</h2>
+<h2 id="the-file-format">The file format</h2>
+<pre class="wire"><code>ontology/
+├── ontology.yaml          # name, version, domains; optional namespace and prefixes for IRIs
+├── glossary.yaml          # &quot;vendor&quot; means Supplier
+├── sources/*.yaml         # connections: csv, parquet, duckdb, postgres, s3 read here; snowflake/… declared; mcp points at another MCP server
+├── types/*.yaml           # one type per file, or a `types:` list
+├── relationships/*.yaml   # relationships with their own properties / edge tables
+├── constraints/**/*.yaml  # rules, grouped however you like
+├── actions/*.yaml         # what agents may do, and which rules are checked
+├── trust.yaml             # who stands behind each definition; written by Lorefile only
+└── data/*.csv|*.parquet   # optional local rows for csv / parquet sources</code></pre>
+<p>Files are classified by their keys, not their folder, so organise them however suits your team.</p>
+<h3 id="a-type">A type</h3>
+<pre><code>type: Supplier
+description: A company we buy parts from. Tier 1 is strategic and audited yearly.
+properties:
+  supplier_id: { type: string, key: true, description: &quot;ERP vendor number&quot; }
+  tier:        { type: enum, values: [1, 2, 3] }
+  status:      { type: enum, values: [approved, probation, suspended] }
+  lead_time_days: integer
+relationships:
+  located_in: { to: Region, cardinality: many-to-one }
+source:
+  connection: erp_files
+  table: suppliers
+  key: supplier_id
+owner: procurement@acme.example</code></pre>
+<h3 id="iris">IRIs</h3>
+<p>Optional everywhere. <code>ontology.yaml</code> may set the base every derived IRI starts with, and short names for other vocabularies:</p>
+<pre><code>name: acme-supply-chain
+namespace: https://ontology.acme.example/supply#     # ends in # or /; default https://lorefile.dev/ns/&lt;name&gt;#
+prefixes:
+  fibo: https://spec.edmcouncil.org/fibo/ontology/   # schema, owl, rdfs, xsd, skos, sh, dcterms, foaf are built in</code></pre>
+<p>An entity, field, link, glossary term, guardrail or action may then name its own identity, absolute or <code>prefix:local</code>:</p>
+<pre><code>type: Supplier
+iri: schema:Organization
+properties:
+  name: { type: string, iri: schema:legalName }</code></pre>
+<p>Without <code>iri:</code>, an entity is <code>&lt;namespace&gt;Supplier</code>, a field <code>&lt;namespace&gt;Supplier.name</code>, a link <code>&lt;namespace&gt;Supplier.located_in</code>, a guardrail <code>&lt;namespace&gt;SC-041</code>, an action <code>&lt;namespace&gt;switch_supplier</code> and a glossary term <code>&lt;namespace&gt;term.vendor</code>.</p>
+<h3 id="a-rule">A rule</h3>
+<p>Rules are <a href="https://cel.dev">CEL</a> expressions. <code>A implies B</code> is accepted as sugar for <code>!(A) || (B)</code>.</p>
+<pre><code>constraints:
+  - id: SC-041
+    name: Safety-critical parts need tier-1 suppliers
+    applies_to: supplies          # a relationship: rule sees `supplier` and `part`
+    rule: part.safety_critical == true implies supplier.tier == 1
+    severity: block               # block | warn | info
+    rationale: ISO 26262 and customer contract clause 14.2.</code></pre>
+<p>What a rule can see depends on <code>applies_to</code>:</p>
+<div class="tbl"><table><thead><tr><th>applies_to</th><th>Variables available</th></tr></thead><tbody><tr><td>a type, e.g. <code>Supplier</code></td><td>its properties as top-level names (<code>tier</code>, <code>status</code>), plus <code>self</code></td></tr><tr><td>a relationship, e.g. <code>supplies</code></td><td><code>supplier</code>, <code>part</code> (snake_case of the two type names), plus <code>from</code>, <code>to</code></td></tr><tr><td>an action, e.g. <code>switch_supplier</code></td><td>each action input by name (<code>part</code>, <code>from</code>, <code>to</code>)</td></tr></tbody></table></div>
+<h3 id="a-metric">A metric</h3>
+<pre><code># logic/measurement.yaml
+metrics:
+  - metric: success                 # the conventional name for the one number the business is run on
+    description: Paid orders. Not sessions, not the conversions the ad platforms report.
+    source:
+      connection: shop_bigquery     # a source under sources/ …
+      table: orders                 # … and a table, or `tool:` + `params:` for an MCP source
+      filter: status in (&#x27;paid&#x27;, &#x27;fulfilled&#x27;)
+      measure: count distinct order_id
+    grain: day
+    basis: transactional            # transactional | attributed | modelled | experimental (optional)
+    owner: growth@lumenhome
+    caveats: Platform conversions are attributed, not the same thing; compare, never add.
+  - metric: paid_performance
+    variants:                       # one definition per condition
+      - when: channel == &quot;meta&quot;
+        source: { connection: meta_ads, tool: get_insights, params: { level: campaign } }</code></pre>
+<p>A metric is a named number with its definition, where it comes from and who owns it, so every agent computes it the same way tomorrow. A <strong>function</strong> in the same folder is an operation an agent can run: typed inputs and outputs plus <code>runs: {kind: mcp, server, tool, args}</code> (or <code>http</code> with a <code>url</code>, or <code>manual</code>). The ontology never runs it; the agent reads the contract and calls the tool with its own login. <code>examples/ecommerce/logic/forecast.yaml</code> points <code>forecast_success</code> at the budget optimiser of the marketing-measurement MCP the example declares as a source. <code>success</code> is the same name in every space: a store counts purchases, a SaaS product counts trials, a B2B company counts qualified opportunities. <code>summary</code> lists metrics, <code>describe</code> gives the full recipe, and the Logic step of the page shows them. Derived fields and functions follow in the same folder.</p>
+<p><code>basis:</code> says what kind of number a metric is: <code>transactional</code> (counted from the business's own records), <code>attributed</code> (credit a platform or rule assigns to a channel), <code>modelled</code> (an estimate from a model) or <code>experimental</code> (read from a controlled test). A variant may set its own, which wins. It is optional and nothing warns when it is absent; agents are told never to add numbers of different basis.</p>
+<h3 id="who-stands-behind-what-trust-yaml">Who stands behind what: <code>trust.yaml</code></h3>
+<pre><code># trust.yaml · who stands behind what in this space.
+trust:
+  metrics:
+    success: { grade: checked, by: &quot;Priya via page&quot;, at: &quot;2026-11-28&quot;, of: &quot;3f9a1c2e70b4&quot;, against: &quot;shop_bigquery&quot;, note: &quot;412 paid orders for 16–22 Nov, the same as Shopify&#x27;s own report&quot; }
+    blended_roas: { grade: proposed, by: &quot;agent via MCP&quot;, at: &quot;2026-11-24&quot;, of: &quot;9d02b7c15a11&quot; }
+  bindings:
+    Order: { grade: accepted, by: &quot;person via page&quot;, at: &quot;2026-11-26&quot;, of: &quot;77b0e1aa0c3d&quot; }</code></pre>
+<p>One line per graded thing, under <code>metrics</code>, <code>bindings</code> (by entity name), <code>terms</code> and <code>guardrails</code>. <code>of</code> is a fingerprint of the definition as compiled (comments, spacing and key order do not count; a binding's covers the entity's name, key and <code>source:</code> block). A metric's and a binding's also cover the definition of each source they read, without its description, so pointing <code>shop_bigquery</code> at another project or dataset stops the grade of everything that reads it; a word written twice is graded as one thing, every meaning counted. A definition edited behind the grade's back stops counting. The save gate writes it in the same commit as the facts: an agent's save is <code>proposed</code>, a person's edit or Accept is <code>accepted</code>, a person changing only the words of a checked metric (description, caveats, owner, tags) keeps it checked, and changing the recipe makes it accepted again. Agents cannot write the file (<code>propose_change</code> refuses it, edits on or off), and a <code>grade:</code> key typed into a fact file is an unknown key. Undo puts the file back with the facts. A copy of a space leaves it behind; imports start ungraded unless <code>--keep-grades</code>. <code>summary</code> gains one Trust line and marks proposed (UNVERIFIED) and checked lines; <code>describe</code> returns <code>trust</code> with a ready sentence (<code>say</code>); <code>where_is</code> returns the binding's <code>trust</code>; <code>validate</code> keeps its verdicts and adds an <code>unverified</code> list, and <code>grade</code> on each rule result once the space has a <code>trust.yaml</code>. It grades definitions, never answers; it is as tamper-proof as the repository's review.</p>
+<h3 id="an-action">An action</h3>
+<pre><code>action: switch_supplier
+description: Move a Part from one approved Supplier to another.
+inputs: { part: Part, from: Supplier, to: Supplier }
+effects:
+  - remove: { relationship: supplies, from: from, to: part }
+  - create: { relationship: supplies, from: to, to: part }
+checks: [SC-041, SC-042, SC-043]
+requires_approval_from: Procurement Lead</code></pre>
+<p><code>validate</code> evaluates every rule in <code>checks</code>, every rule whose <code>applies_to</code> is the action, and binds relationship rules to the edges the action <code>create</code>s.</p>
+<h2 id="data-sources-the-duckdb-door">Data sources: the DuckDB door</h2>
+<p>The ontology is small and lives in git; the rows are big and live elsewhere. A <code>source</code> says where. Kinds DuckDB reads inside the binary are <strong>readable here</strong>: <code>validate</code> checks real rows, <code>instances</code> lists them, and <code>query</code> joins them. Any other kind (<code>snowflake</code>, <code>bigquery</code>, …) is declared for agents, which fetch the row with their own connector and pass it inline to <code>validate</code>.</p>
+<div class="tbl"><table><thead><tr><th>Kind</th><th>YAML</th><th>What the binary does</th></tr></thead><tbody><tr><td><code>csv</code></td><td><code>path: data</code> (folder)</td><td>Reads <code>data/&lt;table&gt;.csv</code> in plain Rust; also a DuckDB view for SQL</td></tr><tr><td><code>parquet</code></td><td><code>path: data</code> (folder)</td><td><code>read_parquet('data/&lt;table&gt;.parquet')</code>; a table may also be a glob like <code>parts/*.parquet</code></td></tr><tr><td><code>duckdb</code></td><td><code>path: data/erp.duckdb</code> (file)</td><td><code>ATTACH … (READ_ONLY)</code>; table is <code>name</code> or <code>schema.name</code></td></tr><tr><td><code>postgres</code></td><td><code>env: ORDERS_PG_URL</code>, <code>schema: public</code></td><td>Loads the <code>postgres</code> extension and attaches read-only using the libpq connection string in that env var</td></tr><tr><td><code>s3</code> / <code>httpfs</code></td><td><code>path: s3://bucket/prefix</code> or an <code>https://…</code> base</td><td>Loads <code>httpfs</code>; <code>read_parquet('&lt;path&gt;/&lt;table&gt;.parquet')</code></td></tr><tr><td><code>mcp</code></td><td><code>server: meta-ads</code></td><td>Nothing is read here. <code>where_is</code> tells the agent which tool to call on that MCP server, with which params</td></tr></tbody></table></div>
+<pre><code># sources/parquet_files.yaml
+connection: parquet_files
+kind: parquet
+path: data              # Supplier.source.table: suppliers → data/suppliers.parquet</code></pre>
+<pre><code># sources/orders_pg.yaml — credentials never live in the repo
+connection: orders_pg
+kind: postgres
+env: ORDERS_PG_URL      # export ORDERS_PG_URL=&#x27;postgresql://user:pw@host:5432/erp&#x27;
+schema: public</code></pre>
+<pre><code># sources/lake.yaml
+connection: lake
+kind: s3
+path: s3://acme-erp/extracts
+region: eu-west-1       # optional; endpoint / url_style for MinIO or R2
+# credentials: AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_SESSION_TOKEN in the environment,
+# or `credential_chain: true` to use the AWS SDK chain (profiles, SSO, instance roles).</code></pre>
+<pre><code># sources/meta-ads.yaml — the rows live behind another MCP server the agent already has
+connection: meta_ads
+kind: mcp
+server: meta-ads         # the server name as the agent has it configured</code></pre>
+<p>A type binds to a source with <code>source: { connection, table, key, columns }</code>. <code>columns</code> maps property names to column names when they differ; the view renames them so rules and SQL see property names. Relationships bind edge tables the same way with <code>from_key</code> / <code>to_key</code>.</p>
+<p>A type on an <code>mcp</code> source binds with <code>tool</code> and an optional <code>params</code> map instead of a table:</p>
+<pre><code>source:
+  connection: meta_ads
+  tool: get_campaigns
+  params: { account_id: &quot;act_&lt;Account.account_id&gt;&quot;, limit: 100 }</code></pre>
+<p><code>where_is("Campaign")</code> then answers <code>readable_here: false</code> with <code>server</code>, <code>tool</code>, <code>params</code> and a <code>hint</code> that spells out the call: "Call tool <code>get_campaigns</code> on the <code>meta-ads</code> MCP server with params {…}". The agent fetches the row there and passes it inline to <code>validate</code>. The validator requires <code>server</code> on every <code>kind: mcp</code> source (E011) and a <code>tool</code> on every type bound to one (E012). This is how the <a href="#packs">packs</a> work.</p>
+<p><strong>What SQL sees.</strong> <code>query</code> runs DuckDB SQL over:</p>
+<ul>
+<li>the ontology as tables: <code>nodes</code> (types), <code>properties</code>, <code>edges</code> (relationships), <code>constraints</code> (rules), <code>actions</code>, <code>sources</code>;</li>
+<li>one view per readable type or relationship, named after it: <code>Supplier</code>, <code>Part</code>, <code>supplies</code>, … Inline <code>instances:</code> become small tables too.</li>
+</ul>
+<pre><code>-- which rules govern each type, and how many rows each type has
+select n.name, n.source_kind, c.id, c.severity
+from nodes n join constraints c on c.applies_to = n.name
+where n.readable_here order by 1, 3;
+
+-- rules joined to rows: tier-1 suppliers that break the lead-time warning
+select s.name, s.lead_time_days, c.id
+from Supplier s join constraints c on c.id = &#x27;SC-042&#x27;
+where s.tier = 1 and s.lead_time_days &gt; 30;</code></pre>
+<p>Rules of the door: exactly one <code>SELECT</code> or <code>WITH</code> statement (anything else is rejected before DuckDB sees it), sources are attached read-only, results are capped at 500 rows, and dates, timestamps, decimals and nested values come back as JSON strings, numbers and arrays. Column discovery: <code>select * from information_schema.columns where table_name = 'Supplier'</code>, or the <code>tables</code> tool. The <code>postgres</code>, <code>httpfs</code> and <code>aws</code> extensions are downloaded from extensions.duckdb.org the first time they are needed (about 20 MB, cached in <code>~/.duckdb</code>); <code>parquet</code> and <code>json</code> are compiled in. A SELECT can still read any file the process can read (<code>read_csv('/etc/hosts')</code>), so treat <code>serve</code> as a local tool: it binds to 127.0.0.1 only.</p>
+<p><strong>Build notes.</strong> DuckDB is compiled from source by the <code>duckdb</code> cargo feature, on by default. On a 12-core Apple Silicon Mac with rustc 1.87: <code>cargo build</code> 2m50s and <code>cargo build --release</code> 2m57s from a clean checkout (DuckDB's C++ is the bulk of both; incremental rebuilds of this crate take seconds). The release binary grows from about 6 MB to about 40 MB, and still starts and answers a <code>check</code> in under 50 ms. <code>cargo build --no-default-features</code> gives a small CSV-only binary in under a minute, with <code>query</code> reporting that it was built without DuckDB. The crate pins <code>rust-version = "1.87"</code> with <code>resolver = "3"</code> so cargo picks dependency versions that compile on that toolchain (<code>duckdb</code> 1.10506 = DuckDB v1.5.6; <code>uuid</code> is pinned in <code>Cargo.lock</code> for the same reason). No system DuckDB is needed; if the bundled C++ build ever fails on a platform, <code>libduckdb-sys</code> also supports linking a system library via <code>pkg-config</code>.</p>
+<p>DuckDB is <strong>fenced</strong>, always: once a space's views are built, the catalog may touch only the folders those views read from, external access is switched off and the configuration is locked, so a <code>query</code> cannot read other files on the machine, install extensions or reach the network. A space whose fence cannot be set gets no SQL door at all. That is why the door reads only local files (csv, parquet, <code>.duckdb</code>): Postgres, S3 and HTTP sources are declared so <code>where_is</code> can point at them, and agents read them with their own connectors.</p>
+<h2 id="the-web-page">The web page</h2>
+<p><code>lorefile serve --dir ./ontology</code> opens a guided workspace at http://127.0.0.1:7070. It is organised around putting the ontology in place, not around the data model:</p>
+<ul>
+<li><strong>Build</strong>, five steps with live status: <strong>Sources</strong> (where the rows live), <strong>Entities</strong> (each type with a plain-English description, its fields, links, guardrails, data and YAML), <strong>Links</strong> (a relationship builder and one sentence per link), <strong>Logic</strong> (metrics: what counts and where the number comes from; functions: what can be run and which tool does it), <strong>Guardrails</strong> (rules grouped by what they apply to, a builder that writes the expression for you, and the expression itself one click away), <strong>Actions</strong> (what agents may do, with a try-it form that runs the same <code>validate</code> an agent runs).</li>
+<li><strong>Use</strong>: <strong>Map</strong> (the whole shape, with what to do next computed from the gaps), <strong>Agents</strong> (the MCP tools, connect commands, an inbox of changes agents proposed, and an activity log), <strong>Data &amp; SQL</strong> (DuckDB over the ontology and every readable source).</li>
+<li>One vocabulary, three places: an <strong>entity</strong> on the page is a <code>type:</code> block in YAML and a type to the MCP tools (<code>describe</code>, <code>neighbors</code>). The page uses the plain word; the files and the tools keep the short one.</li>
+<li><strong>Use</strong>: <strong>How to use it</strong> (the questions an agent can now answer about this space, which tool answers each, and a Try-it button that runs it), <strong>Map</strong>, <strong>Agents</strong>, <strong>History</strong> (every change, Show and Undo), <strong>Data &amp; SQL</strong>, <strong>Files</strong> (every YAML file, with a note on what each folder is for) and <strong>Settings</strong> (history and sharing: Share to any git address, Push, Pull; what this server runs with; how agents connect over stdio or HTTP; Sign out; Export for other tools: Apache Ossie, and OWL, SKOS and SHACL as Turtle or JSON-LD).</li>
+<li>A readiness meter in the header rises as fields get words, links get sentences and entities get tables.</li>
+</ul>
+<h3 id="editing-from-the-page">Editing from the page</h3>
+<p>Start the server with <code>--allow-edit</code> and every description box, link sentence, builder and "Edit YAML" button writes a file. Each change is a small operation (<code>POST /api/patch</code>: describe a field, describe a link, add a link, add a guardrail, create a thing, bind a table) that becomes the full new text of one YAML file and goes through the same compiler check as any other write: errors refuse the save and are shown, warnings are allowed. Guardrails are appended as text, so their file keeps its comments; type files are rewritten through the YAML library, which keeps key order but drops comments in that one file. Each accepted change is committed when the space's history is its own (its repository is the space folder or the folder of spaces, which is how a new space starts); a space nested inside another project's repository stays uncommitted for <code>git diff</code> unless the server runs with <code>--commit-edits</code>. <code>--no-commit-edits</code> never commits.</p>
+<p>Without <code>--allow-edit</code> the page is read-only and says so. The login is one shared token, not accounts: on anything reachable from the internet, put HTTPS in front and think about who holds the token before turning edits on (<a href="PRODUCTION.md">PRODUCTION.md</a>).</p>
+<h3 id="proposals-from-agents">Proposals from agents</h3>
+<p>An agent calls <code>propose_patch</code> with one small fact (<code>add_source</code>, <code>add_type</code>, <code>set_source</code>, <code>add_metric</code>, <code>add_function</code>, <code>add_term</code>, <code>set_property_description</code>, <code>add_relationship</code>, <code>add_constraint</code> and the other page operations, or <code>record_check</code> to report a check, which is always queued), or with <code>ops: [...]</code> for several that depend on each other, planned in order and queued as one proposal with every file in it; or <code>propose_change</code> with the full new text of one file, plus a reason. The server's instructions tell agents to offer this the moment the user settles a definition during their work: which event counts as success and where it comes from, which table or tool holds an entity's rows, what a word means. That is the loop: the first report writes the definition down, and the next day's question runs the same way for everyone. When the server allows edits and the change is clean, it is written and logged, and graded proposed; a change to something a person accepted or checked is queued instead. Otherwise it is queued under <code>&lt;ontology&gt;/.lorefile/proposals/</code> and shows up on the Agents page with a diff, where a person accepts or sets it aside; accepting writes it through the same checked path. Activity (who changed or proposed what, when) is kept in <code>&lt;ontology&gt;/.lorefile/activity.jsonl</code>. The <code>.lorefile/</code> folder is local state and is ignored by git.</p>
+<h3 id="spaces-one-server-many-ontologies">Spaces: one server, many ontologies</h3>
+<p>Point <code>serve</code> or <code>mcp</code> at a folder that has no <code>ontology.yaml</code> of its own and every sub-folder with one becomes a <strong>space</strong>: one ontology per brand, business unit or client. The page gets a picker at the top; each space has its own URL (<code>/s/brand-two/</code>), API (<code>/s/brand-two/api/…</code>), DuckDB catalog, proposals inbox and activity log. With <code>--allow-edit</code>, "＋ New space…" creates one as blank, from the starter, or as a copy of any other space.</p>
+<pre><code>lorefile serve --dir ./spaces --allow-edit     # spaces/brand-one, spaces/brand-two, …
+lorefile validate --dir ./spaces               # checks every space (for CI)
+lorefile describe Campaign --dir ./spaces --space brand-two</code></pre>
+<p>The examples and packs ship inside the binary and are listed as read-only spaces whose ids start with <code>@</code> (<code>@ecommerce</code>, <code>@supply-chain-parquet</code>, <code>@meta-ads</code>), so you can open one to see how it is done and copy it. They are written out under <code>&lt;dir&gt;/.lorefile/examples/</code> at start (that folder hides itself from git); <code>--no-examples</code> leaves them out.</p>
+<p>Over MCP, agents name the space in each call. With exactly one space of yours it is implied; with several, every tool takes <code>space:</code> (the tool list names them) and a <code>spaces</code> tool describes each one. <code>mcp --space brand-two</code> dedicates a server to one space. Resource URIs carry the space too: <code>ontology://brand-two/summary</code>.</p>
+<h2 id="cli">CLI</h2>
+<pre><code>lorefile validate              compile and report errors / warnings (exit 1 on errors)
+lorefile summary               the Markdown agents load into context
+lorefile describe &lt;name&gt;       type / relationship / action / rule / source
+lorefile search &lt;words&gt;
+lorefile neighbors &lt;type&gt; --depth 2
+lorefile path &lt;from&gt; &lt;to&gt;
+lorefile rules &lt;name&gt;
+lorefile where &lt;type&gt;
+lorefile instances &lt;type|relationship&gt;
+lorefile check &lt;action&gt; k=v …  exit 2 when blocked
+lorefile query &quot;&lt;sql&gt;&quot;         one read-only SELECT/WITH via DuckDB (--limit, max 500; `-` reads stdin)
+lorefile tables                what SQL can see: ontology tables, data views, bindings not attached
+lorefile mcp [--allow-edit]    MCP server on stdio; --allow-edit lets propose_patch and propose_change write
+lorefile serve --port 7070 [--allow-edit] [--commit-edits | --no-commit-edits] [--token T | --no-auth]
+                               web page, JSON API and MCP over HTTP at /mcp, behind the login token
+lorefile init [path]           starter ontology, with its own git history when it is not inside a repository
+lorefile trust                 every metric, data binding, word and guardrail, grouped by grade
+lorefile trust accept &lt;name&gt; [--all] [--by NAME]                   a person stands behind it (--all: every ungraded one)
+lorefile trust check &lt;name&gt; --against &lt;source&gt; --note &quot;…&quot; [--by NAME]   you ran it against real rows and it was right
+lorefile export --ossie [--out &lt;folder&gt;|&lt;file&gt;.json]          Apache Ossie: semantic model, ontology, mapping
+lorefile export --rdf [--format turtle|jsonld|ntriples|rdfxml] [--out &lt;file&gt;]   OWL, SKOS and SHACL
+lorefile import --from-ossie &lt;semantic model&gt; [--ontology F] [--mapping F] --into &lt;folder&gt; [--report] [--keep-grades]
+lorefile import --from-rdf &lt;file&gt; [--into &lt;folder&gt;] [--only A,B] [--depth N] [--report] [--keep-grades]</code></pre>
+<p><code>--dir</code> picks the folder (defaults to <code>./ontology</code>, then <code>.</code>): an ontology folder, or a folder of spaces. <code>--space &lt;id&gt;</code> picks a space when there are several (<code>@…</code> for a shipped example); <code>--no-examples</code> leaves the shipped ones out. <code>--json</code> switches any command to machine output.</p>
+<h2 id="tests">Tests</h2>
+<p><code>cargo test</code> runs 95 tests in these layers: unit tests inside the modules (paths that cannot escape the folder, the save gate, the DuckDB fence, spaces, patch operations, history, IRI resolution, CEL to SHACL, and grades: proposed, accepted and checked through the gate, a hand edit giving W113, Undo taking a grade back, two saves at once both landing their grade), <code>tests/mcp_loop.rs</code> (the real binary over stdio: an agent lists tools, reads the summary, saves a metric with <code>propose_patch</code>, and the save is queued in words, or written and committed when edits are allowed), <code>tests/mcp_http.rs</code> (the same over HTTP with the token, and 401 without it), <code>tests/http.rs</code> (the server: the login, write headers, a stale proposal, read-only examples, and History, Undo, Share, Push and Pull against a bare repository, no network), <code>tests/cli.rs</code> (every example and pack compiles with no errors and no warnings, and the documented commands answer), <code>tests/ossie.rs</code> (every example and pack through Ossie and back, unchanged; Ossie's own example files import) and <code>tests/rdf.rs</code> (every example and pack through Turtle and back, unchanged; JSON-LD, N-Triples and RDF/XML carry the same graph; a slice of schema.org imports; a SHACL shape becomes a guardrail that <code>check</code> enforces; one IRI on two things is an error), and for grades: an agent can neither write <code>trust.yaml</code> nor overwrite an accepted binding, a reported check waits for a person's click, and grades travel in Turtle (as PROV-O) and Ossie and come back only with <code>--keep-grades</code>. <code>.github/workflows/ci.yml</code> runs the same on every push, then <code>cargo clippy -- -D warnings</code>. A <code>.mcp.json</code> in the repository gives any Claude Code session opened here the ontology MCP server, pointed at <code>spaces/</code>.</p>
+<h2 id="validation-codes">Validation codes</h2>
+<div class="tbl"><table><thead><tr><th>Code</th><th>Meaning</th></tr></thead><tbody><tr><td>E001</td><td>A YAML file did not parse</td></tr><tr><td>E002</td><td>Duplicate type, rule id, action, or source</td></tr><tr><td>E003</td><td>Relationship points to an unknown type</td></tr><tr><td>E004</td><td>Rule <code>applies_to</code> is not a type, relationship, or action</td></tr><tr><td>E005–E007</td><td>Action input type, check id, or effect relationship unknown</td></tr><tr><td>E008</td><td>Unknown connection</td></tr><tr><td>E009</td><td>Rule does not parse</td></tr><tr><td>E010</td><td>A domain in <code>ontology.yaml</code> lists an unknown type</td></tr><tr><td>E011</td><td><code>kind: mcp</code> source has no <code>server</code></td></tr><tr><td>E012</td><td>Type or metric binding has no <code>table</code> (or no <code>tool</code>, for an <code>mcp</code> source)</td></tr><tr><td>E013</td><td>Metric says nothing about where it comes from (no <code>source</code>, <code>variants</code> or <code>sql</code>)</td></tr><tr><td>E014</td><td>Function <code>runs</code> is incomplete, or names an MCP server no <code>kind: mcp</code> source declares</td></tr><tr><td>E015</td><td>One name, two kinds (a metric or function named like an entity or action)</td></tr><tr><td>E016</td><td>One IRI names two things (fields of different entities may share one)</td></tr><tr><td>E017</td><td>An IRI, namespace or prefix that does not resolve (an undeclared prefix, a namespace not ending in <code>#</code> or <code>/</code>)</td></tr><tr><td>E018</td><td>A grade in <code>trust.yaml</code> that makes no sense: <code>checked</code> without <code>against</code>, <code>by</code> or <code>at</code>, <code>against</code> that is no source, a word marked checked, an empty <code>of</code></td></tr><tr><td>W101</td><td>Missing description</td></tr><tr><td>W109</td><td>Metric has no owner</td></tr><tr><td>W111</td><td>Function does not say where it runs</td></tr><tr><td>W102</td><td>Blocking rule without a rationale</td></tr><tr><td>W103</td><td>Type bound to data but no <code>key: true</code> property</td></tr><tr><td>W104</td><td>Rule references a name not available on its <code>applies_to</code></td></tr><tr><td>W105</td><td>An enum with no <code>values</code></td></tr><tr><td>W106</td><td>CSV / Parquet / DuckDB file not found</td></tr><tr><td>W107</td><td>An action's effect runs a link the wrong way round for its inputs</td></tr><tr><td>W108</td><td>A glossary term means something that does not exist</td></tr><tr><td>W112</td><td>Two things get the same derived IRI; set <code>iri:</code> on one</td></tr><tr><td>W113</td><td>A graded definition changed since it was graded; a person has to accept it again</td></tr><tr><td>W114</td><td><code>trust.yaml</code> grades something that no longer exists</td></tr></tbody></table></div>
+<h2 id="packs">Packs</h2>
+<p>An ontology pack is a ready-made folder for one data source an agent already has an MCP server for. The data MCP returns rows; the pack says what they mean, which rules apply, and what the rows cannot tell you. Load both in the same agent. Each pack has a <code>README.md</code> with the Claude Desktop config and three worked questions, a <code>sources/&lt;server&gt;.yaml</code> of <code>kind: mcp</code>, and validates with zero errors and zero warnings.</p>
+<div class="tbl"><table><thead><tr><th>Pack</th><th>Types</th><th>Rules</th><th>Actions</th><th>What it fixes</th></tr></thead><tbody><tr><td><a href="packs/meta-ads"><code>packs/meta-ads</code></a></td><td>Account, Campaign, AdSet, Ad, Creative, Audience, Placement, Insight, Conversion, AttributionWindow, LiftStudy, BudgetChange</td><td>16</td><td>pause_campaign, change_budget, create_lookalike, read_performance, compare_conversions</td><td>Conversions are attributed counts under one window (7-day click, 1-day view by default), booked on the click day, modelled and late on iOS; awareness campaigns are not judged on CPA; CBO ad-set budgets are advisory; geo breakdowns stop at region/DMA and are not incrementality; test cells are frozen</td></tr><tr><td><a href="packs/google-ads"><code>packs/google-ads</code></a></td><td>Account, Campaign, AdGroup, Keyword, Ad, ConversionAction, BiddingStrategy, Audience, GeoTarget, Readout, BudgetChange, TargetChange</td><td>16</td><td>pause_campaign, change_budget, change_bid_target, read_performance, compare_readouts, audit_conversion_action</td><td><code>conversions</code> counts primary actions under each action's model (data-driven by default), by click date; counting rules per category; CPM/CPV strategies are not judged on CPA; geo segments are matched location, not presence; shared budgets and experiment arms</td></tr><tr><td><a href="packs/shopify"><code>packs/shopify</code></a></td><td>Shop, Order, LineItem, Product, Variant, Customer, Fulfillment, Refund, DiscountCode</td><td>15</td><td>cancel_order, refund_order, create_discount_code, attribute_order</td><td>Test and cancelled orders are not revenue; <code>processed_at</code> and the shop currency are the reporting basis; financial versus fulfillment status; <code>source_name</code> is the sales channel, not attribution; codes are proof of use</td></tr></tbody></table></div>
+<pre><code>lorefile validate --dir packs/meta-ads</code></pre>
+<pre><code>lorefile mcp --dir packs/meta-ads</code></pre>
+<p>The three read-out guards (<code>read_performance</code>, <code>compare_conversions</code>, <code>attribute_order</code> and their siblings) are actions with no side effects: an agent calls <code>validate</code> on them before quoting a number, and gets the same block / warn / info verdict it would get before a write. Where a platform detail was uncertain the YAML says <code># TODO verify</code> rather than guessing. Tool names in the bindings follow the common open-source MCP servers for each platform; change <code>tool:</code> in a type file if yours differ.</p>
+<h2 id="roadmap">Roadmap</h2>
+<ol>
+<li><strong>Core</strong> (done) — format, compiler, graph, CLI, MCP, UI, CSV data door.</li>
+<li><strong>Doors</strong> (this) — DuckDB inside the binary: Parquet, <code>.duckdb</code>, Postgres, S3/HTTP; <code>query(sql)</code> and the ontology as SQL tables; SQL box in the UI. Editing from the page and <code>propose_change</code> for agents, both compiler-checked. Still open: MySQL, <code>init --from &lt;db&gt;</code> to draft types from an existing schema, opening a PR from an edit.</li>
+<li><strong>Any MCP is a source</strong> — designed in <a href="ARCHITECTURE.md#17-phase-3-design-any-mcp-is-a-source-the-ontology-keeps-what-matters">ARCHITECTURE.md §17</a>. Step 1 is built: <code>propose_patch</code>, metrics in <code>logic/</code>, the Logic step, the offer-to-save instruction. Still to come: derived fields in <code>logic/</code>; <code>does</code> on actions and <code>mutable: false</code> on entities, checked by <code>validate</code>; a table browser and <code>init --from</code> for warehouses. A hosted version that keeps the one copy with SSO, roles and audit may come later (<a href="BACKLOG.md">BACKLOG.md</a>, "Hosted version, later"). The ontology never executes and never holds credentials.</li>
+<li><strong>Ecosystem</strong> — Apache Ossie and OWL / SKOS / SHACL import and export are built. Next: more packs (TikTok Ads, GA4, Klaviyo), Python/TS SDKs, sub-kinds (<code>extends</code>) so imported class hierarchies stop being tags, LinkML, dbt/LookML import.</li>
+</ol>
+<h2 id="before-the-first-release">Before the first release</h2>
+<p>A note for the maintainer: what has to happen once before <code>npx lorefile</code>, the Docker image and <code>cargo install lorefile</code> work for anyone.</p>
+<ol>
+<li><strong>Create the GitHub org and repository.</strong> The name <code>lorefile/lorefile</code> is written in six places; change them together if it differs: <code>LOREFILE_REPO</code> in <code>.github/workflows/release.yml</code>, <code>DEFAULT_REPO</code> in <code>npm/bin/lorefile.js</code>, <code>repository</code>/<code>homepage</code>/<code>bugs</code> in <code>npm/package.json</code>, <code>DEFAULT_REPO</code> in <code>scripts/install.sh</code>, <code>repository</code>/<code>homepage</code> in <code>Cargo.toml</code>, and the links in <code>npm/README.md</code> (and this file). The npm job refuses to publish if the first three disagree.</li>
+<li><strong>Add the two secrets</strong> in the repository settings: <code>NPM_TOKEN</code> (an npm automation token for the <code>lorefile</code> package) and <code>CARGO_REGISTRY_TOKEN</code> (a crates.io token). Without them those jobs are skipped with a notice and everything else still releases. npm tokens now expire after 90 days at most; trusted publishing (OIDC) would remove both secrets and is in <a href="BACKLOG.md">BACKLOG.md</a>.</li>
+<li><strong>Run the release workflow by hand once</strong> (Actions › release › Run workflow; the button appears once the workflow file is on the default branch) for a dry run: it builds every platform, keeps the archives as workflow artifacts, dry-runs the npm and crates.io publishes and pushes <code>ghcr.io/lorefile/lorefile:edge</code>.</li>
+<li><strong>Make the ghcr.io package public</strong> after that first push: new packages start private (the package's settings on GitHub, Change visibility).</li>
+<li><strong>Push a tag.</strong> Bump <code>version</code> in <code>Cargo.toml</code>, commit, then <code>git tag -a v0.2.0 -m "What changed" &amp;&amp; git push origin v0.2.0</code>. The tag must match <code>Cargo.toml</code>; its message becomes the release notes.</li>
+</ol>
+<h2 id="license">License</h2>
+<p>Apache-2.0, see <a href="LICENSE">LICENSE</a>. Use it, change it, host it, sell what you build on it; keep the notice (<a href="NOTICE">NOTICE</a>). Why Apache-2.0 and not MIT, AGPL or a source-available licence is in <a href="PRODUCTION.md#6-licence">PRODUCTION.md</a>.</p>
+<p>Built by the team at Stella.</p></main></div>
+</body>
+</html>

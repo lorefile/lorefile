@@ -29,5 +29,5 @@ source:
   connection: meta_ads
   tool: get_ad_creatives
   params: { ad_id: "<Ad.ad_id>" }
-owner: creative@stella.example
+owner: creative@yourcompany.example
 tags: [meta, structure]

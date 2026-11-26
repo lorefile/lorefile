@@ -1,0 +1,35 @@
+# What an agent can run for Lumen Home, and where. The ontology holds the
+# contract (what goes in, what comes out, which tool does it); the agent makes
+# the call with its own login to that tool. Nothing runs inside the ontology.
+functions:
+  - function: forecast_success
+    description: >
+      Projects revenue and the orders behind it for a total weekly budget over
+      the next N weeks, from Stella's marketing mix model for this account.
+      Run it before moving budget, never after. The optimiser works in revenue;
+      divide by average order value for success (paid orders).
+    inputs: { study_id: string, total_budget: number, weeks: integer }
+    outputs: { forecast: json }
+    runs:
+      kind: mcp
+      server: stella
+      tool: mmm_run_budget_optimizer
+      args: { studyId: "{{study_id}}", totalBudget: "{{total_budget}}", timePeriodWeeks: "{{weeks}}" }
+    may_be_called_by: [growth_agent, analyst]
+    owner: growth@lumenhome
+    caveats: >
+      Asynchronous: the call returns a run that takes two to five minutes;
+      poll it with mmm_refresh_study on the same server until it is done.
+      The study_id is the account's current MMM study (mmm_list_projects
+      shows it). A model output, not a promise: report the confidence
+      intervals with the number.
+  - function: cancel_in_store_admin
+    description: >
+      Cancels an unshipped order in the store admin and triggers the refund.
+      The cancel_order action is the gate: it checks EC-001 (only unshipped
+      orders) and names the approver; this is the operation it leads to.
+    inputs: { order: Order, reason: string }
+    outputs: { refund_reference: string }
+    runs: { kind: manual }
+    owner: support@lumenhome
+    caveats: No Shopify MCP is connected in this example, so a person does it from the store admin. Shipped orders are returns, not cancellations.

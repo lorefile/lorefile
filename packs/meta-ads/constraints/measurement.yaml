@@ -9,7 +9,7 @@ constraints:
       populations, not two measurements of one thing; so are purchases and leads.
       Put both reads under the same window and action type, or report them as two
       numbers that must not be compared.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution]
 
   - id: MA-002
@@ -21,7 +21,7 @@ constraints:
       Since iOS 14.5, conversions from opted-out iOS users are modelled by Meta
       and reported with a delay of up to three days. Any count whose date_stop is
       less than 72 hours old will still grow; say so, or wait.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution, ios]
 
   - id: MA-003
@@ -33,7 +33,7 @@ constraints:
       Meta books a conversion on the day of the click, so a click on the last day
       of the range can still add a purchase six days later. A 7-day-click number is
       provisional until seven days after date_stop.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution]
 
   - id: MA-004
@@ -45,7 +45,7 @@ constraints:
       28-day click, 28-day view and 7-day view were removed in January 2021. A
       count under one of them comes from an old export or a saved report, not from
       the API today, and cannot be reconciled with current numbers.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [attribution]
 
   - id: MA-005
@@ -60,7 +60,7 @@ constraints:
       Meta could connect to ads shown there; they say nothing about how many would
       have happened without the ads. Incrementality by geo needs a geo experiment
       with a holdout, not a breakdown.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [geo, incrementality]
 
   - id: MA-006
@@ -73,7 +73,7 @@ constraints:
       cheapest people to reach, not people likely to convert. Their conversions
       are incidental, so a CPA or ROAS read on them measures the audience, not the
       campaign. Judge them on CPM, reach, frequency and lift.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [kpi]
 
   - id: MA-007
@@ -85,7 +85,7 @@ constraints:
       status is what was set; effective_status is what is happening. ACTIVE with
       WITH_ISSUES or IN_PROCESS means no or broken delivery, which explains zero
       spend better than any performance story does.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [delivery]
 
   - id: MA-008
@@ -98,7 +98,7 @@ constraints:
       unstable, and a budget or targeting edit restarts the learning phase.
       FAIL (learning limited) means it never collected enough events; its numbers
       are small-sample noise.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [delivery]
 
   - id: MA-009
@@ -111,5 +111,5 @@ constraints:
       CBO), Meta allocates spend across ad sets itself. The ad set's
       daily_min_spend_target and daily_spend_cap only bound that allocation, so
       changing them rarely changes spend; change the campaign budget instead.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [budget]

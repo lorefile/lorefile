@@ -8,7 +8,7 @@ constraints:
       Pausing, re-budgeting or retargeting a test cell mid-flight changes the
       treatment and voids the experiment. Wait for the read-out, or ask the
       measurement team to end the test first.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [experiment]
 
   - id: MA-011
@@ -19,7 +19,7 @@ constraints:
     rationale: >
       Pausing a PAUSED, ARCHIVED or DELETED campaign does nothing; the request is
       almost always aimed at the wrong campaign.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
 
   - id: MA-012
     name: Change the budget where it lives
@@ -30,7 +30,7 @@ constraints:
       Without Advantage campaign budget there is no campaign budget to change;
       the budget is on each ad set. With it, the campaign amount is the one that
       moves spend (MA-009 explains why the ad-set amounts do not).
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [budget]
 
   - id: MA-013
@@ -43,7 +43,7 @@ constraints:
       ad set back into the learning phase. The 20% threshold is our working rule
       from practice, not a published Meta number; step larger changes over several
       days.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [budget]
 
   - id: MA-014
@@ -52,7 +52,7 @@ constraints:
     rule: seed.subtype != "LOOKALIKE"
     severity: block
     rationale: Meta rejects lookalike-of-lookalike; seed from a customer, website, app, engagement or value audience.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [audience]
 
   - id: MA-015
@@ -64,7 +64,7 @@ constraints:
       Meta's minimum for a source audience is 100 people in a single country.
       It recommends 1,000 to 50,000: smaller seeds give noisy lookalikes, larger
       ones dilute toward the general population.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [audience]
 
   - id: MA-016
@@ -76,5 +76,5 @@ constraints:
       lookalike_spec.ratio is a fraction of the chosen country's population and
       Meta accepts 0.01 to 0.20. 1% is most similar to the seed; each step up
       adds reach and loses similarity.
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [audience]

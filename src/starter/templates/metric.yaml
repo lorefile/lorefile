@@ -1,0 +1,13 @@
+# A named number: what it means, where it comes from, who owns it.
+# `success` is the conventional name for the one number the business is run on.
+metrics:
+  - metric: {{name}}
+    description: What this number means to the business, in one or two sentences.
+    source:
+      connection: a_connection          # a source under sources/
+      table: a_table                    # or `tool:` and `params:` for an MCP source
+      filter: status = 'paid'
+      measure: count distinct order_id
+    grain: day
+    owner: someone@company
+    caveats: What this number cannot tell you.

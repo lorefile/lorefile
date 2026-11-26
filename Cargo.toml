@@ -1,16 +1,38 @@
 [package]
-name = "stella-ontology"
+name = "lorefile"
 version = "0.1.0"
 edition = "2021"
-description = "Lightweight, file-based, AI-agent-first ontology graph: YAML in, MCP/CLI/UI out."
+description = "Lorefile: a file-based, AI-agent-first business ontology. YAML in; MCP, CLI and a web page out."
 license = "Apache-2.0"
+# The org/repo is not final: change it here, in npm/, in scripts/install.sh and
+# in .github/workflows/release.yml (LOREFILE_REPO) together.
+repository = "https://github.com/lorefile/lorefile"
+homepage = "https://github.com/lorefile/lorefile"
+readme = "README.md"
+keywords = ["ontology", "mcp", "ai-agents", "semantic-layer", "yaml"]
+categories = ["command-line-utilities", "database", "development-tools"]
+# What `cargo publish` uploads: the code, the examples and packs that build.rs
+# compiles into the binary, and the licence files. Local state never goes in.
+include = [
+    "/src/**",
+    "/examples/**",
+    "/packs/**",
+    "/build.rs",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/LICENSE",
+    "/NOTICE",
+    "/README.md",
+    "!**/.lorefile/**",
+    "!**/.DS_Store",
+]
 # Homebrew rustc 1.87 is the floor; resolver 3 makes cargo pick dependency
 # versions that compile on it (uuid is pinned in Cargo.lock for the same reason).
 rust-version = "1.87"
 resolver = "3"
 
 [[bin]]
-name = "stella-ontology"
+name = "lorefile"
 path = "src/main.rs"
 
 [dependencies]
@@ -26,14 +48,25 @@ regex = "1"
 cel = "0.16"
 tiny_http = "0.12"
 chrono = "0.4"
+# The login token's 32 random bytes, from the operating system.
+getrandom = "0.2"
 # The data door. `bundled` compiles DuckDB from source (no system install);
 # `parquet` and `json` link those extensions statically so they need no download.
 duckdb = { version = "1.10506", features = ["bundled", "parquet", "json"], optional = true }
+# The W3C bridge (`export --rdf`, `import --from-rdf`): Oxigraph's RDF model and
+# its Turtle / N-Triples, RDF/XML and JSON-LD parsers and writers. No reasoner.
+oxrdf = { version = "0.3", optional = true }
+oxttl = { version = "0.2", optional = true }
+oxrdfxml = { version = "0.2", optional = true }
+oxjsonld = { version = "0.2", optional = true }
 
 [features]
-default = ["duckdb"]
+default = ["duckdb", "rdf"]
 # Turn off with `cargo build --no-default-features` for a small CSV-only binary.
 duckdb = ["dep:duckdb"]
+# OWL, SKOS and SHACL export and import. Small; the slim release keeps it
+# (`--no-default-features --features rdf`).
+rdf = ["dep:oxrdf", "dep:oxttl", "dep:oxrdfxml", "dep:oxjsonld"]
 
 [profile.release]
 opt-level = 3

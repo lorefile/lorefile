@@ -36,7 +36,7 @@ types:
       params:
         customer_id: "<Account.customer_id>"
         query: "SELECT conversion_action.id, conversion_action.name, conversion_action.category, conversion_action.type, conversion_action.origin, conversion_action.status, conversion_action.counting_type, conversion_action.attribution_model_settings.attribution_model, conversion_action.click_through_lookback_window_days, conversion_action.view_through_lookback_window_days, conversion_action.include_in_conversions_metric, conversion_action.primary_for_goal, conversion_action.value_settings.default_value, conversion_action.value_settings.always_use_default_value, conversion_action.owner_customer FROM conversion_action WHERE conversion_action.status = 'ENABLED'"
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [google, measurement]
 
   - type: Readout
@@ -79,5 +79,5 @@ types:
         customer_id: "<Account.customer_id>"
         query: "SELECT campaign.id, segments.date, metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions, metrics.conversions_value, metrics.all_conversions, metrics.view_through_conversions, metrics.conversions_by_conversion_date FROM campaign WHERE segments.date BETWEEN 'YYYY-MM-DD' AND 'YYYY-MM-DD' AND campaign.id = <Campaign.campaign_id>"
         geo_example: "SELECT geographic_view.country_criterion_id, geographic_view.location_type, segments.geo_target_region, metrics.conversions, metrics.cost_micros FROM geographic_view WHERE segments.date DURING LAST_30_DAYS"
-    owner: measurement@stella.example
+    owner: measurement@yourcompany.example
     tags: [google, measurement]

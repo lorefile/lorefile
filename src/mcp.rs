@@ -1,11 +1,13 @@
-//! MCP server over stdio. Hand-rolled JSON-RPC so the protocol surface is
-//! visible in one file and there is no SDK churn. Speaks the 2025-06-18
-//! protocol and is backwards compatible with 2024-11-05 clients.
+//! MCP server over stdio, and the `Hub` that `serve` also answers `POST /mcp`
+//! with (Streamable HTTP, plain JSON replies). Hand-rolled JSON-RPC so the
+//! protocol surface is visible in one file and there is no SDK churn. Speaks
+//! the 2025-06-18 protocol and is backwards compatible with 2024-11-05 clients.
 
 use crate::data::DataLayer;
-use crate::edit::{self, Change, EditConfig, Outcome};
+use crate::edit::{self, Change, EditConfig, Note, Outcome};
 use crate::ontology::Ontology;
-use crate::proposals::{self, Proposal};
+use crate::patch;
+use crate::proposals::{self, Proposal, ProposedFile};
 use crate::rules;
 use crate::spaces::Registry;
 use crate::validate;
@@ -15,7 +17,7 @@ use indexmap::IndexMap;
 use serde_json::{json, Value as Json};
 use std::cell::Cell;
 use std::io::{self, BufRead, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 const PROTOCOL: &str = "2025-06-18";
 
@@ -50,7 +52,7 @@ pub fn tool_definitions() -> Json {
     json!([
         {
             "name": "search",
-            "description": "Find types, relationships, rules, actions, glossary terms and data sources by plain-text query. Start here when you don't know the exact name.",
+            "description": "Find entities (types), relationships, rules, actions, metrics, functions, glossary terms and data sources by plain-text query. Start here when you don't know the exact name.",
             "inputSchema": { "type": "object", "properties": {
                 "query": { "type": "string", "description": "Words to look for, e.g. 'lead time' or 'vendor'" },
                 "limit": { "type": "integer", "default": 15 }
@@ -58,7 +60,7 @@ pub fn tool_definitions() -> Json {
         },
         {
             "name": "describe",
-            "description": "Full detail of one thing: a type (properties, relationships, rules, data source, actions), a relationship, an action (inputs, effects, checks, approval), a rule, or a data source. Accepts glossary terms like 'vendor'.",
+            "description": "Full detail of one thing: an entity type (properties, relationships, rules, data source, actions), a relationship, an action (inputs, effects, checks, approval), a rule, a metric (what counts and the recipe for where the number comes from), a function (what an agent can run: inputs, outputs, which tool), or a data source. Accepts glossary terms like 'vendor'.",
             "inputSchema": { "type": "object", "properties": {
                 "name": { "type": "string", "description": "Exact name, e.g. 'Supplier', 'supplies', 'switch_supplier', 'SC-041'" }
             }, "required": ["name"] }
@@ -80,7 +82,7 @@ pub fn tool_definitions() -> Json {
         },
         {
             "name": "constraints_for",
-            "description": "Every rule that applies to a type, relationship, or action, sorted by severity (block > warn > info). Call this before proposing any change.",
+            "description": "Every guardrail that applies to an entity type, relationship, or action, sorted by severity (block > warn > info). Call this before telling a user an action is possible; `validate` then checks them against real rows.",
             "inputSchema": { "type": "object", "properties": {
                 "name": { "type": "string" }
             }, "required": ["name"] }
@@ -111,7 +113,7 @@ pub fn tool_definitions() -> Json {
         },
         {
             "name": "summary",
-            "description": "Compact Markdown overview of the whole ontology: types by domain, blocking rules, actions, data sources, glossary. Under ~4k tokens. Load this first.",
+            "description": "Compact Markdown overview of the whole ontology: entities by domain, blocking rules, actions, metrics (what counts and where it comes from), functions (what can be run and where), data sources, glossary. Under ~4k tokens. Load this first.",
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
@@ -128,8 +130,17 @@ pub fn tool_definitions() -> Json {
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
+            "name": "propose_patch",
+            "description": "Save what you settled to the ontology without writing YAML: one op, or `ops: [..]` for several that depend on each other (a source, then the entity, then its binding, then the metric), planned in order and saved as one change a person accepts as one. Use it the moment the user settles a definition during your work (which event counts as success and where it comes from, which table or tool holds an entity's rows, what a word means, a rule to respect), so the next question runs the same way for everyone. The change is compiled and checked; when the server allows edits and it is clean it is written, otherwise it is queued for a person to accept in the web page. Ops and their fields: add_type {name, domain, description} · set_type_description {type, text} · set_property_description {type, property, text} · add_relationship {type, name, to, cardinality, description} · set_relationship_description {type, relationship, text} · add_constraint {applies_to, name, rule (CEL), severity block|warn|info, rationale, owner} · set_source {type, connection, table | tool + params, key} · add_term {term, means (an entity), description} · add_metric {metric, description, connection, table | tool + params, filter, measure, grain, owner, caveats, basis transactional|attributed|modelled|experimental, variants: [{when, description, connection, table | tool + params, filter, measure, basis}], sql} · add_function {function, description, inputs: {name: entity|primitive}, outputs: {…}, kind mcp|http|manual, server, tool, args, url, owner, caveats, may_be_called_by} · add_source {connection, kind (bigquery|snowflake|postgres|csv|parquet|s3|mcp…), server (for mcp), description, project, dataset, path} · record_check {kind metric|binding|guardrail, name, against (the source whose rows were used), note (what was compared with what)}: report that a definition a person accepted gave the right number against real rows; it is always queued, on its own (not in `ops`), and only a person's click marks it checked. Always add `reason`. Order matters when teaching from scratch: add_source and add_type first, then set_source, add_metric, add_term, since each is checked against what exists.",
+            "inputSchema": { "type": "object", "properties": {
+                "op": { "type": "string", "enum": ["add_type", "set_type_description", "set_property_description", "add_relationship", "set_relationship_description", "add_constraint", "set_source", "add_source", "add_term", "add_metric", "add_function", "record_check"] },
+                "ops": { "type": "array", "description": "Several ops as one change, in the order they depend on each other; each item has the same fields as a single call", "items": { "type": "object", "additionalProperties": true } },
+                "reason": { "type": "string", "description": "One sentence on why, for the person who reviews it" }
+            }, "additionalProperties": true }
+        },
+        {
             "name": "propose_change",
-            "description": "Propose a change to the ontology: send the full new text of one YAML file plus a reason. It is compiled and checked first. When the server allows edits and the change is clean it is written; otherwise it is queued for a person to review in the web page, and you get the proposal id. Use it when you learn something the ontology is missing, such as a type, a field, a link or a guardrail.",
+            "description": "Propose a change to the ontology: send the full new text of one YAML file plus a reason. trust.yaml (the grades) is written by Lorefile only and is refused here. It is compiled and checked first. When the server allows edits and the change is clean it is written; otherwise it is queued for a person to review in the web page, and you get the proposal id. Use it when you learn something the ontology is missing, such as a type, a field, a link or a guardrail.",
             "inputSchema": { "type": "object", "properties": {
                 "file": { "type": "string", "description": "Path relative to the ontology folder, ending in .yaml, e.g. types/supplier.yaml" },
                 "content": { "type": "string", "description": "The full new text of the file" },
@@ -146,12 +157,21 @@ pub struct Server<'a> {
     pub edit: EditConfig,
     /// Set after a write so the owner reloads the ontology before the next request.
     pub reload_needed: Cell<bool>,
+    /// The folder of spaces, when `summary` should say how the space's history stands
+    /// (left out for shipped examples, which have none).
+    pub history_root: Option<PathBuf>,
 }
 
 impl<'a> Server<'a> {
     /// Share a data layer (and its open DuckDB) instead of opening a fresh one.
     pub fn with_data(ont: &'a Ontology, data: DataLayer<'a>) -> Self {
-        Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false) }
+        Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false), history_root: None }
+    }
+
+    /// Add the one History line to `summary`, reading the space's git history.
+    pub fn with_history(mut self, spaces_root: Option<PathBuf>) -> Self {
+        self.history_root = spaces_root;
+        self
     }
 
     pub fn with_edit(mut self, edit: EditConfig) -> Self {
@@ -170,21 +190,29 @@ impl<'a> Server<'a> {
 
     /// The `tools/call` result for `propose_change`, shared with `/api/tool`.
     /// Diagnostics as JSON plus a `note` saying what happened to the file.
-    pub fn propose_change_result(out: &Outcome, edit: EditConfig, queued: Option<&Proposal>) -> Json {
+    pub fn propose_change_result(out: &Outcome, edit: EditConfig, queued: Option<&Proposal>, summary: &str) -> Json {
         if let Some(why) = &out.refused {
             return Self::text(format!("{}: {}", out.file, why), true);
         }
-        let note = if let Some(p) = queued {
+        let note = if let (Some(p), Some(held)) = (queued, &out.held) {
+            format!("{}: queued as {}. Nothing was written; a person can accept it in the web page (Agents › Waiting for your review), and on Accept its grade becomes accepted", held, p.id)
+        } else if let Some(p) = queued {
             if out.ok {
                 format!("queued for review as {}: nothing was written; a person can accept it in the web page (Agents › Waiting for your review)", p.id)
             } else {
                 format!("queued as {} but it has {} error(s), so it cannot be accepted until they are fixed; nothing was written", p.id, out.errors())
             }
         } else if out.written {
-            match &out.commit {
-                Some(h) => format!("written to {} and committed as {}", out.file, h),
-                None if edit.commit => format!("written to {}; commit failed: {}", out.file, out.git_error.clone().unwrap_or_default()),
+            let said = match &out.commit {
+                Some(h) => format!("written to {} and saved to history as {}", out.file, h),
+                None if out.git_error.is_some() => format!("written to {}; commit failed: {}", out.file, out.git_error.clone().unwrap_or_default()),
+                None if edit.commit => format!("written to {}; it was already in history as it is", out.file),
                 None => format!("written to {}; the change is uncommitted, review it with git diff", out.file),
+            };
+            if out.stamped.iter().any(|g| g.ends_with(": proposed")) {
+                format!("{}. Grade: proposed. Tell the user a person still has to accept it (Agents › Written by agents, not reviewed)", said)
+            } else {
+                said
             }
         } else if !out.ok {
             format!("refused: the change leaves {} error(s); nothing was written", out.errors())
@@ -194,6 +222,9 @@ impl<'a> Server<'a> {
             "nothing was written".to_string()
         };
         let mut j = out.to_json();
+        if !summary.is_empty() {
+            j["summary"] = json!(summary);
+        }
         j["note"] = json!(note);
         Self::text(Self::pretty(&j), false)
     }
@@ -201,22 +232,96 @@ impl<'a> Server<'a> {
     /// Apply a proposed change. Written changes are logged; changes that were
     /// validated but not written (edit mode off, or errors) are queued for a
     /// person to review. Returns the outcome and the queued proposal, if any.
-    pub fn propose(root: &Path, edit: EditConfig, before: &Report, file: &str, content: &str, reason: &str, via: &str) -> (Outcome, Option<Proposal>) {
-        let out = edit::apply(root, edit, before, file, Change::Write(content.to_string()), via, None, reason);
+    #[allow(clippy::too_many_arguments)] // one call site per transport; a struct would only rename the arguments
+    pub fn propose(root: &Path, edit: EditConfig, before: &Report, file: &str, content: &str, reason: &str, via: &str, label: Option<(&str, &str)>, summary: &str) -> (Outcome, Option<Proposal>) {
+        // a raw file edit still gets a sentence, from what the file declares
+        let derived = if summary.is_empty() {
+            let (kind, name) = match label {
+                Some((k, n)) => (k.to_string(), n.to_string()),
+                None => edit::describe_content(file, content),
+            };
+            if kind.is_empty() || kind == "file" { String::new() } else { format!("changed the {} {}", kind, name) }
+        } else {
+            String::new()
+        };
+        let summary: &str = if summary.is_empty() { derived.as_str() } else { summary };
+        let line = edit::agent_line(via, summary);
+        // an agent never overwrites what a person accepted or checked: queued instead, even with edits on
+        let held = if edit.allow { edit::graded_overwrites(root, &[(file.to_string(), content.to_string())]) } else { vec![] };
+        let cfg = if held.is_empty() { edit } else { EditConfig { allow: false, commit: false, ..edit } };
+        let mut out = edit::apply(root, cfg, before, file, Change::Write(content.to_string()), &Note { via, summary: &line, reason, ..Default::default() }, label);
+        if !held.is_empty() && out.refused.is_none() {
+            out.held = Some(format!("{}, so this change waits for a person", held.join("; ")));
+        }
         let why = if reason.is_empty() { String::new() } else { format!(": {}", reason) };
         if out.written {
-            proposals::log(root, via, &format!("changed {}{}", file, why), file);
+            proposals::log(root, via, &format!("{}{}", if summary.is_empty() { format!("changed {}", file) } else { summary.to_string() }, why), file);
             return (out, None);
         }
         if out.refused.is_some() {
             return (out, None);
         }
-        match proposals::store(root, file, content, reason, via, &out) {
+        match proposals::store(root, file, content, reason, via, &out, summary) {
             Ok(p) => {
-                proposals::log(root, via, &format!("proposed a change to {} (waiting for review){}", file, why), file);
+                proposals::log(root, via, &format!("proposed {} (waiting for review){}", if summary.is_empty() { format!("a change to {}", file) } else { summary.to_string() }, why), file);
                 (out, Some(p))
             }
             Err(_) => (out, None),
+        }
+    }
+
+    /// A batch of files as one change: written when allowed and clean, else queued as one proposal.
+    pub fn propose_many(root: &Path, edit: EditConfig, before: &Report, plan: &patch::BatchPlan, reason: &str, via: &str) -> (Outcome, Option<Proposal>) {
+        let summary = if plan.summaries.len() == 1 { plan.summaries[0].clone() } else { format!("{} changes: {}", plan.summaries.len(), plan.summaries.join("; ")) };
+        let label = if plan.kinds.len() == 1 { Some((plan.kinds[0].0.as_str(), plan.kinds[0].1.as_str())) } else { None };
+        let line = edit::agent_line(via, &summary);
+        let held = if edit.allow { edit::graded_overwrites(root, &plan.files) } else { vec![] };
+        let cfg = if held.is_empty() { edit } else { EditConfig { allow: false, commit: false, ..edit } };
+        let mut out = edit::apply_many(root, cfg, before, &plan.files, &Note { via, summary: &line, reason, ..Default::default() }, label);
+        if !held.is_empty() && out.refused.is_none() {
+            out.held = Some(format!("{}, so this change waits for a person", held.join("; ")));
+        }
+        let why = if reason.is_empty() { String::new() } else { format!(": {}", reason) };
+        if out.written {
+            proposals::log(root, via, &format!("{}{}", summary, why), &out.file);
+            return (out, None);
+        }
+        if out.refused.is_some() {
+            return (out, None);
+        }
+        let files: Vec<ProposedFile> = plan
+            .files
+            .iter()
+            .enumerate()
+            .map(|(i, (f, t))| ProposedFile { file: f.clone(), content: t.clone(), before: std::fs::read_to_string(root.join(f)).unwrap_or_default(), summary: plan.summaries.get(i).cloned().unwrap_or_default() })
+            .collect();
+        match proposals::store_many(root, &files, reason, via, &out, &summary) {
+            Ok(p) => {
+                proposals::log(root, via, &format!("proposed {} (waiting for review){}", summary, why), &out.file);
+                (out, Some(p))
+            }
+            Err(_) => (out, None),
+        }
+    }
+
+    /// `propose_patch` with `op: record_check`: an agent reports a check. Always
+    /// queued, whatever the edit mode; the grade becomes checked only when a
+    /// person clicks "Yes, mark as checked".
+    pub fn record_check(ont: &Ontology, args: &Json, via: &str) -> Json {
+        let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
+        let claim = match patch::plan_check(ont, args) {
+            Ok(c) => c,
+            Err(e) => return Self::text(format!("{} (nothing was queued)", e), true),
+        };
+        match proposals::store_check(&ont.root, &claim, &reason, via) {
+            Ok(p) => {
+                proposals::log(&ont.root, via, &format!("reported a check of {} {} against {} (waiting for a person)", claim.kind, claim.name, claim.against), crate::trust::FILE);
+                Self::text(Self::pretty(&json!({
+                    "ok": true, "written": false, "queued": p.id, "kind": claim.kind, "name": claim.name, "against": claim.against,
+                    "note": format!("queued as {}: nothing is graded yet. A person confirms the check in the web page (Agents › Waiting for your review); only then is {} marked checked, in their name.", p.id, claim.name),
+                })), false)
+            }
+            Err(e) => Self::text(e, true),
         }
     }
 
@@ -318,7 +423,13 @@ impl<'a> Server<'a> {
                     Err(e) => Self::text(e.to_string(), true),
                 }
             }
-            "summary" => Self::text(ont.summary_markdown(), false),
+            "summary" => {
+                let mut md = ont.summary_markdown();
+                if let Some(sr) = &self.history_root {
+                    md.push_str(&format!("\n\n{}\n", edit::history_line(&ont.root, sr)));
+                }
+                Self::text(md, false)
+            }
             "query" | "sql" => {
                 let sql = Self::arg_str(args, &["sql", "query"]).unwrap_or_default();
                 let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(crate::data::MAX_QUERY_ROWS as u64) as usize;
@@ -336,11 +447,40 @@ impl<'a> Server<'a> {
                 let content = Self::arg_str(args, &["content", "text"]).unwrap_or_default();
                 let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
                 let before = validate::validate(ont);
-                let (out, queued) = Self::propose(&ont.root, self.edit, &before, &file, &content, &reason, "agent via MCP");
+                let (out, queued) = Self::propose(&ont.root, self.edit, &before, &file, &content, &reason, "agent via MCP", None, "");
                 if out.written {
                     self.reload_needed.set(true);
                 }
-                Self::propose_change_result(&out, self.edit, queued.as_ref())
+                Self::propose_change_result(&out, self.edit, queued.as_ref(), "")
+            }
+            "propose_patch" if Self::arg_str(args, &["op"]).as_deref() == Some("record_check") => Self::record_check(ont, args, "agent via MCP"),
+            "propose_patch" => {
+                let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
+                if let Some(ops) = args.get("ops").and_then(|o| o.as_array()) {
+                    return match patch::plan_many(ont, ops) {
+                        Ok(plan) => {
+                            let before = validate::validate(ont);
+                            let (out, queued) = Self::propose_many(&ont.root, self.edit, &before, &plan, &reason, "agent via MCP");
+                            if out.written {
+                                self.reload_needed.set(true);
+                            }
+                            let summary = if plan.summaries.len() == 1 { plan.summaries[0].clone() } else { format!("{} changes: {}", plan.summaries.len(), plan.summaries.join("; ")) };
+                            Self::propose_change_result(&out, self.edit, queued.as_ref(), &summary)
+                        }
+                        Err(e) => Self::text(format!("{} (nothing was written)", e), true),
+                    };
+                }
+                match patch::plan(ont, args) {
+                    Ok(p) => {
+                        let before = validate::validate(ont);
+                        let (out, queued) = Self::propose(&ont.root, self.edit, &before, &p.file, &p.text, &reason, "agent via MCP", Some((&p.kind, &p.name)), &p.summary);
+                        if out.written {
+                            self.reload_needed.set(true);
+                        }
+                        Self::propose_change_result(&out, self.edit, queued.as_ref(), &p.summary)
+                    }
+                    Err(e) => Self::text(format!("{} (nothing was written)", e), true),
+                }
             }
             other => Self::text(format!("Unknown tool '{}'", other), true),
         }
@@ -381,19 +521,37 @@ impl<'a> Server<'a> {
     }
 }
 
-/// One stdio server, many spaces. Each request names its space (or gets the
+/// One MCP server, many spaces. Each request names its space (or gets the
 /// implied one) and is answered by a `Server` built on that space's state.
-pub struct Hub {
-    pub reg: Registry,
+/// Stdio owns its registry; `serve` lends the one behind its lock, so both
+/// transports answer through the same code.
+pub struct Hub<'r> {
+    pub reg: &'r mut Registry,
     pub edit: EditConfig,
-    /// `--space`: serve one space only, and hide the `space` argument.
+    /// `--space` (or `/s/<id>/mcp` over HTTP): serve one space only, and hide the `space` argument.
     pub only: Option<String>,
 }
 
-impl Hub {
+impl Hub<'_> {
+    /// One HTTP body: a single message, or a batch (an array). Notifications get
+    /// no reply, so a body of notifications only answers `None` (HTTP 202).
+    pub fn handle_body(&mut self, msg: &Json) -> Option<Json> {
+        match msg {
+            Json::Array(a) if a.is_empty() => Some(json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32600, "message": "invalid request: an empty batch" } })),
+            Json::Array(a) => {
+                let out: Vec<Json> = a.iter().filter_map(|m| self.handle(m)).collect();
+                if out.is_empty() { None } else { Some(Json::Array(out)) }
+            }
+            m => self.handle(m),
+        }
+    }
+
+    /// The flags as they apply to one space: shipped ones never take writes,
+    /// and commits follow the space's history (see `EditConfig::for_space`).
     fn edit_for(&self, id: &str) -> EditConfig {
         match self.reg.info(id) {
             Some(s) if s.builtin => EditConfig::default(),
+            Some(s) if self.edit.allow => self.edit.for_space(&s.dir, &self.reg.root),
             _ => self.edit,
         }
     }
@@ -418,15 +576,16 @@ impl Hub {
         let mine = self.reg.user_spaces();
         let shipped = self.reg.spaces.len() - mine.len();
         let scope = match (&self.only, mine.len()) {
-            (Some(o), _) => format!("This server holds one ontology space, '{}'.", o),
-            (None, 0) => format!("This server holds no space of the user's own yet, only {} shipped examples (ids start with @). Name one with `space`, e.g. \"@supply-chain\".", shipped),
-            (None, 1) => format!("This server holds the ontology space '{}'{}. Tools default to it; pass `space` to look at a shipped example (ids start with @).", mine[0].id, if shipped > 0 { format!(" plus {} shipped examples", shipped) } else { String::new() }),
-            (None, n) => format!("This server holds {} ontology spaces: {}. Every tool takes `space`; ask the user which business or brand they mean when it is not obvious, or call `spaces`.", n, mine.iter().map(|s| s.id.as_str()).collect::<Vec<_>>().join(", ")),
+            (Some(o), _) => format!("This Lorefile server holds one ontology space, '{}'.", o),
+            (None, 0) => format!("This Lorefile server holds no space of the user's own yet, only {} shipped examples (ids start with @). Name one with `space`, e.g. \"@supply-chain\".", shipped),
+            (None, 1) => format!("This Lorefile server holds the ontology space '{}'{}. Tools default to it; pass `space` to look at a shipped example (ids start with @).", mine[0].id, if shipped > 0 { format!(" plus {} shipped examples", shipped) } else { String::new() }),
+            (None, n) => format!("This Lorefile server holds {} ontology spaces: {}. Every tool takes `space`; ask the user which business or brand they mean when it is not obvious, or call `spaces`.", n, mine.iter().map(|s| s.id.as_str()).collect::<Vec<_>>().join(", ")),
         };
         format!(
-            "{} Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector. To change an ontology, send the full new text of one YAML file to `propose_change`; it is compiled and checked first{}. Shipped examples cannot be changed.",
+            "{} Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector. To change an ontology, use `propose_patch` for one small fact (a description, a link, a guardrail, a glossary term, a metric, a data binding) or `propose_change` with the full new text of one YAML file; both are compiled and checked first{}. When the user settles a definition during your work (which event counts as success and where it comes from, which table or tool holds an entity's rows, what a word means, a rule to respect), offer to save it with `propose_patch`, so the next question runs the same way for everyone. Shipped examples cannot be changed. Definitions carry a trust grade. When you rely on one marked proposed or UNVERIFIED, say so before the number or the action: an agent wrote it and no person has reviewed it. Checked means a person compared it with real rows; say who and when if the user asks how sure this is. You cannot set a grade: a person accepts or checks in the web page{}. Numbers with a different `basis` (transactional, attributed, modelled, experimental) are shown side by side, never added.",
             scope,
-            if self.edit.allow { ", then written" } else { ", and queued for a person to accept in the web page" }
+            if self.edit.allow { ", then written" } else { ", and queued for a person to accept in the web page" },
+            if self.edit.allow { ", and a change to something a person accepted or checked is queued for them instead of written" } else { "" }
         )
     }
 
@@ -444,8 +603,12 @@ impl Hub {
 
     fn with_space<T>(&mut self, id: &str, f: impl FnOnce(&Server<'_>) -> T) -> Result<T, String> {
         let edit = self.edit_for(id);
+        let history = match self.reg.info(id) {
+            Some(s) if !s.builtin => Some(self.reg.root.clone()),
+            _ => None,
+        };
         let l = self.reg.get(id).map_err(|e| format!("{:#}", e))?;
-        let srv = Server::with_data(&l.ont, l.data()).with_edit(edit);
+        let srv = Server::with_data(&l.ont, l.data()).with_edit(edit).with_history(history);
         let out = f(&srv);
         let reload = srv.reload_needed.get();
         drop(srv);
@@ -475,12 +638,15 @@ impl Hub {
                 ok(json!({
                     "protocolVersion": version,
                     "capabilities": { "tools": { "listChanged": false }, "resources": { "subscribe": false, "listChanged": false } },
-                    "serverInfo": { "name": "stella-ontology", "version": env!("CARGO_PKG_VERSION") },
+                    "serverInfo": { "name": "lorefile", "version": env!("CARGO_PKG_VERSION") },
                     "instructions": self.instructions()
                 }))
             }
             "ping" => ok(json!({})),
-            "tools/list" => ok(json!({ "tools": tool_definitions_for(&self.reg, self.only.as_deref()) })),
+            "tools/list" => {
+                self.reg.rescan();
+                ok(json!({ "tools": tool_definitions_for(self.reg, self.only.as_deref()) }))
+            }
             "tools/call" => {
                 let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
                 let mut args = params.get("arguments").cloned().unwrap_or(json!({}));
@@ -493,13 +659,30 @@ impl Hub {
                 }
                 let space = match self.pick(want.as_deref()) {
                     Ok(s) => s,
-                    Err(e) => return ok(Server::text(e, true)),
+                    Err(_) => {
+                        // a space created since this server started: look again before giving up
+                        self.reg.rescan();
+                        match self.pick(want.as_deref()) {
+                            Ok(s) => s,
+                            Err(e) => return ok(Server::text(e, true)),
+                        }
+                    }
                 };
-                if name == "propose_change" && self.reg.info(&space).map(|s| s.builtin).unwrap_or(false) {
+                if (name == "propose_change" || name == "propose_patch") && self.reg.info(&space).map(|s| s.builtin).unwrap_or(false) {
                     return ok(Server::text(format!("{} is a shipped example and stays read-only. Create a space of your own (or copy the example) and propose the change there.", space), true));
                 }
                 match self.with_space(&space, |srv| srv.call_tool(name, &args)) {
-                    Ok(r) => ok(r),
+                    Ok(mut r) => {
+                        // a miss in the implied space: say where we looked and where else to look
+                        if want.is_none() && self.reg.spaces.len() > 1 && r["isError"].as_bool().unwrap_or(false) {
+                            let others: Vec<&str> = self.reg.spaces.keys().filter(|k| **k != space).map(|k| k.as_str()).collect();
+                            if let Some(t) = r["content"][0]["text"].as_str() {
+                                let hint = format!("{}\n(looked in the space `{}`, the default here; other spaces: {}. Pass `space` to look elsewhere.)", t, space, others.join(", "));
+                                r["content"][0]["text"] = json!(hint);
+                            }
+                        }
+                        ok(r)
+                    }
                     Err(e) => ok(Server::text(e, true)),
                 }
             }
@@ -548,7 +731,7 @@ impl Hub {
     }
 }
 
-pub fn run_stdio(reg: Registry, edit: EditConfig, only: Option<String>) -> Result<()> {
+pub fn run_stdio(mut reg: Registry, edit: EditConfig, only: Option<String>) -> Result<()> {
     let stdin = io::stdin();
     let stdout = io::stdout();
     let mut out = stdout.lock();
@@ -558,14 +741,14 @@ pub fn run_stdio(reg: Registry, edit: EditConfig, only: Option<String>) -> Resul
     };
     let mine = reg.user_spaces().len();
     eprintln!(
-        "stella-ontology MCP server ready on stdio ({} space{} of yours, {} shipped{}{})",
+        "lorefile MCP server ready on stdio ({} space{} of yours, {} shipped{}{})",
         mine,
         if mine == 1 { "" } else { "s" },
         reg.spaces.len() - mine,
         only.as_ref().map(|o| format!(", serving only {}", o)).unwrap_or_default(),
         if edit.allow { ", edit mode on" } else { "" }
     );
-    let mut hub = Hub { reg, edit, only };
+    let mut hub = Hub { reg: &mut reg, edit, only };
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(l) => l,

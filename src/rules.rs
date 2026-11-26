@@ -13,14 +13,43 @@ use serde_json::{json, Value as Json};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// `A implies B` → `!(A) || (B)`. Everything else is plain CEL.
+/// `A implies B` → `!(A) || (B)`. Everything else is plain CEL. The word is
+/// only special outside string literals, so `name != "a implies b"` is left alone.
 pub fn desugar(rule: &str) -> String {
     let r = rule.trim();
-    if let Some(idx) = r.find(" implies ") {
+    if let Some(idx) = find_outside_strings(r, " implies ") {
         let (a, b) = (&r[..idx], &r[idx + " implies ".len()..]);
         return format!("!({}) || ({})", a.trim(), desugar(b));
     }
     r.to_string()
+}
+
+/// Byte index of `needle` in `s`, ignoring anything inside "…" or '…' (with backslash escapes).
+fn find_outside_strings(s: &str, needle: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut quote: Option<u8> = None;
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i];
+        match quote {
+            Some(q) => {
+                if c == b'\\' {
+                    i += 1;
+                } else if c == q {
+                    quote = None;
+                }
+            }
+            None => {
+                if c == b'"' || c == b'\'' {
+                    quote = Some(c);
+                } else if s[i..].starts_with(needle) {
+                    return Some(i);
+                }
+            }
+        }
+        i += 1;
+    }
+    None
 }
 
 pub fn compile(rule: &str) -> Result<Program, String> {
@@ -91,6 +120,9 @@ pub struct RuleResult {
     pub rationale: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The rule's grade in trust.yaml (proposed, accepted, checked, ungraded); left out when the space has no trust.yaml.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grade: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -122,6 +154,10 @@ pub struct CheckReport {
     pub side_effects: String,
     pub suggestions: Vec<Suggestion>,
     pub notes: Vec<String>,
+    /// What this answer relied on that no person has reviewed: rules an agent
+    /// proposed (or that changed since a person graded them), and the data
+    /// bindings rows were read through. The verdict is the same either way.
+    pub unverified: Vec<String>,
 }
 
 /// A plausible inline record for a type, used in hints: `{"status": "open", "qty": 1}`.
@@ -167,7 +203,7 @@ fn label_of(rec: &Record, t: &TypeDef) -> String {
 }
 
 /// Turn raw inputs (key strings or inline records) into records.
-fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &IndexMap<String, Json>, notes: &mut Vec<String>) -> Result<Vec<ResolvedInput>> {
+fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &IndexMap<String, Json>, notes: &mut Vec<String>, read: &mut Vec<String>) -> Result<Vec<ResolvedInput>> {
     let mut out = Vec::new();
     for (input, type_name) in &action.inputs {
         let t = ont.type_(type_name).ok_or_else(|| anyhow!("action input `{}` has unknown type `{}`", input, type_name))?;
@@ -186,7 +222,12 @@ fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &In
                     o => o.to_string(),
                 };
                 match data.find(&t.name, &key)? {
-                    Some(rec) => out.push(ResolvedInput { name: input.clone(), type_name: t.name.clone(), key, resolved: true, record: rec }),
+                    Some(rec) => {
+                        if t.source.is_some() && !read.contains(&t.name) {
+                            read.push(t.name.clone());
+                        }
+                        out.push(ResolvedInput { name: input.clone(), type_name: t.name.clone(), key, resolved: true, record: rec })
+                    }
                     None => {
                         let kp = t.key_property().unwrap_or_else(|| "id".into());
                         let mut rec = Record::new();
@@ -213,7 +254,7 @@ fn evaluate_all(ont: &Ontology, action: &ActionDef, inputs: &[ResolvedInput], no
         let program = match compile(&c.rule) {
             Ok(p) => p,
             Err(e) => {
-                results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: false, applies_to: c.applies_to.clone(), bound_to: vec![], rule: c.rule.clone(), message: "rule does not parse".into(), rationale: c.rationale.clone(), error: Some(e) });
+                results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: false, applies_to: c.applies_to.clone(), bound_to: vec![], rule: c.rule.clone(), message: "rule does not parse".into(), rationale: c.rationale.clone(), error: Some(e), grade: None });
                 continue;
             }
         };
@@ -276,9 +317,9 @@ fn evaluate_all(ont: &Ontology, action: &ActionDef, inputs: &[ResolvedInput], no
                 .map(|b| recs.get(b).map(|ri| format!("{}={}", b, if ri.key.is_empty() { "?".into() } else { ri.key.clone() })).unwrap_or(b.clone()))
                 .collect();
             match eval(&program, &vars) {
-                Ok(true) => results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: true, applies_to: c.applies_to.clone(), bound_to, rule: c.rule.clone(), message: format!("holds for {}", labels.join(", ")), rationale: c.rationale.clone(), error: None }),
-                Ok(false) => results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: false, applies_to: c.applies_to.clone(), bound_to, rule: c.rule.clone(), message: format!("violated for {}", labels.join(", ")), rationale: c.rationale.clone(), error: None }),
-                Err(e) => results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: false, applies_to: c.applies_to.clone(), bound_to, rule: c.rule.clone(), message: format!("could not evaluate for {}", labels.join(", ")), rationale: c.rationale.clone(), error: Some(e) }),
+                Ok(true) => results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: true, applies_to: c.applies_to.clone(), bound_to, rule: c.rule.clone(), message: format!("holds for {}", labels.join(", ")), rationale: c.rationale.clone(), error: None, grade: None }),
+                Ok(false) => results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: false, applies_to: c.applies_to.clone(), bound_to, rule: c.rule.clone(), message: format!("violated for {}", labels.join(", ")), rationale: c.rationale.clone(), error: None, grade: None }),
+                Err(e) => results.push(RuleResult { id: c.id.clone(), name: c.name.clone(), severity: c.severity, passed: false, applies_to: c.applies_to.clone(), bound_to, rule: c.rule.clone(), message: format!("could not evaluate for {}", labels.join(", ")), rationale: c.rationale.clone(), error: Some(e), grade: None }),
             }
         }
     }
@@ -286,10 +327,17 @@ fn evaluate_all(ont: &Ontology, action: &ActionDef, inputs: &[ResolvedInput], no
     results
 }
 
+/// A rule that could not be evaluated (a field the record does not have, a
+/// row that was not found) never counts as a violation: the answer is
+/// `unknown` unless some other rule is plainly violated.
 fn verdict_of(results: &[RuleResult]) -> &'static str {
-    if results.iter().any(|r| !r.passed && r.severity == Severity::Block) {
+    let violated = |sev: Severity| results.iter().any(|r| !r.passed && r.error.is_none() && r.severity == sev);
+    let errored = results.iter().any(|r| !r.passed && r.error.is_some() && r.severity != Severity::Info);
+    if violated(Severity::Block) {
         "fail"
-    } else if results.iter().any(|r| !r.passed && r.severity == Severity::Warn) {
+    } else if errored {
+        "unknown"
+    } else if violated(Severity::Warn) {
         "warn"
     } else {
         "pass"
@@ -302,9 +350,43 @@ pub fn check_action(ont: &Ontology, data: &DataLayer, action_name: &str, raw: &I
         anyhow!("unknown action `{}`. Known actions: {}", action_name, ont.actions.keys().cloned().collect::<Vec<_>>().join(", "))
     })?;
     let mut notes = Vec::new();
-    let inputs = resolve_inputs(ont, data, action, raw, &mut notes)?;
-    let results = evaluate_all(ont, action, &inputs, &mut notes);
-    let verdict = verdict_of(&results);
+    let mut read = Vec::new();
+    let inputs = resolve_inputs(ont, data, action, raw, &mut notes, &mut read)?;
+    let mut results = evaluate_all(ont, action, &inputs, &mut notes);
+    // what a person stands behind: each result's grade, and what was relied on unreviewed
+    let mut unverified: Vec<String> = Vec::new();
+    let mut unreviewed_rules: Vec<String> = Vec::new();
+    if ont.graded.has_file {
+        use crate::trust::Kind as TK;
+        for r in results.iter_mut() {
+            let st = ont.grade_of(TK::Guardrail, &r.id);
+            r.grade = Some(st.word().to_string());
+            let why = match (&st.grade, &st.record) {
+                (Some(Grade::Proposed), Some(rec)) => Some(format!("rule {}: an agent proposed it ({}) and no person has accepted it", r.id, crate::trust::short_date(&rec.at))),
+                (None, Some(rec)) if st.changed => Some(format!("rule {}: changed since it was {} ({}, {}); no person has reviewed the new version", r.id, rec.grade.word(), crate::trust::who_said(&rec.by), crate::trust::short_date(&rec.at))),
+                _ => None,
+            };
+            if let Some(w) = why {
+                if !unreviewed_rules.contains(&r.id) {
+                    unreviewed_rules.push(r.id.clone());
+                    unverified.push(w);
+                }
+            }
+        }
+        for t in &read {
+            let st = ont.grade_of(TK::Binding, t);
+            match (&st.grade, &st.record) {
+                (Some(Grade::Proposed), Some(rec)) => unverified.push(format!("{} rows were read through a data binding nobody has reviewed (proposed by an agent, {})", t, crate::trust::short_date(&rec.at))),
+                (None, Some(rec)) if st.changed => unverified.push(format!("{} rows were read through a data binding that changed since it was {} ({}); nobody has reviewed the new version", t, rec.grade.word(), crate::trust::short_date(&rec.at))),
+                _ => {}
+            }
+        }
+    }
+    // a key no row matched: rules that needed its fields could not run, so the
+    // answer is "unknown", never "blocked" (an agent would repeat a wrong reason)
+    let missing: Vec<&ResolvedInput> = inputs.iter().filter(|i| !i.resolved).collect();
+    let unknown = !missing.is_empty() && results.iter().any(|r| r.error.is_some() && r.bound_to.iter().any(|b| missing.iter().any(|m| &m.name == b)));
+    let verdict = if unknown { "unknown" } else { verdict_of(&results) };
 
     // suggestions: for inputs involved in blocking failures, try other rows
     let mut suggestions = Vec::new();
@@ -356,15 +438,29 @@ pub fn check_action(ont: &Ontology, data: &DataLayer, action_name: &str, raw: &I
         }
     }
 
-    let failed_at = |sev: Severity| -> Vec<String> { results.iter().filter(|r| !r.passed && r.severity == sev).map(|r| r.id.clone()).collect() };
+    let failed_at = |sev: Severity| -> Vec<String> {
+        results
+            .iter()
+            .filter(|r| !r.passed && r.severity == sev)
+            .map(|r| if unreviewed_rules.contains(&r.id) { format!("{} (unreviewed: an agent proposed this rule and no person has accepted it)", r.id) } else { r.id.clone() })
+            .collect()
+    };
     let (blocks, warns, infos) = (failed_at(Severity::Block), failed_at(Severity::Warn), failed_at(Severity::Info));
     let tail = |label: &str, ids: &Vec<String>| if ids.is_empty() { String::new() } else { format!("; {} {}: {}", ids.len(), label, ids.join(", ")) };
     let summary = match verdict {
+        "unknown" => {
+            let mut parts: Vec<String> = missing.iter().map(|m| format!("`{}` = {} was not found in {} data", m.name, m.key, m.type_name)).collect();
+            for r in results.iter().filter(|r| !r.passed && r.error.is_some() && r.severity != Severity::Info) {
+                parts.push(format!("{} could not be evaluated ({})", r.id, r.error.clone().unwrap_or_default()));
+            }
+            format!("{} could not be checked: {}. Fetch the missing rows or fields with your own connector and pass them inline.", action.name, parts.join("; "))
+        }
         "pass" if infos.is_empty() => format!("{} may proceed: all {} rules hold.", action.name, results.len()),
         "pass" => format!("{} may proceed{}.", action.name, tail("note(s)", &infos)),
         "warn" => format!("{} may proceed with warnings: {}{}.", action.name, warns.join(", "), tail("note(s)", &infos)),
         _ => format!("{} is blocked by {}{}{}.", action.name, blocks.join(", "), tail("warning(s)", &warns), tail("note(s)", &infos)),
     };
+    let summary = if unverified.is_empty() { summary } else { format!("{} Not reviewed by a person: {}.", summary, unverified.join("; ")) };
 
     Ok(CheckReport {
         action: action.name.clone(),
@@ -376,5 +472,61 @@ pub fn check_action(ont: &Ontology, data: &DataLayer, action_name: &str, raw: &I
         side_effects: action.side_effects.clone(),
         suggestions,
         notes,
+        unverified,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn implies_is_only_special_outside_strings() {
+        assert_eq!(desugar("tier == 1 implies audited"), "!(tier == 1) || (audited)");
+        assert_eq!(desugar("a implies b implies c"), "!(a) || (!(b) || (c))");
+        assert_eq!(desugar(r#"order_id != "a implies b""#), r#"order_id != "a implies b""#);
+        assert_eq!(desugar(r#"note == 'x implies y' implies ok"#), r#"!(note == 'x implies y') || (ok)"#);
+    }
+
+    #[test]
+    fn a_rule_that_cannot_run_is_unknown_unless_another_is_plainly_violated() {
+        let errored = RuleResult { id: "A".into(), name: "a".into(), severity: Severity::Block, passed: false, error: Some("no such key".into()), message: String::new(), rationale: String::new(), bound_to: vec![], applies_to: String::new(), rule: String::new(), grade: None };
+        let violated = RuleResult { id: "B".into(), name: "b".into(), severity: Severity::Block, passed: false, error: None, message: String::new(), rationale: String::new(), bound_to: vec![], applies_to: String::new(), rule: String::new(), grade: None };
+        let fine = RuleResult { id: "C".into(), name: "c".into(), severity: Severity::Warn, passed: true, error: None, message: String::new(), rationale: String::new(), bound_to: vec![], applies_to: String::new(), rule: String::new(), grade: None };
+        assert_eq!(verdict_of(&[errored.clone(), fine.clone()]), "unknown");
+        assert_eq!(verdict_of(&[errored, violated]), "fail");
+        assert_eq!(verdict_of(&[fine]), "pass");
+    }
+
+    #[test]
+    fn an_unreviewed_rule_still_blocks_and_the_answer_says_it_is_unreviewed() {
+        use crate::trust::{fingerprint, things, Kind as TK};
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/ecommerce");
+        let (ont, _) = crate::load_ontology(&src).unwrap();
+        let data = DataLayer::new(&ont);
+        let inputs: IndexMap<String, Json> = [("order".to_string(), json!("ORD-1001"))].into_iter().collect();
+        let plain = check_action(&ont, &data, "cancel_order", &inputs).unwrap();
+        assert_eq!(plain.verdict, "fail");
+        assert!(plain.unverified.is_empty() && plain.results.iter().all(|r| r.grade.is_none()), "no trust.yaml, no grades");
+        // the same space with EC-001 and the Order binding proposed by an agent
+        let mut graded = crate::load_ontology(&src).unwrap().0;
+        let rec = |v: &Json| crate::schema::TrustRecord { grade: crate::schema::Grade::Proposed, by: "agent via MCP".into(), at: "2026-11-24".into(), of: fingerprint(v), against: None, note: None };
+        let mut book = crate::schema::TrustBook::default();
+        book.guardrails.insert("EC-001".into(), rec(&things(&graded, TK::Guardrail)["EC-001"]));
+        book.bindings.insert("Order".into(), rec(&things(&graded, TK::Binding)["Order"]));
+        graded.set_trust(Some(book));
+        let data = DataLayer::new(&graded);
+        let rep = check_action(&graded, &data, "cancel_order", &inputs).unwrap();
+        assert_eq!(rep.verdict, plain.verdict, "the verdict does not change");
+        let ec = rep.results.iter().find(|r| r.id == "EC-001").unwrap();
+        assert_eq!(ec.grade.as_deref(), Some("proposed"));
+        assert!(rep.unverified.iter().any(|u| u.starts_with("rule EC-001")), "{:?}", rep.unverified);
+        assert!(rep.unverified.iter().any(|u| u.starts_with("Order rows were read through a data binding nobody has reviewed")), "{:?}", rep.unverified);
+        assert!(rep.summary.contains("blocked by EC-001 (unreviewed: an agent proposed this rule"), "{}", rep.summary);
+        // a pass over rows read through the proposed binding is still a pass
+        let ok: IndexMap<String, Json> = [("order".to_string(), json!("ORD-1002"))].into_iter().collect();
+        let rep = check_action(&graded, &data, "cancel_order", &ok).unwrap();
+        let before = check_action(&ont, &DataLayer::new(&ont), "cancel_order", &ok).unwrap();
+        assert_eq!(rep.verdict, before.verdict);
+    }
 }

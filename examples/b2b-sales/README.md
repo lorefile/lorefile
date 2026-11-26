@@ -21,7 +21,7 @@ Quote is bound to `cpq_snowflake`, which the binary cannot read, so `where_is` p
 ## Validate
 
 ```bash
-./target/debug/stella-ontology validate --dir examples/b2b-sales
+./target/debug/lorefile validate --dir examples/b2b-sales
 ```
 
 ```
@@ -35,7 +35,7 @@ Quote is bound to `cpq_snowflake`, which the binary cannot read, so `where_is` p
 OPP-5004 has no economic buyer, so it cannot enter Proposal. The suggestions are honest: without a buyer the deal can only go backwards or be lost.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/b2b-sales advance_stage opportunity=OPP-5004 from=ST-03 to=ST-04
+./target/debug/lorefile check --dir examples/b2b-sales advance_stage opportunity=OPP-5004 from=ST-03 to=ST-04
 ```
 
 ```
@@ -63,7 +63,7 @@ Exit code 2.
 Moving Cobalt Logistics from Marcus (Americas East Enterprise) to Sofia (Americas West Enterprise). Sofia is active and ramped, but the account would be owned outside its territory.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/b2b-sales reassign_account account=ACC-2003 from=REP-11 to=REP-14
+./target/debug/lorefile check --dir examples/b2b-sales reassign_account account=ACC-2003 from=REP-11 to=REP-14
 ```
 
 ```
@@ -85,7 +85,7 @@ Exit code 0.
 Halden's $180k rollout has an accepted, legally reviewed proposal, a named economic buyer and a signed order form.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/b2b-sales close_won opportunity=OPP-5001 proposal=PRP-901
+./target/debug/lorefile check --dir examples/b2b-sales close_won opportunity=OPP-5001 proposal=PRP-901
 ```
 
 ```
@@ -105,7 +105,7 @@ Exit code 0.
 Quotes live in the CPQ system's Snowflake replica. The first attempt tells the agent what to fetch:
 
 ```bash
-./target/debug/stella-ontology check --dir examples/b2b-sales submit_quote quote=Q-7781 opportunity=OPP-5003
+./target/debug/lorefile check --dir examples/b2b-sales submit_quote quote=Q-7781 opportunity=OPP-5003
 ```
 
 ```
@@ -132,7 +132,7 @@ note: `quote` = Q-7781 could not be loaded (Quote data is not readable here); fe
 Exit code 2.
 
 ```bash
-./target/debug/stella-ontology where --dir examples/b2b-sales Quote
+./target/debug/lorefile where --dir examples/b2b-sales Quote
 ```
 
 ```
@@ -168,7 +168,7 @@ Exit code 2.
 With the quote passed inline, the verdict is real: $310k without Deal Desk is blocked, and the 24% discount needs the VP Sales on top.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/b2b-sales submit_quote opportunity=OPP-5003 \
+./target/debug/lorefile check --dir examples/b2b-sales submit_quote opportunity=OPP-5003 \
   quote='{"quote_id":"Q-7781","opportunity_id":"OPP-5003","amount_usd":310000.0,"discount_pct":24.0,"status":"draft","valid_until":"2026-05-15","deal_desk_approved":false,"payment_terms":"net60"}'
 ```
 
@@ -191,7 +191,7 @@ Exit code 2.
 Atlas Field Services is suspended. The engine lists the active partners whose agreement covers EMEA, and notes that a $520k deal would normally go to a gold partner.
 
 ```bash
-./target/debug/stella-ontology check --dir examples/b2b-sales register_partner_deal opportunity=OPP-5006 partner=PTR-03
+./target/debug/lorefile check --dir examples/b2b-sales register_partner_deal opportunity=OPP-5006 partner=PTR-03
 ```
 
 ```
@@ -214,5 +214,5 @@ Exit code 2.
 ## Browse it
 
 ```bash
-./target/debug/stella-ontology serve --dir examples/b2b-sales --port 7075
+./target/debug/lorefile serve --dir examples/b2b-sales --port 7075
 ```

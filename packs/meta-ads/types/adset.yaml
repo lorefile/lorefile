@@ -47,5 +47,5 @@ source:
   connection: meta_ads
   tool: get_adsets
   params: { account_id: "act_<Account.account_id>", campaign_id: "<Campaign.campaign_id>", limit: 100 }
-owner: measurement@stella.example
+owner: measurement@yourcompany.example
 tags: [meta, structure]

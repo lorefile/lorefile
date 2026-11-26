@@ -1,0 +1,7 @@
+connection: stella
+kind: mcp
+server: stella
+description: >
+  Stella's measurement MCP for this account: the marketing mix model, geo
+  experiments and attribution. Functions under logic/ point at its tools; the
+  agent calls them with its own Stella login. Nothing here holds a credential.
