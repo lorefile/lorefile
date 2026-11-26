@@ -192,11 +192,11 @@ jobs:
       matrix:
         include:
           - target: aarch64-apple-darwin
-            os: macos-14
+            os: macos-15
           # Cross-compiled on the Apple-silicon runner (GitHub's Intel macOS
           # runners are being retired), so it cannot be smoke-run there.
           - target: x86_64-apple-darwin
-            os: macos-14
+            os: macos-15
             cross: true
           # Built on Ubuntu 22.04 so the binaries need only glibc 2.35 or newer.
           - target: x86_64-unknown-linux-gnu
