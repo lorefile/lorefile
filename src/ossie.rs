@@ -1534,8 +1534,10 @@ pub fn import(sm_path: &Path, ontology_path: Option<&Path>, mapping_path: Option
             claimed.insert(c.clone());
         }
         let key_hint = concept.as_ref().and_then(|c| mx.key.get(c)).filter(|(d, _)| fold(d) == fold(&name)).map(|(_, f)| f.clone());
-        if key_hint.is_some() && arr(&ds["primary_key"]).is_empty() {
-            notes.push(format!("dataset {}: key field {} taken from the mapping", name, key_hint.as_ref().unwrap()));
+        if let Some(key) = &key_hint {
+            if arr(&ds["primary_key"]).is_empty() {
+                notes.push(format!("dataset {}: key field {} taken from the mapping", name, key));
+            }
         }
         let mut tj = type_from_dataset(ds, key_hint.as_deref());
         for f in arr(&ds["fields"]) {

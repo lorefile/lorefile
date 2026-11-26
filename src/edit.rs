@@ -815,8 +815,7 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
         let v = trust::things(&ont, k).get(n).cloned()?;
         Some(TrustRecord { grade, by: by.to_string(), at: at.clone(), of: trust::fingerprint(&v), against, note })
     };
-    let summary: String;
-    match op {
+    let summary = match op {
         GradeOp::Accept { kind, name } => {
             let st = ont.grade_of(*kind, name);
             match st.grade {
@@ -827,7 +826,7 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
             let Some(r) = record(*kind, name, Grade::Accepted, None, None) else { return Outcome::refuse(trust::FILE, format!("there is no {} {}", kind.word(), name)) };
             trust::entries_mut(&mut book, *kind).insert(name.clone(), r);
             (out.kind, out.name) = label(*kind, name);
-            summary = format!("Accepted {} {}", kind.word(), name);
+            format!("Accepted {} {}", kind.word(), name)
         }
         GradeOp::Check { kind, name, against, note } => {
             if !kind.can_be_checked() {
@@ -848,7 +847,7 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
             let Some(r) = record(*kind, name, Grade::Checked, Some(against.to_string()), Some(note.to_string())) else { return Outcome::refuse(trust::FILE, format!("there is no {} {}", kind.word(), name)) };
             trust::entries_mut(&mut book, *kind).insert(name.clone(), r);
             (out.kind, out.name) = label(*kind, name);
-            summary = format!("Checked {} {} against {}", kind.word(), name, against);
+            format!("Checked {} {} against {}", kind.word(), name, against)
         }
         GradeOp::VouchAll => {
             let mut n = 0;
@@ -867,9 +866,9 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
             }
             out.kind = "definitions".into();
             out.name = n.to_string();
-            summary = format!("Vouched for {} definition{}", n, if n == 1 { "" } else { "s" });
+            format!("Vouched for {} definition{}", n, if n == 1 { "" } else { "s" })
         }
-    }
+    };
     let new_text = trust::render(&book);
     let mut ov = Overrides::new();
     ov.insert(trust::FILE.to_string(), Some(new_text.clone()));
@@ -1760,7 +1759,7 @@ fn in_words(err: &str, host: &str) -> String {
     } else if has(&["would be overwritten", "local changes"]) {
         "Some files here have changes that are not in history yet; commit them first, then pull.".to_string()
     } else {
-        format!("git: {}", err.lines().filter(|l| !l.trim().is_empty()).next_back().unwrap_or(err).trim())
+        format!("git: {}", err.lines().rfind(|l| !l.trim().is_empty()).unwrap_or(err).trim())
     }
 }
 

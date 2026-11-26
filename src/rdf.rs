@@ -1782,7 +1782,7 @@ pub fn import(path: &Path, target: &Target, opts: &ImportOptions) -> Result<Impo
     let foreign_shapes: Vec<Id> = g
         .order
         .iter()
-        .filter(|s| (g.is_a(s, &v(SH, "NodeShape")) || (!g.all(s, &v(SH, "property")).is_empty() && !g.all(s, &v(SH, "targetClass")).is_empty())))
+        .filter(|s| g.is_a(s, &v(SH, "NodeShape")) || (!g.all(s, &v(SH, "property")).is_empty() && !g.all(s, &v(SH, "targetClass")).is_empty()))
         .filter(|s| !g.is_a(s, &v(LF, "EntityShape")) && g.literals(s, &v(LF, "cel")).is_empty())
         .cloned()
         .collect();
@@ -2383,7 +2383,7 @@ pub fn import(path: &Path, target: &Target, opts: &ImportOptions) -> Result<Impo
         }
         let mut j = json!({ "term": word, "iri": null, "means": means, "description": g.text(&s, &v(SKOS, "definition")).unwrap_or_default() });
         if let Id::N(i) = &s {
-            if *i != iri::derive(&ns, &Key::Term(0), &[word.clone()]) {
+            if *i != iri::derive(&ns, &Key::Term(0), std::slice::from_ref(&word)) {
                 j["iri"] = json!(i);
             }
         }
