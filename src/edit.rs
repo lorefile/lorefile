@@ -1682,7 +1682,15 @@ pub fn git_commit_all(root: &Path, message: &str) -> Result<String, String> {
     let scope = root.canonicalize().map_err(|e| e.to_string())?.to_string_lossy().to_string();
     git(&repo, &["add", "-A", "--", &scope])?;
     let msg = if message.trim().is_empty() { "Update the ontology" } else { message.trim() };
-    git(&repo, &["commit", "-q", "-m", msg, "--", &scope])?;
+    // A machine with no git identity (a fresh server, the Docker image) commits
+    // as Lorefile, as the other commit paths do, instead of failing.
+    let mut args: Vec<String> = Vec::new();
+    if git(&repo, &["config", "user.email"]).map(|s| s.is_empty()).unwrap_or(true) {
+        args.extend(["-c".into(), format!("user.name={}", LOREFILE_NAME), "-c".into(), format!("user.email={}", LOREFILE_EMAIL)]);
+    }
+    args.extend(["commit".into(), "-q".into(), "-m".into(), msg.to_string(), "--".into(), scope]);
+    let a: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    git(&repo, &a)?;
     git(&repo, &["rev-parse", "--short", "HEAD"])
 }
 
