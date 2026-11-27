@@ -27,6 +27,9 @@ use std::sync::{Arc, Mutex};
 
 pub const READ: &str = "lorefile:read";
 pub const PROPOSE: &str = "lorefile:propose";
+/// Listed in the metadata because OpenAI asks for it; asking for it changes nothing, since
+/// refresh tokens are always issued and unknown scopes are ignored.
+pub const OFFLINE: &str = "offline_access";
 /// OAuth stays off with a shorter login token: the approval page is on the public internet.
 pub const MIN_LOGIN: usize = 32;
 /// Register, authorize, token and revoke bodies are small; anything larger is refused unread.
@@ -1063,7 +1066,7 @@ impl Server {
         Reply::json(200, &json!({
             "resource": resource,
             "authorization_servers": [origin],
-            "scopes_supported": [READ, PROPOSE],
+            "scopes_supported": [READ, PROPOSE, OFFLINE],
             "bearer_methods_supported": ["header"],
             "resource_name": "Lorefile",
         }))
@@ -1082,7 +1085,7 @@ impl Server {
             "code_challenge_methods_supported": ["S256"],
             "token_endpoint_auth_methods_supported": ["none", "client_secret_post", "client_secret_basic"],
             "revocation_endpoint_auth_methods_supported": ["none", "client_secret_post", "client_secret_basic"],
-            "scopes_supported": [READ, PROPOSE],
+            "scopes_supported": [READ, PROPOSE, OFFLINE],
             "authorization_response_iss_parameter_supported": true,
         }))
         .with("Access-Control-Allow-Origin", "*")

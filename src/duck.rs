@@ -602,7 +602,13 @@ impl Db {
         if let Some(why) = self.skipped.get(name) {
             return Some(why.clone());
         }
-        self.unreadable.get(name).map(|kind| format!("kind `{}` is not readable here; agents query it with their own connector", kind))
+        self.unreadable.get(name).map(|kind| {
+            if crate::learn::is_from_user(kind) {
+                format!("its rows arrive as a file a person gives the agent; the agent reads that file with its own tools, and Lorefile keeps only what {}'s columns mean", name)
+            } else {
+                format!("kind `{}` is not readable here; agents query it with their own connector", kind)
+            }
+        })
     }
 
     /// (ontology name, view name, source) for everything SQL can see.

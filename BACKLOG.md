@@ -52,6 +52,15 @@ Still open, in the order they hurt:
 6. **`propose_patch` describes its fields in prose with `additionalProperties`.** Strict-schema clients may drop fields. Fix: a schema per op (oneOf).
 7. **Claude Desktop needs absolute paths** and the same flags as the Claude Code line; the connect card now says so, a generated config file would be better.
 
+## From the live ChatGPT test (2026-11-27)
+
+ChatGPT on the web connected over OAuth and called tools. Then "@Lorefile save this file" on a promo-sales CSV gave a proposal that could never read a row.
+
+1. ~~**`add_type` makes only a generated key** (`<name>_id`), and no op adds a field, so none of the file's 14 columns became fields.~~ Built 2026-11-27: `add_type` takes `properties` and `key`; a new `add_property` op adds a field, with `column` when the header differs; `set_source` takes `columns`.
+2. ~~**"Save this file" has no recipe**: ChatGPT looked for an upload tool, split a flat export into six entities, made up keys and never asked which number counts.~~ Built 2026-11-27: `match_file` and `learn_file` (`specs/2026-11-27-learn-file.md`).
+3. ~~**ChatGPT asks to confirm every read**~~, ~~**`/.well-known/openid-configuration` answers 401**~~, ~~**`offline_access` not listed**~~. Fixed 2026-11-27 (whether ChatGPT then stops asking is still to check live).
+4. Item 6 above (strict schemas) is done for `match_file` and `learn_file`; `propose_patch` still describes its ops in prose.
+
 
 ## From the three reviews (2026-11-26)
 
@@ -204,3 +213,15 @@ Status: design only.
 5. **`lorefile trust --audit`** (small): compare each line of `trust.yaml` with who committed it, and flag a line an agent's commit wrote.
 6. **Named, signed-in people** once accounts exist: "Priya" is a typed name today.
 7. **A machine check of a binding for local files** (the table exists, the key is unique), if the frozen DuckDB door is ever reopened.
+
+### Left for later by `learn_file` (2026-11-27, `specs/2026-11-27-learn-file.md`)
+
+1. **A `from_user` source readable here** (medium): `path:` and a glob, read through the frozen DuckDB door, so Claude Code users who drop each month's file in a folder can use `query` (option C in the spec's Part 3).
+2. **A `format:` on date fields** (small) for `11/20/2026` and the like; today they are saved as text with a note.
+3. **A `set_property` op** (small) to change a field's type or unit.
+4. **Splitting a flat entity into several**, on request (medium).
+5. **Every sheet of a workbook in one call** (small); today it is one sheet per call.
+6. **A totals check against last month** (medium), "revenue is 3× last month's", to catch a meaning that changed under the same headers. Today `match_file` says `same` and the caveat and the person's review are the only guard.
+7. **Grades per field** (medium).
+8. **An owner for a learned number** (small): a learned metric has none, so it carries warning W109 until a person adds one. Lorefile does not invent who decides what a number means.
+9. **Empty flags** (small): `refunded = false` also leaves out rows where `refunded` is empty. Fine for these files; a file with empty flags may want `refunded is distinct from true`.

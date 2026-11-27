@@ -231,3 +231,97 @@ fn over_http_trust_yaml_is_refused_and_an_agents_save_is_proposed() {
     let d: serde_json::Value = serde_json::from_str(&described).unwrap();
     assert_eq!(d["word"]["trust"]["grade"], "proposed", "{}", described);
 }
+
+#[test]
+fn server_discover_is_method_not_found_and_every_tool_says_whether_it_only_reads() {
+    let srv = start(scratch_copy("ecommerce", 7115), 7115, &["--no-examples"]);
+    // openai-mcp sends server/discover first: a JSON-RPC error in a 200, never a 401 or 404
+    let (status, reply) = rpc_at(srv.port, "/mcp", &serde_json::json!({"jsonrpc":"2.0","id":1,"method":"server/discover"}));
+    assert_eq!(status, 200, "{}", reply);
+    assert_eq!(reply["error"]["code"], -32601, "{}", reply);
+    assert_eq!(reply["error"]["message"], "method not found: server/discover");
+    // as a notification (no id) it is accepted with nothing to say
+    let h = client_headers(&format!("Bearer {}", TOKEN));
+    let hs: Vec<(&str, &str)> = h.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let (status, _, body) = http(srv.port, "POST", "/mcp", &hs, &serde_json::json!({"jsonrpc":"2.0","method":"server/discover"}).to_string());
+    assert_eq!((status, body.as_str()), (202, ""));
+
+    // tools/list: every tool carries annotations; reads say read-only, the writes do not
+    let list = serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/list"});
+    let over_http = rpc(srv.port, list.clone());
+    let over_stdio = stdio(&srv.dir, &[list]).remove(0);
+    for reply in [&over_http, &over_stdio] {
+        let tools = reply["result"]["tools"].as_array().unwrap();
+        let reads = ["search", "describe", "neighbors", "path", "constraints_for", "validate", "where_is", "instances", "summary", "query", "tables", "match_file"];
+        for t in tools {
+            let name = t["name"].as_str().unwrap();
+            let a = &t["annotations"];
+            assert!(a.is_object(), "{} has annotations", name);
+            assert_eq!(a["openWorldHint"], false, "{} reaches nothing outside", name);
+            if reads.contains(&name) {
+                assert_eq!(a["readOnlyHint"], true, "{} only reads", name);
+            } else {
+                assert_eq!(a["readOnlyHint"], false, "{} is a write", name);
+            }
+        }
+        let by_name = |n: &str| tools.iter().find(|t| t["name"] == n).unwrap_or_else(|| panic!("{} listed", n))["annotations"].clone();
+        assert_eq!(by_name("propose_patch"), serde_json::json!({"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}));
+        assert_eq!(by_name("learn_file"), serde_json::json!({"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}));
+        assert_eq!(by_name("propose_change"), serde_json::json!({"readOnlyHint": false, "openWorldHint": false}), "keeps the default destructiveHint: it can replace a whole file");
+        assert_eq!(by_name("match_file")["readOnlyHint"], true);
+    }
+    assert_eq!(over_http["result"], over_stdio["result"], "the same list either way");
+}
+
+/// A blank space like Branda's, and what an agent sends for one of the promo-sales fixtures.
+fn blank_branda(port: u16) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("lorefile-mcp-http-branda-{}-{}", port, std::process::id()));
+    let _ = fs::remove_dir_all(&dir);
+    fs::create_dir_all(dir.join("types")).unwrap();
+    fs::write(dir.join("ontology.yaml"), "name: branda\ndomains:\n  - name: Core\n    types: []\n").unwrap();
+    fs::write(dir.join("glossary.yaml"), "terms: []\n").unwrap();
+    dir
+}
+
+fn promo_args(file: &str, file_name: &str) -> serde_json::Value {
+    let mut rdr = csv::Reader::from_path(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/learn").join(file)).unwrap();
+    let headers: Vec<String> = rdr.headers().unwrap().iter().map(|s| s.to_string()).collect();
+    let rows: Vec<Vec<String>> = rdr.records().map(|r| r.unwrap().iter().map(|s| s.to_string()).collect()).collect();
+    let columns: Vec<serde_json::Value> = headers.iter().enumerate().map(|(i, h)| serde_json::json!({ "name": h, "examples": rows.iter().take(5).map(|r| r[i].clone()).collect::<Vec<_>>() })).collect();
+    serde_json::json!({ "file_name": file_name, "row_count": rows.len(), "columns": columns })
+}
+
+#[test]
+fn learned_over_stdio_accepted_on_the_page_and_read_over_stdio_next_month() {
+    let dir = blank_branda(7116);
+    let call = |id: u64, name: &str, args: serde_json::Value| serde_json::json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":name,"arguments":args}});
+    let mut learn = promo_args("promo_sales_2026-11.csv", "promo_sales.csv");
+    learn["answers"] = serde_json::json!({ "success": { "column": "revenue" }, "exclude": [{ "column": "refunded", "equals": true }], "exclude_words": "Refunded lines never count." });
+    let r = stdio(&dir, &[call(1, "match_file", promo_args("promo_sales_2026-11.csv", "promo_sales.csv")), call(2, "learn_file", learn)]);
+    let saved: serde_json::Value = serde_json::from_str(&text(&r[1])).unwrap();
+    assert!(text(&r[0]).contains("\"match\": \"new\""), "{}", text(&r[0]));
+    let id = saved["queued"].as_str().unwrap_or_else(|| panic!("queued: {}", saved)).to_string();
+    assert!(saved.get("accept_at").is_none(), "over stdio the server does not know the page's address");
+
+    // the page, with edits allowed: Accept
+    let srv = start(dir.clone(), 7116, &["--no-examples", "--allow-edit"]);
+    let bearer = format!("Bearer {}", TOKEN);
+    let (status, _, body) = http(srv.port, "POST", "/api/proposals/accept", &[("Authorization", &bearer), ("Content-Type", "application/json"), ("X-Lorefile", "write")], &serde_json::json!({ "id": id, "by": "Vinay" }).to_string());
+    assert_eq!(status, 200, "{}", body);
+    assert!(body.contains("\"written\":true"), "{}", body);
+    // MCP over HTTP from this machine gets a link to the page
+    let mut again = promo_args("promo_sales_2026-12.csv", "promo_sales_2026-12.csv");
+    again["answers"] = serde_json::json!({});
+    let over_http: serde_json::Value = serde_json::from_str(&text(&rpc(srv.port, call(3, "learn_file", again)))).unwrap();
+    assert_eq!(over_http["saved"], false, "December is the same file: nothing to save: {}", over_http);
+
+    // next month, over stdio (the server keeps running; dropping it removes the folder): where the rows are, and December read the same way
+    let r = stdio(&dir, &[call(4, "where_is", serde_json::json!({ "type": "PromoSale" })), call(5, "match_file", promo_args("promo_sales_2026-12.csv", "promo_sales_2026-12.csv"))]);
+    assert!(text(&r[0]).contains("arrive as a file a person gives you"), "{}", text(&r[0]));
+    let dec: serde_json::Value = serde_json::from_str(&text(&r[1])).unwrap();
+    assert_eq!(dec["match"], "same");
+    assert_eq!(dec["read_it"][0]["filter"], "refunded = false");
+    assert_eq!(dec["read_it"][0]["trust"]["grade"], "accepted");
+    assert_eq!(dec["read_it"][0]["trust"]["by"], "Vinay via page");
+    drop(srv);
+}

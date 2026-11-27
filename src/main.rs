@@ -6,6 +6,7 @@ mod data;
 mod duck;
 mod edit;
 mod iri;
+mod learn;
 mod loader;
 mod mcp;
 mod oauth;

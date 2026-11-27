@@ -838,6 +838,10 @@ impl Ontology {
             if let Some(s) = &t.source {
                 let kind = self.sources.get(&s.connection).map(|x| x.kind.clone()).unwrap_or_else(|| "unknown".into());
                 j["source"] = json!({ "connection": s.connection, "kind": kind, "table": s.table, "key": s.key, "columns": s.columns, "tool": s.tool, "params": s.params });
+                if crate::learn::is_from_user(&kind) {
+                    j["source"]["readable_here"] = json!(false);
+                    j["source"]["hint"] = json!(crate::learn::hint(&t.name, &s.table));
+                }
                 if self.graded.has_file {
                     j["source"]["trust"] = self.grade_of(TKind::Binding, &t.name).to_json(TKind::Binding);
                 }
@@ -1050,7 +1054,11 @@ impl Ontology {
             for t in types {
                 let rels: Vec<String> = self.outgoing(&t.name).iter().map(|r| format!("─{}→ {}", r.name, r.to)).collect();
                 let own = if self.iris.declared.contains_key(&Key::Entity(t.name.clone())) { format!(" ({})", self.iris.compact(&self.iri_type(&t.name))) } else { String::new() };
-                let data = mark(TKind::Binding, &t.name).map(|m| format!(" [data binding {}]", m)).unwrap_or_default();
+                let mut data = mark(TKind::Binding, &t.name).map(|m| format!(" [data binding {}]", m)).unwrap_or_default();
+                // an agent reading only the summary still knows where the rows come from
+                if t.source.as_ref().and_then(|b| self.sources.get(&b.connection)).map(|s| crate::learn::is_from_user(&s.kind)).unwrap_or(false) {
+                    data.push_str(" [file from the user]");
+                }
                 md.push_str(&format!(
                     "- **{}**{}{}: {}{}\n",
                     t.name,

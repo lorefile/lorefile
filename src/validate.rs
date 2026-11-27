@@ -422,4 +422,17 @@ mod tests {
         assert!(ont.constraints.is_empty(), "the rule was not loaded with a guessed severity");
         let _ = std::fs::remove_dir_all(&d);
     }
+
+    #[test]
+    fn a_from_user_binding_compiles_clean() {
+        let d = space(&[
+            ("ontology.yaml", "name: t\n"),
+            ("glossary.yaml", "terms: []\n"),
+            ("sources/user_files.yaml", "connection: user_files\nkind: from_user\ndescription: Files people hand to an agent.\n"),
+            ("types/promo_sale.yaml", "type: PromoSale\ndescription: One order line.\nproperties: { line_id: { type: string, key: true, description: One line. }, revenue: { type: number, description: Paid. } }\nsource: { connection: user_files, table: promo_sales, key: line_id }\n"),
+        ]);
+        let report = super::validate(&Ontology::from_raw(loader::load(&d).unwrap()));
+        assert!(report.diags.is_empty(), "no E012, no W106 for a file nobody keeps here: {:?}", report.diags);
+        let _ = std::fs::remove_dir_all(&d);
+    }
 }

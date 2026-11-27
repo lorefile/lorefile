@@ -1,0 +1,41 @@
+line_id,order_id,order_date,promo_code,campaign,channel,region,sku,product,units,unit_price,discount,revenue,refunded
+L-1009,BR-5008,2026-11-20,CYBER20,Cyber Monday 20%,email,south,BRD-TOTE-04,Market tote,3,18.00,10.80,43.20,false
+L-1015,BR-5013,2026-11-20,WELCOME10,Welcome 10%,email,north,BRD-CAP-03,Canvas cap,1,22.00,2.20,19.80,false
+L-1028,BR-5023,2026-11-20,CYBER20,Cyber Monday 20%,google_ads,west,BRD-SOCK-05,Wool socks 3-pack,1,24.00,4.80,19.20,false
+L-1036,BR-5028,2026-11-20,WELCOME10,Welcome 10%,email,west,BRD-TEE-01,Organic cotton tee,1,28.00,2.80,25.20,false
+L-1038,BR-5030,2026-11-20,CYBER20,Cyber Monday 20%,meta_ads,east,BRD-SOCK-05,Wool socks 3-pack,1,24.00,4.80,19.20,false
+L-1006,BR-5005,2026-11-21,CYBER20,Cyber Monday 20%,email,east,BRD-CAP-03,Canvas cap,2,22.00,8.80,35.20,false
+L-1011,BR-5009,2026-11-21,BLACKFRI30,Black Friday 30%,instagram,south,BRD-TEE-01,Organic cotton tee,2,28.00,16.80,39.20,false
+L-1032,BR-5025,2026-11-21,CYBER20,Cyber Monday 20%,meta_ads,north,BRD-SOCK-05,Wool socks 3-pack,3,24.00,14.40,57.60,false
+L-1021,BR-5019,2026-11-22,WELCOME10,Welcome 10%,affiliate,north,BRD-TEE-01,Organic cotton tee,1,28.00,2.80,25.20,false
+L-1023,BR-5021,2026-11-22,CYBER20,Cyber Monday 20%,instagram,north,BRD-CAP-03,Canvas cap,2,22.00,8.80,35.20,false
+L-1027,BR-5023,2026-11-22,CYBER20,Cyber Monday 20%,email,west,BRD-CAP-03,Canvas cap,1,22.00,4.40,17.60,false
+L-1033,BR-5026,2026-11-22,WELCOME10,Welcome 10%,meta_ads,west,BRD-SOCK-05,Wool socks 3-pack,1,24.00,2.40,21.60,false
+L-1040,BR-5032,2026-11-22,BLACKFRI30,Black Friday 30%,affiliate,east,BRD-TEE-01,Organic cotton tee,2,28.00,16.80,39.20,false
+L-1007,BR-5006,2026-11-23,WELCOME10,Welcome 10%,email,west,BRD-CAP-03,Canvas cap,1,22.00,2.20,19.80,true
+L-1012,BR-5010,2026-11-23,WELCOME10,Welcome 10%,email,west,BRD-HOOD-02,Fleece hoodie,2,64.00,12.80,115.20,false
+L-1013,BR-5011,2026-11-23,BLACKFRI30,Black Friday 30%,email,south,BRD-CAP-03,Canvas cap,2,22.00,13.20,30.80,false
+L-1018,BR-5016,2026-11-23,WELCOME10,Welcome 10%,affiliate,south,BRD-HOOD-02,Fleece hoodie,3,64.00,19.20,172.80,false
+L-1022,BR-5020,2026-11-23,WELCOME10,Welcome 10%,google_ads,south,BRD-TEE-01,Organic cotton tee,1,28.00,2.80,25.20,false
+L-1034,BR-5027,2026-11-23,CYBER20,Cyber Monday 20%,google_ads,south,BRD-TOTE-04,Market tote,3,18.00,10.80,43.20,false
+L-1037,BR-5029,2026-11-23,CYBER20,Cyber Monday 20%,meta_ads,west,BRD-TOTE-04,Market tote,3,18.00,10.80,43.20,false
+L-1008,BR-5007,2026-11-24,CYBER20,Cyber Monday 20%,email,south,BRD-TEE-01,Organic cotton tee,1,28.00,5.60,22.40,false
+L-1010,BR-5008,2026-11-24,CYBER20,Cyber Monday 20%,google_ads,north,BRD-TEE-01,Organic cotton tee,1,28.00,5.60,22.40,false
+L-1020,BR-5018,2026-11-24,BLACKFRI30,Black Friday 30%,affiliate,west,BRD-TOTE-04,Market tote,1,18.00,5.40,12.60,false
+L-1026,BR-5023,2026-11-24,CYBER20,Cyber Monday 20%,affiliate,east,BRD-HOOD-02,Fleece hoodie,1,64.00,12.80,51.20,true
+L-1005,BR-5004,2026-11-25,CYBER20,Cyber Monday 20%,meta_ads,west,BRD-SOCK-05,Wool socks 3-pack,1,24.00,4.80,19.20,false
+L-1019,BR-5017,2026-11-26,CYBER20,Cyber Monday 20%,email,north,BRD-SOCK-05,Wool socks 3-pack,1,24.00,4.80,19.20,false
+L-1030,BR-5024,2026-11-26,WELCOME10,Welcome 10%,affiliate,north,BRD-SOCK-05,Wool socks 3-pack,2,24.00,4.80,43.20,false
+L-1035,BR-5027,2026-11-26,BLACKFRI30,Black Friday 30%,instagram,west,BRD-SOCK-05,Wool socks 3-pack,1,24.00,7.20,16.80,false
+L-1001,BR-5001,2026-11-27,WELCOME10,Welcome 10%,affiliate,south,BRD-TOTE-04,Market tote,2,18.00,3.60,32.40,false
+L-1024,BR-5022,2026-11-27,CYBER20,Cyber Monday 20%,affiliate,north,BRD-SOCK-05,Wool socks 3-pack,2,24.00,9.60,38.40,false
+L-1025,BR-5022,2026-11-27,CYBER20,Cyber Monday 20%,email,west,BRD-CAP-03,Canvas cap,1,22.00,4.40,17.60,true
+L-1002,BR-5002,2026-11-28,CYBER20,Cyber Monday 20%,meta_ads,south,BRD-SOCK-05,Wool socks 3-pack,1,24.00,4.80,19.20,true
+L-1004,BR-5004,2026-11-28,BLACKFRI30,Black Friday 30%,instagram,north,BRD-TEE-01,Organic cotton tee,1,28.00,8.40,19.60,false
+L-1031,BR-5025,2026-11-28,BLACKFRI30,Black Friday 30%,email,south,BRD-CAP-03,Canvas cap,2,22.00,13.20,30.80,true
+L-1014,BR-5012,2026-11-29,WELCOME10,Welcome 10%,instagram,south,BRD-SOCK-05,Wool socks 3-pack,1,24.00,2.40,21.60,true
+L-1017,BR-5015,2026-11-29,CYBER20,Cyber Monday 20%,instagram,south,BRD-SOCK-05,Wool socks 3-pack,1,24.00,4.80,19.20,false
+L-1029,BR-5024,2026-11-29,BLACKFRI30,Black Friday 30%,meta_ads,west,BRD-TEE-01,Organic cotton tee,1,28.00,8.40,19.60,false
+L-1039,BR-5031,2026-11-29,BLACKFRI30,Black Friday 30%,email,east,BRD-HOOD-02,Fleece hoodie,2,64.00,38.40,89.60,false
+L-1003,BR-5003,2026-11-30,BLACKFRI30,Black Friday 30%,affiliate,south,BRD-SOCK-05,Wool socks 3-pack,2,24.00,14.40,33.60,false
+L-1016,BR-5014,2026-11-30,BLACKFRI30,Black Friday 30%,affiliate,west,BRD-TEE-01,Organic cotton tee,2,28.00,16.80,39.20,false

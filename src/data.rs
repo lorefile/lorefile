@@ -177,7 +177,18 @@ impl<'a> DataLayer<'a> {
     /// data views. Rows come back as JSON objects, at most `MAX_QUERY_ROWS`.
     #[cfg(feature = "duckdb")]
     pub fn query(&self, sql: &str, limit: usize) -> Result<QueryResult> {
-        self.db()?.query(sql, limit)
+        self.db()?.query(sql, limit).map_err(|e| match self.user_file_named(sql) {
+            // asked for rows that only ever arrive as a person's file: say so, not "table not found"
+            Some(h) => anyhow!("{}", h),
+            None => e,
+        })
+    }
+
+    /// The from_user sentence for the first entity the SQL names whose rows come from a person's file.
+    #[cfg(feature = "duckdb")]
+    fn user_file_named(&self, sql: &str) -> Option<String> {
+        let words: Vec<&str> = sql.split(|c: char| !(c.is_alphanumeric() || c == '_')).filter(|w| !w.is_empty()).collect();
+        self.ont.types.values().find(|t| words.iter().any(|w| w.eq_ignore_ascii_case(&t.name))).and_then(|t| self.user_file_hint(&t.name))
     }
 
     #[cfg(not(feature = "duckdb"))]
@@ -388,6 +399,14 @@ impl<'a> DataLayer<'a> {
         Ok(rows)
     }
 
+    /// For an entity whose rows come from a person's file (`kind: from_user`), the sentence that
+    /// says so; `None` for anything else.
+    pub fn user_file_hint(&self, type_name: &str) -> Option<String> {
+        let t = self.ont.type_(type_name)?;
+        let (src, b) = self.binding_of(t)?;
+        crate::learn::is_from_user(&src.kind).then(|| crate::learn::hint(&t.name, &b.table))
+    }
+
     /// Where the rows live, plus a live row count when readable here.
     pub fn where_is(&self, type_name: &str) -> Result<Json> {
         let t = self.ont.type_(type_name).ok_or_else(|| anyhow!("unknown type {}", type_name))?;
@@ -405,7 +424,16 @@ impl<'a> DataLayer<'a> {
                     j["trust"] = self.ont.grade_of(crate::trust::Kind::Binding, &t.name).to_json(crate::trust::Kind::Binding);
                 }
                 if let Some(s) = src {
-                    if s.kind.eq_ignore_ascii_case("csv") {
+                    if crate::learn::is_from_user(&s.kind) {
+                        // a file a person hands the agent: never here, read with the agent's own tools
+                        let headers: Vec<String> = t.properties.keys().map(|p| b.columns.get(p).cloned().unwrap_or_else(|| p.clone())).collect();
+                        j["columns"] = json!(headers);
+                        if !b.columns.is_empty() {
+                            j["column_names"] = json!(b.columns);
+                        }
+                        j["readable_here"] = json!(false);
+                        j["hint"] = json!(crate::learn::hint(&t.name, &b.table));
+                    } else if s.kind.eq_ignore_ascii_case("csv") {
                         j["path"] = json!(self.file_path(s, &b.table).display().to_string());
                         j["readable_here"] = json!(true);
                         j["row_count"] = json!(self.instances(&t.name)?.len());

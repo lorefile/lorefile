@@ -45,6 +45,23 @@ pub struct Proposal {
     /// "Yes, mark as checked" writes the grade.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub check: Option<CheckClaim>,
+    /// Made by `learn_file`: which entity, and the file's normalized column names, so the next
+    /// file of the same shape is recognised while this waits. Names only, never values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub learned: Option<Learned>,
+    /// Set aside because a newer `learn_file` for the same file replaced it: that proposal's id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replaced_by: Option<String>,
+}
+
+/// What a `learn_file` proposal is about.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct Learned {
+    pub entity: String,
+    /// The file's column names, normalized (trimmed, lower case, `_`/space/`-` alike).
+    pub headers: Vec<String>,
+    #[serde(default)]
+    pub file_name: String,
 }
 
 /// What an agent says it compared: the thing, the source whose rows it used, and what matched.
@@ -120,6 +137,8 @@ pub fn store(root: &Path, file: &str, content: &str, reason: &str, via: &str, ou
         summary: summary.to_string(),
         files: Vec::new(),
         check: None,
+        learned: None,
+        replaced_by: None,
     };
     let mut p = p;
     write_new(root, &mut p)?;
@@ -208,6 +227,27 @@ pub fn set_status(root: &Path, id: &str, status: &str) -> Result<Proposal, Strin
     let mut p = get(root, id).ok_or_else(|| format!("no proposal {}", id))?;
     p.status = status.to_string();
     p.resolved_at = now();
+    write(root, &p)?;
+    Ok(p)
+}
+
+/// Record what a `learn_file` proposal is about, so `match_file` recognises the file while it waits.
+pub fn set_learned(root: &Path, id: &str, learned: &Learned) -> Result<Proposal, String> {
+    let mut p = get(root, id).ok_or_else(|| format!("no proposal {}", id))?;
+    p.learned = Some(learned.clone());
+    write(root, &p)?;
+    Ok(p)
+}
+
+/// Set a waiting proposal aside because a newer one for the same file replaced it.
+pub fn dismiss_replaced(root: &Path, id: &str, by: &str) -> Result<Proposal, String> {
+    let mut p = get(root, id).ok_or_else(|| format!("no proposal {}", id))?;
+    if p.status != "pending" {
+        return Ok(p);
+    }
+    p.status = "dismissed".into();
+    p.resolved_at = now();
+    p.replaced_by = Some(by.to_string());
     write(root, &p)?;
     Ok(p)
 }

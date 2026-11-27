@@ -1,0 +1,25 @@
+line_id,order_id,order_date,promo_code,campaign,channel,region,sku,product,units,unit_price,discount,revenue,refunded
+L-2007,BR-6006,2026-12-01,WELCOME10,Welcome 10%,meta_ads,west,BRD-SOCK-05,Wool socks 3-pack,1,24.00,2.40,21.60,true
+L-2017,BR-6013,2026-12-01,HOLIDAY15,Holiday 15%,meta_ads,east,BRD-HOOD-02,Fleece hoodie,1,64.00,9.60,54.40,false
+L-2002,BR-6002,2026-12-02,HOLIDAY15,Holiday 15%,affiliate,south,BRD-HOOD-02,Fleece hoodie,1,64.00,9.60,54.40,false
+L-2012,BR-6009,2026-12-05,WELCOME10,Welcome 10%,affiliate,north,BRD-SOCK-05,Wool socks 3-pack,2,24.00,4.80,43.20,false
+L-2004,BR-6004,2026-12-07,HOLIDAY15,Holiday 15%,affiliate,east,BRD-TOTE-04,Market tote,2,18.00,5.40,30.60,false
+L-2022,BR-6015,2026-12-07,HOLIDAY15,Holiday 15%,email,east,BRD-HOOD-02,Fleece hoodie,1,64.00,9.60,54.40,false
+L-2018,BR-6013,2026-12-08,WELCOME10,Welcome 10%,email,east,BRD-TEE-01,Organic cotton tee,2,28.00,5.60,50.40,false
+L-2006,BR-6006,2026-12-13,HOLIDAY15,Holiday 15%,meta_ads,east,BRD-CAP-03,Canvas cap,2,22.00,6.60,37.40,false
+L-2015,BR-6012,2026-12-13,WELCOME10,Welcome 10%,meta_ads,west,BRD-HOOD-02,Fleece hoodie,2,64.00,12.80,115.20,false
+L-2023,BR-6016,2026-12-14,WELCOME10,Welcome 10%,google_ads,north,BRD-SOCK-05,Wool socks 3-pack,3,24.00,7.20,64.80,false
+L-2008,BR-6006,2026-12-16,HOLIDAY15,Holiday 15%,email,south,BRD-HOOD-02,Fleece hoodie,1,64.00,9.60,54.40,false
+L-2010,BR-6007,2026-12-16,HOLIDAY15,Holiday 15%,meta_ads,south,BRD-HOOD-02,Fleece hoodie,2,64.00,19.20,108.80,false
+L-2016,BR-6012,2026-12-16,WELCOME10,Welcome 10%,email,east,BRD-TEE-01,Organic cotton tee,1,28.00,2.80,25.20,false
+L-2011,BR-6008,2026-12-18,WELCOME10,Welcome 10%,affiliate,south,BRD-CAP-03,Canvas cap,3,22.00,6.60,59.40,false
+L-2014,BR-6011,2026-12-19,HOLIDAY15,Holiday 15%,email,west,BRD-TOTE-04,Market tote,1,18.00,2.70,15.30,false
+L-2024,BR-6017,2026-12-19,WELCOME10,Welcome 10%,meta_ads,south,BRD-CAP-03,Canvas cap,1,22.00,2.20,19.80,false
+L-2013,BR-6010,2026-12-20,WELCOME10,Welcome 10%,affiliate,west,BRD-TEE-01,Organic cotton tee,2,28.00,5.60,50.40,false
+L-2005,BR-6005,2026-12-21,HOLIDAY15,Holiday 15%,email,south,BRD-TEE-01,Organic cotton tee,3,28.00,12.60,71.40,false
+L-2020,BR-6014,2026-12-21,HOLIDAY15,Holiday 15%,affiliate,south,BRD-SOCK-05,Wool socks 3-pack,1,24.00,3.60,20.40,false
+L-2001,BR-6001,2026-12-22,HOLIDAY15,Holiday 15%,email,west,BRD-HOOD-02,Fleece hoodie,2,64.00,19.20,108.80,false
+L-2009,BR-6007,2026-12-22,HOLIDAY15,Holiday 15%,affiliate,west,BRD-TOTE-04,Market tote,1,18.00,2.70,15.30,false
+L-2003,BR-6003,2026-12-23,HOLIDAY15,Holiday 15%,google_ads,south,BRD-TEE-01,Organic cotton tee,2,28.00,8.40,47.60,false
+L-2019,BR-6013,2026-12-23,WELCOME10,Welcome 10%,affiliate,south,BRD-TEE-01,Organic cotton tee,2,28.00,5.60,50.40,false
+L-2021,BR-6015,2026-12-24,WELCOME10,Welcome 10%,instagram,south,BRD-HOOD-02,Fleece hoodie,1,64.00,6.40,57.60,false

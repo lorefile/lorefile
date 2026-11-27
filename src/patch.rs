@@ -279,6 +279,55 @@ fn next_rule_id(ont: &Ontology, applies_to: &str) -> String {
     format!("{}-{:03}", prefix, n)
 }
 
+/// A field name goes into YAML keys, SQL and the page: letters, digits and `_`, starting with a letter.
+fn prop_name_ok(s: &str) -> Result<(), String> {
+    let ok = s.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false) && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') && s.len() <= 80;
+    if ok { Ok(()) } else { Err(format!("a field name starts with a letter and uses only letters, digits and `_` (got `{}`); map a header like `Unit Price ($)` with `columns`", s)) }
+}
+
+/// One property as given (`"integer"` or `{type, key, unit, description}`), checked the way a
+/// file is: an unknown key such as `descripton` is an error. Written as given, in its order.
+fn property_yaml(name: &str, spec: &Json) -> Result<Yaml, String> {
+    match spec {
+        Json::String(kind) if !kind.trim().is_empty() => Ok(Yaml::String(kind.trim().to_string())),
+        Json::Object(_) => {
+            serde_json::from_value::<crate::schema::Property>(spec.clone()).map_err(|e| format!("property `{}`: {}", name, e))?;
+            serde_yaml::to_value(spec).map_err(|e| e.to_string())
+        }
+        _ => Err(format!("property `{}` is a type name (`integer`) or a mapping ({{type, key, unit, description}})", name)),
+    }
+}
+
+/// Mark a property as the key, turning the shorthand `id: string` into a mapping.
+fn set_key(entry: &mut Yaml) {
+    match entry {
+        Yaml::String(kind) => {
+            let mut mm = Mapping::new();
+            mm.insert(key("type"), Yaml::String(kind.clone()));
+            mm.insert(key("key"), Yaml::Bool(true));
+            *entry = Yaml::Mapping(mm);
+        }
+        Yaml::Mapping(mm) => {
+            if !mm.contains_key(key("key")) {
+                let mut out = Mapping::new();
+                for (k, v) in mm.iter() {
+                    out.insert(k.clone(), v.clone());
+                    if k.as_str() == Some("type") {
+                        out.insert(key("key"), Yaml::Bool(true));
+                    }
+                }
+                if !out.contains_key(key("key")) {
+                    out.insert(key("key"), Yaml::Bool(true));
+                }
+                *mm = out;
+            } else {
+                mm.insert(key("key"), Yaml::Bool(true));
+            }
+        }
+        _ => {}
+    }
+}
+
 pub fn plan(ont: &Ontology, body: &Json) -> Result<Patch, String> {
     let none = HashMap::new();
     plan_in(&Workspace { ont, pending: &none }, body)
@@ -440,6 +489,19 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
                 return Err("a binding needs a connection and a table".into());
             }
             let params = body.get("params").filter(|p| p.as_object().map(|o| !o.is_empty()).unwrap_or(false)).cloned();
+            // field → the file's column, when they differ
+            let mut columns = Mapping::new();
+            if let Some(cols) = body.get("columns") {
+                let o = cols.as_object().ok_or("`columns` maps a field to its column: {\"unit_price\": \"Unit Price ($)\"}")?;
+                let ty = ont.type_(&t).ok_or_else(|| format!("no type named `{}`", t))?;
+                for (f, c) in o {
+                    let c = c.as_str().map(|x| x.trim()).filter(|x| !x.is_empty()).ok_or_else(|| format!("`columns`: the column for `{}` must be its name", f))?;
+                    if !ty.properties.contains_key(f) {
+                        return Err(format!("`columns`: {} has no field `{}`", t, f));
+                    }
+                    columns.insert(key(f), Yaml::String(c.to_string()));
+                }
+            }
             let (file, out) = edit_type_file(ws, &t, |m| {
                 let mut src = Mapping::new();
                 src.insert(key("connection"), Yaml::String(connection.clone()));
@@ -454,6 +516,9 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
                 }
                 if !keyp.is_empty() {
                     src.insert(key("key"), Yaml::String(keyp.clone()));
+                }
+                if !columns.is_empty() {
+                    src.insert(key("columns"), Yaml::Mapping(columns.clone()));
                 }
                 insert_after(m, "relationships", "source", Yaml::Mapping(src));
                 Ok(())
@@ -595,16 +660,98 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
                 m.insert(key("domain"), Yaml::String(domain.to_string()));
             }
             m.insert(key("description"), Yaml::String(field(body, "description").to_string()));
+            let keyp = field(body, "key").to_string();
             let mut props = Mapping::new();
-            let mut idp = Mapping::new();
-            idp.insert(key("type"), Yaml::String("string".into()));
-            idp.insert(key("key"), Yaml::Bool(true));
-            idp.insert(key("description"), Yaml::String(format!("Identifier of one {}", name)));
-            props.insert(key(&format!("{}_id", snake(&name))), Yaml::Mapping(idp));
+            match body.get("properties") {
+                // the fields as the YAML writes them: `units: integer`, or `{type, key, unit, description}`
+                Some(Json::Object(given)) if !given.is_empty() => {
+                    if given.len() > 300 {
+                        return Err("at most 300 properties in one entity".into());
+                    }
+                    for (pname, spec) in given {
+                        prop_name_ok(pname)?;
+                        props.insert(key(pname), property_yaml(pname, spec)?);
+                    }
+                    let keyed: Vec<String> = props.iter().filter(|(_, v)| v.get("key").and_then(|k| k.as_bool()).unwrap_or(false)).filter_map(|(k, _)| k.as_str().map(|s| s.to_string())).collect();
+                    if keyed.len() > 1 {
+                        return Err(format!("only one field can be the key; {} all say `key: true`", keyed.join(", ")));
+                    }
+                    if !keyp.is_empty() {
+                        if keyed.iter().any(|k| k != &keyp) {
+                            return Err(format!("`key` names {}, but {} says `key: true`", keyp, keyed.join(", ")));
+                        }
+                        let entry = props.get_mut(key(&keyp)).ok_or_else(|| format!("`key` must be one of the properties; `{}` is not", keyp))?;
+                        set_key(entry);
+                    }
+                }
+                Some(Json::Object(_)) | None => {
+                    // no fields given: one identifier, the key, as before
+                    let mut idp = Mapping::new();
+                    idp.insert(key("type"), Yaml::String("string".into()));
+                    idp.insert(key("key"), Yaml::Bool(true));
+                    idp.insert(key("description"), Yaml::String(format!("Identifier of one {}", name)));
+                    let id = if keyp.is_empty() { format!("{}_id", snake(&name)) } else { prop_name_ok(&keyp).map(|_| keyp.clone())? };
+                    props.insert(key(&id), Yaml::Mapping(idp));
+                }
+                Some(_) => return Err("`properties` maps each field to its type, e.g. {\"units\": \"integer\", \"revenue\": {\"type\": \"number\", \"unit\": \"USD\"}}".into()),
+            }
             m.insert(key("properties"), Yaml::Mapping(props));
             let content = serde_yaml::to_string(&Yaml::Mapping(m)).map_err(|e| e.to_string())?;
             let (rel, text) = edit::plan_create(&ont.root, "type", &name, &content, None)?;
             Ok(Patch { file: rel, text, kind: "type".into(), name: name.clone(), summary: format!("created {}", name) })
+        }
+        "add_property" => {
+            let t = field(body, "type").to_string();
+            let prop = field(body, "property").to_string();
+            if t.is_empty() || prop.is_empty() {
+                return Err("add_property needs `type` (the entity) and `property` (the new field's name)".into());
+            }
+            prop_name_ok(&prop)?;
+            let ty = ont.type_(&t).ok_or_else(|| format!("no type named `{}`", t))?;
+            if let Some(have) = ty.properties.keys().find(|k| k.eq_ignore_ascii_case(&prop)) {
+                return Err(format!("{} already has a field `{}`", t, have));
+            }
+            let mut pm = Mapping::new();
+            let datatype = { let d = field(body, "datatype"); if d.is_empty() { "string" } else { d } };
+            pm.insert(key("type"), Yaml::String(datatype.to_string()));
+            let is_key = body.get("key").and_then(|k| k.as_bool()).unwrap_or(false);
+            if is_key {
+                if let Some(k) = ty.key_property() {
+                    return Err(format!("{} already has a key, `{}`", t, k));
+                }
+                pm.insert(key("key"), Yaml::Bool(true));
+            }
+            let unit = field(body, "unit");
+            if !unit.is_empty() {
+                pm.insert(key("unit"), Yaml::String(unit.to_string()));
+            }
+            let desc = field(body, "description");
+            if !desc.is_empty() {
+                pm.insert(key("description"), Yaml::String(desc.to_string()));
+            }
+            serde_yaml::from_value::<crate::schema::Property>(Yaml::Mapping(pm.clone())).map_err(|e| format!("field `{}`: {}", prop, e))?;
+            let column = field(body, "column").to_string();
+            let mapped = !column.is_empty() && column != prop;
+            if mapped && ty.source.is_none() {
+                return Err(format!("`column` maps the field to a column of the binding, and {} has no binding", t));
+            }
+            let (file, out) = edit_type_file(ws, &t, |m| {
+                if !m.contains_key(key("properties")) {
+                    insert_after(m, "description", "properties", Yaml::Mapping(Mapping::new()));
+                }
+                let props = m.get_mut(key("properties")).and_then(|p| p.as_mapping_mut()).ok_or_else(|| "properties is not a mapping".to_string())?;
+                props.insert(key(&prop), Yaml::Mapping(pm.clone()));
+                if mapped {
+                    let src = m.get_mut(key("source")).and_then(|s| s.as_mapping_mut()).ok_or_else(|| format!("{} has no binding", t))?;
+                    if !src.contains_key(key("columns")) {
+                        src.insert(key("columns"), Yaml::Mapping(Mapping::new()));
+                    }
+                    let cols = src.get_mut(key("columns")).and_then(|c| c.as_mapping_mut()).ok_or_else(|| "columns is not a mapping".to_string())?;
+                    cols.insert(key(&prop), Yaml::String(column.clone()));
+                }
+                Ok(())
+            })?;
+            Ok(Patch { file, text: out, kind: "type".into(), name: t.clone(), summary: format!("added the field {}.{}", t, prop) })
         }
         "add_function" => {
             let name = field(body, "function").to_string();
@@ -701,7 +848,7 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             Ok(Patch { file: rel, text, kind: "function".into(), name: name.clone(), summary: format!("added function {} ({})", name, how) })
         }
         "record_check" => Err("record_check reports a check, it changes no file; send it on its own, not in `ops`".into()),
-        other => Err(format!("unknown op `{}`; one of add_type, set_type_description, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
+        other => Err(format!("unknown op `{}`; one of add_type, add_property, set_type_description, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
     }
 }
 
@@ -777,6 +924,48 @@ mod tests {
         // and the single-sitting failure of the trial is gone: the metric's source was only pending
         assert!(plan_many(&ont, &ops[3..4]).is_err(), "alone, the metric still needs its source first");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn add_type_takes_the_fields_and_makes_no_generated_id() {
+        let ont = ecommerce();
+        let p = plan(&ont, &json!({ "op": "add_type", "name": "PromoSale", "description": "One order line.", "properties": {
+            "line_id": { "type": "string", "key": true, "description": "Identifier of one order line." },
+            "units": "integer",
+            "revenue": { "type": "number", "unit": "USD", "description": "What the customer paid." }
+        } })).unwrap();
+        assert!(!p.text.contains("promo_sale_id"), "{}", p.text);
+        assert!(p.text.contains("  line_id:\n    type: string\n    key: true\n    description: Identifier of one order line.\n"), "{}", p.text);
+        assert!(p.text.contains("  units: integer\n"), "shorthand kept: {}", p.text);
+        assert!(p.text.contains("    unit: USD\n"), "{}", p.text);
+        // `key` names the key when no property says so
+        let k = plan(&ont, &json!({ "op": "add_type", "name": "Sheet", "properties": { "code": "string", "n": "integer" }, "key": "code" })).unwrap();
+        assert!(k.text.contains("  code:\n    type: string\n    key: true\n"), "{}", k.text);
+        let e = plan(&ont, &json!({ "op": "add_type", "name": "Bad", "properties": { "x": { "type": "string", "descripton": "typo" } } })).err().unwrap();
+        assert!(e.contains("descripton"), "an unknown key is an error, as in a file: {}", e);
+        assert!(plan(&ont, &json!({ "op": "add_type", "name": "Bad", "properties": { "x": "string" }, "key": "y" })).is_err(), "the key must be a property");
+        assert!(plan(&ont, &json!({ "op": "add_type", "name": "Bad", "properties": { "Unit Price": "number" } })).is_err(), "field names are plain");
+        // without properties, the old shape: one generated key
+        let old = plan(&ont, &json!({ "op": "add_type", "name": "Voucher" })).unwrap();
+        assert!(old.text.contains("voucher_id:"), "{}", old.text);
+    }
+
+    #[test]
+    fn add_property_adds_a_field_and_maps_its_column() {
+        let ont = ecommerce();
+        let p = plan(&ont, &json!({ "op": "add_property", "type": "Order", "property": "gift_wrap", "datatype": "boolean", "description": "True when the order is gift wrapped." })).unwrap();
+        assert!(p.text.contains("  gift_wrap:\n    type: boolean\n    description: True when the order is gift wrapped.\n"), "{}", p.text);
+        assert_eq!(p.summary, "added the field Order.gift_wrap");
+        let c = plan(&ont, &json!({ "op": "add_property", "type": "Order", "property": "gift_wrap", "datatype": "boolean", "column": "Gift Wrap?" })).unwrap();
+        assert!(c.text.contains("columns:\n    gift_wrap: Gift Wrap?"), "{}", c.text);
+        let (o, report) = edit::check_many(&ont.root, &[(c.file.clone(), Some(c.text.clone()))].into_iter().collect()).unwrap();
+        assert!(report.ok(), "{:?}", report.diags);
+        assert_eq!(o.type_("Order").unwrap().source.as_ref().unwrap().columns["gift_wrap"], "Gift Wrap?");
+        assert!(plan(&ont, &json!({ "op": "add_property", "type": "Order", "property": "order_id" })).err().unwrap().contains("already has a field"));
+        assert!(plan(&ont, &json!({ "op": "add_property", "type": "Order", "property": "x", "key": true })).err().unwrap().contains("already has a key"));
+        let s = plan(&ont, &json!({ "op": "set_source", "type": "Order", "connection": "shop_files", "table": "orders", "key": "order_id", "columns": { "order_id": "Order ID" } })).unwrap();
+        assert!(s.text.contains("columns:\n    order_id: Order ID"), "set_source takes columns: {}", s.text);
+        assert!(plan(&ont, &json!({ "op": "set_source", "type": "Order", "connection": "shop_files", "table": "orders", "columns": { "nope": "x" } })).is_err());
     }
 
     #[test]

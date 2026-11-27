@@ -90,7 +90,7 @@ curl -fsSL https://raw.githubusercontent.com/lorefile/lorefile/main/scripts/inst
 
 The rest of this page writes `lorefile`; from a checkout, read it as `./target/release/lorefile`.
 
-## End to end, in ten steps
+## End to end, in eleven steps
 
 Everything below was run on a laptop.
 
@@ -203,7 +203,7 @@ The address to give them is the one your tunnel printed (`https://quiet-otter.ng
 Seen    https://quiet-otter.ngrok-free.app   a connection was approved on this address; its connector URL is https://quiet-otter.ngrok-free.app/mcp
 ```
 
-- **ChatGPT**: Settings › Apps › Developer mode › Create. MCP server URL: that address with `/mcp`. Authentication: OAuth. Which ChatGPT plans can add a connector differs between OpenAI's own pages; check on the account you will use.
+- **ChatGPT**, on the web: chatgpt.com/plugins › **+** › *Add custom MCP server*. URL: that address with `/mcp`. Authentication: OAuth. Then type `@` in a chat and pick it. As of November 2026, the ChatGPT desktop app's Settings › Plugins › MCPs (and its plugin marketplace) are for Codex only: plain chats never see a server added there, so add it on the web. Per OpenAI's help article as read on 27 Nov 2026, on Business only admins and owners can add a server and Pro gets read and fetch only; Plus is not stated. It is OpenAI's product and it moves: check on the account you will use.
 - **Claude**: Settings › Connectors › Add custom connector, with the same URL; leave the OAuth client ID empty. On Team and Enterprise an owner adds it under Organization settings › Connectors and each member connects.
 - **Claude Code without the token**: `claude mcp add --transport http lorefile https://quiet-otter.ngrok-free.app/mcp`, then `/mcp` and Authenticate. (The `--header` command above keeps working too.)
 
@@ -232,7 +232,8 @@ Good to know:
 - Behind your own nginx, have it pass the name and HTTPS: `proxy_set_header Host $host; proxy_set_header X-Forwarded-Proto $scheme;`. Or start with `--public-url https://your.name`, which also limits sign-ins to that one address. Lorefile has to sit at the root of its address (a subdomain, not `example.com/lorefile/`). `--no-oauth` turns the sign-in off.
 - Plain `http://127.0.0.1` sees no change: OAuth answers only on HTTPS addresses. It stays off with `--no-auth`, and with a login token shorter than 32 characters (the start-up line says why): on a public approval page, the token's length is what stops guessing.
 - What connecting shares: the definitions, rules and metric logic go to OpenAI or Anthropic under their terms. The rows stay in your data MCPs, as before. Lorefile makes no outbound request and stores no OpenAI or Anthropic credential; the tokens it issues are keys to itself, kept only as hashes in `.lorefile/oauth.json`.
-- Status: built, and covered by tests that run the whole flow through the real binary with tunnel-style headers. Not yet tried with real ChatGPT and Claude accounts, or through each tunnel service ([DEPLOY.md §8](DEPLOY.md#8-status-of-each-path)).
+- Status: built, and covered by tests that run the whole flow through the real binary with tunnel-style headers. Tried live on 27 Nov 2026 through ngrok: ChatGPT on the web connected from OpenAI's cloud and called `summary` in a plain chat, and Codex desktop connected too. Not yet tried with Claude's connector, or through other tunnel services ([DEPLOY.md §8](DEPLOY.md#8-status-of-each-path)).
+- Discovery addresses Lorefile does not serve (ChatGPT asks for `/.well-known/openid-configuration`) answer 404 before the login check, never 401. Read tools say `readOnlyHint: true`, so ChatGPT should stop asking you to confirm every read (not yet checked live); the metadata lists `offline_access`, as OpenAI asks.
 
 ### 5. Teach it by using it
 
@@ -255,7 +256,64 @@ propose_patch  reason: "First reporting conversation."  ops:
 
 Each op is planned against the space as it would be after the ones before it, so the entity can be bound to a source that is new in the same batch. The whole set is compiled together. In edit mode it is written at once, as one change. Otherwise it is queued as one proposal, and a blank space can be taught in a single sitting.
 
-### 6. Accept what it learned
+### 6. Teach it a file
+
+A monthly export is the thing people hand an agent most. Upload it to ChatGPT or Claude and say "save this to Lorefile". The agent asks at most two questions (three if nobody has said the currency), you press Accept once, and next month's file is read the same way by any agent:
+
+```
+You:      [promo_sales.csv]  save this to Lorefile
+ChatGPT:  I'll save it as "Promo sales": one row per order line, 14 columns.
+          Two questions so next month's file is read the same way:
+          1. Which number is the result you care about: revenue?
+          2. Do refunded lines count?
+You:      revenue, and no refunds
+ChatGPT:  Saved for review: PromoSale (14 columns, each described) and
+          promo_sale_revenue = revenue without refunded lines. Accept it in Lorefile: <link>
+── next month, a new chat ──
+You:      [promo_sales_2026-12.csv]  how did we do?
+ChatGPT:  $1,209.60 in promo revenue, refunded lines left out, as you set on 27 Nov.
+```
+
+Two tools do it:
+
+- `match_file` only reads. The agent sends the file's name, its column names and up to five example values per column. Lorefile answers **same** (and how to read it: "sum(revenue) where refunded = false, accepted by Vinay on 27 Nov"), **changed** (columns added or gone), **waiting** (saved, not accepted yet) or **new** (what it would save, and the questions to ask).
+- `learn_file` saves. The same columns, one short description each, and the user's answers. It saves **one** proposal: the `user_files` source (the first time only), one entity with every column as a field under the file's own names, the key, the binding, the metric, and any words the user uses for the file. Without answers it saves nothing and returns the questions.
+
+What gets saved for the November file, apart from the agent's descriptions:
+
+```yaml
+# sources/user_files.yaml
+connection: user_files
+kind: from_user
+# types/promo_sale.yaml (14 fields, abridged)
+type: PromoSale
+properties:
+  line_id:  { type: string,  key: true }
+  revenue:  { type: number,  unit: USD }
+  refunded: { type: boolean }
+source: { connection: user_files, table: promo_sales, key: line_id }
+# logic/metrics.yaml
+metrics:
+  - metric: promo_sale_revenue
+    description: Sum of revenue in PromoSale, leaving out rows where refunded is true.
+    source: { connection: user_files, table: promo_sales, filter: refunded = false, measure: sum(revenue) }
+    caveats: Refunded lines never count.
+```
+
+The rules it follows:
+
+- **A file is recognised by its column names**, never its file name: `promo_sales_2026-12.csv` and `Promo Sales (1).csv` are the same file if their columns are. Any bound entity can match: an orders export matches `Order`.
+- **Types come from fixed rules**: dates written 2026-11-20, whole numbers, decimals (money when the name or a € £ $ says so), true/false. Never an enum, so next month's new promo code is not refused.
+- **Example values are used in memory and dropped.** They never reach the YAML, a proposal, the activity log or history. A description that quotes one is left out, and the reply says which.
+- **Rows never reach Lorefile.** `kind: from_user` says the rows arrive as a file a person gives the agent; `where_is`, `instances`, `query`, `summary` and the page all say so. Lorefile never computes the number: the agent does, from the recipe.
+- **A changed file** gets its new columns proposed as fields. A missing column is never removed, and a saved number that reads it is flagged before any number is given.
+- **"Refunded lines don't count" is part of the number**, in the metric's `filter` and `caveats`, not a guardrail: a refunded line is a valid row that just does not count.
+
+Why the grain matters: refunds in these files are marked per line. Leaving out refunded lines gives $1,275.20 for November and $1,209.60 for December. Ignoring the rule gives $1,435.40 and $1,231.20. Dropping every order with a refunded line gives $1,142.40 and $1,117.80.
+
+Status: built. Tests run it end to end through the real binary over stdio and over HTTP with an OAuth connection, and run the saved recipe in DuckDB against the two files (1,275.20 and 1,209.60). Not yet tried live in ChatGPT or Claude. To accept from the page, the page's server needs `--allow-edit`; without it, the agent's save waits and Accept is greyed out.
+
+### 7. Accept what it learned
 
 Open Agents. Every proposal reads as a sentence, with the file change one click away.
 
@@ -300,13 +358,13 @@ Accepting also records who stands behind the definition. Every metric, data bind
 
 A grade moves up only by a person's click and down by itself: when the definition changes, by hand, in a merge or by another tool, the grade stops counting until a person looks again (warning W113). When the server runs with `--allow-edit`, what an agent saves is written at once as **proposed** and listed under Agents › *Written by agents, not reviewed*, where **Looks right** makes it accepted. An agent's change to something a person accepted or checked is never written directly: it waits for a person, like any proposal. **Mark as checked…** on an accepted metric, binding or guardrail asks which source's rows you used and what you compared ("412 paid orders for 16–22 Nov, the same as Shopify's own report"); Lorefile records your word and runs nothing. An agent that did the comparing with the user can report it (`propose_patch` with `op: record_check`); that is always queued, and the card asks "Did you see this match yourself?". A space with no `trust.yaml` behaves exactly as before; **Vouch for all** on the Map grades everything nobody has graded yet in one change; what an agent proposed, and what changed since a person graded it, still need a look each. A reported check is tied to the definition the agent compared: if that definition changes before a person clicks, the click is refused. Settings › *Your name* puts your name on what you accept and check (`Priya via page`): up to 60 letters, digits, spaces and `. - ' _`, never "agent" or "via", and the page says so when a name cannot be used.
 
-### 7. Ask again tomorrow
+### 8. Ask again tomorrow
 
 > Show me yesterday's performance.
 
 The agent reads `summary`, sees the metric and its recipe, fetches the rows through the BigQuery MCP with the user's own login, and reports. Same files, same definition, same number. The How-to-use-it page lists the questions a space can answer now, with the tool call behind each and a Try-it button that runs it.
 
-### 8. Put a guardrail in
+### 9. Put a guardrail in
 
 Guardrails are what an agent checks before it acts. The builder writes the expression for you; the sentence comes first.
 
@@ -336,7 +394,7 @@ approval: support-lead@brand-one
 
 An agent gets the same answer from `validate`, with the reason and the approver, and tells the user "no" before anything is touched. A key that matches no row answers `unknown`, never "blocked".
 
-### 9. Add the numbers and the operations
+### 10. Add the numbers and the operations
 
 Logic is two lists the business agrees on once. **Metrics** are the numbers: what counts and where it comes from. **Functions** are the operations: what an agent can run, with what goes in, what comes out and which tool does it. Nothing runs inside the ontology.
 
@@ -355,7 +413,7 @@ functions:
 
 When someone says "run the forecast for a £40k week", the agent reads the contract, gathers the inputs, calls the measurement MCP itself, and reports with the confidence intervals the caveat asks for.
 
-### 10. Keep the history and share it
+### 11. Keep the history and share it
 
 History starts with the space. Creating one runs `git init` in its folder (the `git` already on your machine; nothing to set up, no GitHub account) and makes the first commit, "Start the space". From then on every accepted change is one commit: the summary in words is the message ("Described Order.basket", "An agent learned: 5 changes: …") and the author says who, `person via page` or `agent via MCP`, so an agent's change and a person's look different. When a person accepts an agent's proposal, the agent stays the author and the person is the committer.
 
@@ -399,6 +457,8 @@ To share the live server instead: run it for the team with a token (`LOREFILE_TO
 | Run the forecast for a £40k week | `describe("forecast_success")`, then the measurement MCP | The contract, then the forecast |
 | Remember that "cart" means Order | `propose_patch(add_term)` | Written, or queued for a person |
 | Which spaces do you have? | `spaces` | One line per brand with what it holds |
+| [a CSV] How did we do this month? | `match_file` | Same, changed, waiting or new; for a known file, the number that counts, the rows that do not, and who stands behind it |
+| [a CSV] Save this to Lorefile | `match_file`, then `learn_file` | The questions to ask, then one proposal: the file's shape, its meaning and its number, never its rows |
 
 ## Standards: Ossie, OWL, SKOS, SHACL
 
@@ -446,7 +506,7 @@ An import starts with every definition ungraded, whatever grades the file claims
 ontology/
 ├── ontology.yaml          # name, version, domains; optional namespace and prefixes for IRIs
 ├── glossary.yaml          # "vendor" means Supplier
-├── sources/*.yaml         # connections: csv, parquet, duckdb, postgres, s3 read here; snowflake/… declared; mcp points at another MCP server
+├── sources/*.yaml         # connections: csv, parquet, duckdb, postgres, s3 read here; snowflake/… declared; mcp points at another MCP server; from_user is a file a person gives the agent
 ├── types/*.yaml           # one type per file, or a `types:` list
 ├── relationships/*.yaml   # relationships with their own properties / edge tables
 ├── constraints/**/*.yaml  # rules, grouped however you like
@@ -587,6 +647,7 @@ The ontology is small and lives in git; the rows are big and live elsewhere. A `
 | `postgres` | `env: ORDERS_PG_URL`, `schema: public` | Loads the `postgres` extension and attaches read-only using the libpq connection string in that env var |
 | `s3` / `httpfs` | `path: s3://bucket/prefix` or an `https://…` base | Loads `httpfs`; `read_parquet('<path>/<table>.parquet')` |
 | `mcp` | `server: meta-ads` | Nothing is read here. `where_is` tells the agent which tool to call on that MCP server, with which params |
+| `from_user` | nothing else | Nothing is read here, ever. The rows arrive as a file a person gives the agent (a chat upload, an export); `where_is` says to read it with the agent's own tools. Made by `learn_file` as `user_files`, one per space |
 
 ```yaml
 # sources/parquet_files.yaml
@@ -674,7 +735,7 @@ Without `--allow-edit` the page is read-only and says so. The login is one share
 
 ### Proposals from agents
 
-An agent calls `propose_patch` with one small fact (`add_source`, `add_type`, `set_source`, `add_metric`, `add_function`, `add_term`, `set_property_description`, `add_relationship`, `add_constraint` and the other page operations, or `record_check` to report a check, which is always queued), or with `ops: [...]` for several that depend on each other, planned in order and queued as one proposal with every file in it; or `propose_change` with the full new text of one file, plus a reason. The server's instructions tell agents to offer this the moment the user settles a definition during their work: which event counts as success and where it comes from, which table or tool holds an entity's rows, what a word means. That is the loop: the first report writes the definition down, and the next day's question runs the same way for everyone. When the server allows edits and the change is clean, it is written and logged, and graded proposed; a change to something a person accepted or checked is queued instead. Otherwise it is queued under `<ontology>/.lorefile/proposals/` and shows up on the Agents page with a diff, where a person accepts or sets it aside; accepting writes it through the same checked path. Activity (who changed or proposed what, when) is kept in `<ontology>/.lorefile/activity.jsonl`. The `.lorefile/` folder is local state and is ignored by git.
+An agent calls `propose_patch` with one small fact (`add_source`, `add_type` (with its fields in `properties`, and `key`), `add_property`, `set_source` (with `columns` when a header differs from the field), `add_metric`, `add_function`, `add_term`, `set_property_description`, `add_relationship`, `add_constraint` and the other page operations, or `record_check` to report a check, which is always queued), or with `ops: [...]` for several that depend on each other, planned in order and queued as one proposal with every file in it; or `propose_change` with the full new text of one file, plus a reason; or `learn_file` for a file the user gave it, which builds those ops by fixed rules from the column names. A newer `learn_file` for a file that is still waiting replaces the waiting proposal ("replaced by p-…") instead of queueing a second one. The server's instructions tell agents to offer this the moment the user settles a definition during their work: which event counts as success and where it comes from, which table or tool holds an entity's rows, what a word means. That is the loop: the first report writes the definition down, and the next day's question runs the same way for everyone. When the server allows edits and the change is clean, it is written and logged, and graded proposed; a change to something a person accepted or checked is queued instead. Otherwise it is queued under `<ontology>/.lorefile/proposals/` and shows up on the Agents page with a diff, where a person accepts or sets it aside; accepting writes it through the same checked path. Activity (who changed or proposed what, when) is kept in `<ontology>/.lorefile/activity.jsonl`. The `.lorefile/` folder is local state and is ignored by git.
 
 ### Spaces: one server, many ontologies
 
@@ -724,7 +785,7 @@ lorefile import --from-rdf <file> [--into <folder>] [--only A,B] [--depth N] [--
 
 ## Tests
 
-`cargo test` runs 126 tests in these layers: unit tests inside the modules (paths that cannot escape the folder, the save gate, the DuckDB fence, spaces, patch operations, history, IRI resolution, CEL to SHACL, and grades: proposed, accepted and checked through the gate, a hand edit giving W113, Undo taking a grade back, two saves at once both landing their grade), `tests/mcp_loop.rs` (the real binary over stdio: an agent lists tools, reads the summary, saves a metric with `propose_patch`, and the save is queued in words, or written and committed when edits are allowed), `tests/mcp_http.rs` (the same over HTTP with the token, and 401 without it), `tests/oauth_http.rs` (OAuth through the real binary with tunnel-style headers and no network: the address rule, register, approve, token, `tools/list`, refresh, revoke, the refusals, one-space tokens that stay in their space, read-only scopes, confidential clients, concurrent refreshes, no token next to a forged name, restarts and a changed login token, and plain `http://127.0.0.1` unchanged; unit tests in `src/oauth.rs` cover PKCE, return addresses, resources, the keyed login fingerprint, the store, the flood limits, code replay and the lifetimes on a fake clock), `tests/http.rs` (the server: the login, write headers, a stale proposal, read-only examples, and History, Undo, Share, Push and Pull against a bare repository, no network), `tests/cli.rs` (every example and pack compiles with no errors and no warnings, and the documented commands answer), `tests/ossie.rs` (every example and pack through Ossie and back, unchanged; Ossie's own example files import) and `tests/rdf.rs` (every example and pack through Turtle and back, unchanged; JSON-LD, N-Triples and RDF/XML carry the same graph; a slice of schema.org imports; a SHACL shape becomes a guardrail that `check` enforces; one IRI on two things is an error), and for grades: an agent can neither write `trust.yaml` nor overwrite an accepted binding, a reported check waits for a person's click, and grades travel in Turtle (as PROV-O) and Ossie and come back only with `--keep-grades`. `.github/workflows/ci.yml` runs the same on every push, then `cargo clippy -- -D warnings`. A `.mcp.json` in the repository gives any Claude Code session opened here the ontology MCP server, pointed at `spaces/`.
+`cargo test` runs 153 tests in these layers: unit tests inside the modules (paths that cannot escape the folder, the save gate, the DuckDB fence, spaces, patch operations, history, IRI resolution, CEL to SHACL, grades: proposed, accepted and checked through the gate, a hand edit giving W113, Undo taking a grade back, two saves at once both landing their grade, and learning a file: names, types, the key, quoted values left out, same, changed and new, and the saved recipe run in DuckDB against the two promo-sales files), `tests/mcp_loop.rs` (the real binary over stdio: an agent lists tools, reads the summary, saves a metric with `propose_patch`, and the save is queued in words, or written and committed when edits are allowed; a file matched and learned as one proposal, recognised while it waits, replaced instead of piling up, and an example value found in no file and no commit), `tests/mcp_http.rs` (the same over HTTP with the token, and 401 without it; `server/discover` answered as method not found; every tool's `readOnlyHint`), `tests/oauth_http.rs` (OAuth through the real binary with tunnel-style headers and no network: the address rule, register, approve, token, `tools/list`, refresh, revoke, the refusals, one-space tokens that stay in their space, read-only scopes, confidential clients, concurrent refreshes, `offline_access`, a file learned over a connection and accepted on the page, no token next to a forged name, restarts and a changed login token, and plain `http://127.0.0.1` unchanged; unit tests in `src/oauth.rs` cover PKCE, return addresses, resources, the keyed login fingerprint, the store, the flood limits, code replay and the lifetimes on a fake clock), `tests/http.rs` (the server: the login, write headers, a stale proposal, read-only examples, and History, Undo, Share, Push and Pull against a bare repository, no network), `tests/cli.rs` (every example and pack compiles with no errors and no warnings, and the documented commands answer), `tests/ossie.rs` (every example and pack through Ossie and back, unchanged; Ossie's own example files import) and `tests/rdf.rs` (every example and pack through Turtle and back, unchanged; JSON-LD, N-Triples and RDF/XML carry the same graph; a slice of schema.org imports; a SHACL shape becomes a guardrail that `check` enforces; one IRI on two things is an error), and for grades: an agent can neither write `trust.yaml` nor overwrite an accepted binding, a reported check waits for a person's click, and grades travel in Turtle (as PROV-O) and Ossie and come back only with `--keep-grades`. `.github/workflows/ci.yml` runs the same on every push, then `cargo clippy -- -D warnings`. A `.mcp.json` in the repository gives any Claude Code session opened here the ontology MCP server, pointed at `spaces/`.
 
 ## Validation codes
 

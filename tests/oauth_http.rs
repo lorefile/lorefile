@@ -257,12 +257,13 @@ fn plain_http_and_no_oauth_see_no_change() {
     let folder = Folder::new(7140);
     let srv = start(&folder.0, 7140, &["--no-examples"], &[]);
     let login = format!("Bearer {}", TOKEN);
-    // plain http://127.0.0.1: the OAuth addresses are unknown routes, exactly as before
-    for path in ["/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/mcp"] {
+    // plain http://127.0.0.1: the OAuth addresses are not served here, so they are not found,
+    // before the login and with no sign-in challenge (a 401 on a discovery address misleads clients)
+    for path in ["/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/mcp", "/.well-known/openid-configuration"] {
         let r = http(srv.port, "GET", path, &[], "");
-        assert_eq!(r.status, 401, "behind the login gate as before: {}", r.body);
-        assert_eq!(r.header("WWW-Authenticate").as_deref(), Some("Bearer"));
-        assert_eq!(http(srv.port, "GET", path, &[("Authorization", &login)], "").status, 404, "signed in: not found, as before");
+        assert_eq!(r.status, 404, "not served on plain http: {}", r.body);
+        assert!(r.header("WWW-Authenticate").is_none(), "{}", r.head);
+        assert_eq!(http(srv.port, "GET", path, &[("Authorization", &login)], "").status, 404, "signed in: not found either");
     }
     assert_eq!(http(srv.port, "POST", "/oauth/register", &[("Authorization", &login), ("Content-Type", "application/json")], "{}").status, 404);
     let r = http(srv.port, "POST", "/mcp", &[("Content-Type", "application/json")], "{}");
@@ -275,7 +276,8 @@ fn plain_http_and_no_oauth_see_no_change() {
     // --no-oauth: the same on every address, HTTPS included
     let srv = start(&folder.0, 7141, &["--no-examples", "--no-oauth"], &[]);
     let r = get(srv.port, OTTER, "/.well-known/oauth-authorization-server");
-    assert_eq!(r.status, 401, "{}", r.body);
+    assert_eq!(r.status, 404, "not served with OAuth off: {}", r.body);
+    assert!(r.header("WWW-Authenticate").is_none(), "{}", r.head);
     let r = http(srv.port, "POST", "/mcp", &with(&tunnel(OTTER), &[("Content-Type", "application/json")]), "{}");
     assert_eq!(r.header("WWW-Authenticate").as_deref(), Some("Bearer"));
     assert!(srv.text().contains("OAuth   off (--no-oauth)"), "{}", srv.text());
@@ -291,7 +293,7 @@ fn https_marked_requests_get_metadata_for_their_own_address() {
     let j = pr.json();
     assert_eq!(j["resource"], format!("{}/mcp", o));
     assert_eq!(j["authorization_servers"], json!([o]));
-    assert_eq!(j["scopes_supported"], json!(["lorefile:read", "lorefile:propose"]));
+    assert_eq!(j["scopes_supported"], json!(["lorefile:read", "lorefile:propose", "offline_access"]), "offline_access is listed, as OpenAI asks");
     assert_eq!(j["bearer_methods_supported"], json!(["header"]));
     assert_eq!(pr.header("Access-Control-Allow-Origin").as_deref(), Some("*"));
     assert_eq!(pr.header("Cache-Control").as_deref(), Some("no-store"));
@@ -307,6 +309,7 @@ fn https_marked_requests_get_metadata_for_their_own_address() {
     assert_eq!(am["revocation_endpoint"], format!("{}/oauth/revoke", o));
     assert_eq!(am["code_challenge_methods_supported"], json!(["S256"]));
     assert_eq!(am["authorization_response_iss_parameter_supported"], json!(true));
+    assert_eq!(am["scopes_supported"], json!(["lorefile:read", "lorefile:propose", "offline_access"]));
     assert!(am.get("client_id_metadata_document_supported").is_none(), "no CIMD in phase 1");
     let r = http(srv.port, "POST", "/mcp", &with(&tunnel(OTTER), &[("Content-Type", "application/json")]), "{}");
     assert_eq!(r.status, 401);
@@ -320,8 +323,35 @@ fn https_marked_requests_get_metadata_for_their_own_address() {
     let text = srv.text();
     assert!(!text.contains("Seen"), "{}", text);
     assert!(!text.contains(TOKEN), "{}", text);
-    // the page is unchanged: /.well-known/openid-configuration is not served
-    assert_eq!(get(srv.port, OTTER, "/.well-known/openid-configuration").status, 401);
+    // Lorefile is not an identity provider: other discovery addresses are not found, before the
+    // login and with no challenge (ChatGPT asks for openid-configuration three times)
+    for path in ["/.well-known/openid-configuration", "/.well-known/anything", "/s/brand-two/.well-known/openid-configuration"] {
+        let r = get(srv.port, OTTER, path);
+        assert_eq!(r.status, 404, "{}: {}", path, r.body);
+        assert!(r.header("WWW-Authenticate").is_none(), "{}: {}", path, r.head);
+    }
+}
+
+#[test]
+fn offline_access_is_listed_and_asking_for_it_changes_nothing() {
+    let folder = Folder::new(7163);
+    let port = 7163;
+    let _srv = start(&folder.0, port, &["--no-examples"], &[]);
+    let resource = "https://quiet-otter.example/mcp";
+    let client = register(port, OTTER, "ChatGPT");
+    let (page, id) = authorize(port, OTTER, &client, resource, "lorefile:read lorefile:propose offline_access");
+    assert_eq!(page.status, 200, "{}", page.body);
+    let r = decide(port, OTTER, &id, &format!("decision=allow&propose=on&token={}", enc(TOKEN)));
+    assert_eq!(r.status, 302, "{}", r.body);
+    let code = param(&r.header("Location").unwrap(), "code").unwrap();
+    let t = exchange(port, OTTER, &client, &code, resource);
+    assert_eq!(t.status, 200, "{}", t.body);
+    let j = t.json();
+    assert_eq!(j["scope"], "lorefile:read lorefile:propose", "the token carries our two scopes only");
+    assert!(j["refresh_token"].as_str().unwrap_or("").starts_with("lfr_"), "and a refresh token, as always: {}", j);
+    // the challenge on /mcp still asks for our two scopes only
+    let r = http(port, "POST", "/mcp", &with(&tunnel(OTTER), &[("Content-Type", "application/json")]), "{}");
+    assert!(r.header("WWW-Authenticate").unwrap().ends_with("scope=\"lorefile:read lorefile:propose\""), "{}", r.head);
 }
 
 #[test]
@@ -371,7 +401,7 @@ fn two_addresses_at_once_and_a_pinned_one() {
     let srv = start(&folder.0, 7145, &["--no-examples", "--public-url", "https://a.example/"], &[]);
     assert!(srv.text().contains("OAuth   on at https://a.example only (--public-url)"), "{}", srv.text());
     assert_eq!(get(srv.port, a, "/.well-known/oauth-authorization-server").json()["issuer"], "https://a.example");
-    assert_eq!(get(srv.port, b, "/.well-known/oauth-authorization-server").status, 401, "another name gets today's login gate");
+    assert_eq!(get(srv.port, b, "/.well-known/oauth-authorization-server").status, 404, "another name: not served there, so not found");
     let r = http(srv.port, "POST", "/mcp", &with(&tunnel(b), &[("Content-Type", "application/json")]), "{}");
     assert_eq!(r.header("WWW-Authenticate").as_deref(), Some("Bearer"), "and today's plain 401");
     let login = format!("Bearer {}", TOKEN);
@@ -703,7 +733,7 @@ fn no_auth_and_a_short_token_leave_oauth_off() {
     let srv = start(&folder.0, 7154, &["--no-examples"], &[("LOREFILE_TOKEN", "twenty-chars-0123456")]);
     let text = srv.text();
     assert!(text.contains("OAuth   off: the login token is shorter than 32 characters"), "{}", text);
-    assert_eq!(get(srv.port, OTTER, "/.well-known/oauth-authorization-server").status, 401, "the login gate as before");
+    assert_eq!(get(srv.port, OTTER, "/.well-known/oauth-authorization-server").status, 404, "not served with OAuth off");
     let r = http(srv.port, "GET", "/api/oauth/connections", &[("Authorization", "Bearer twenty-chars-0123456")], "").json();
     assert_eq!(r["reason"], "short-token");
 }
@@ -931,4 +961,115 @@ fn disconnect_needs_a_real_id() {
     assert_eq!((r.status, r.json()["disconnected"].as_u64()), (200, Some(1)));
     assert_eq!(mcp(port, OTTER, "/mcp", &access, &tools_list()).status, 401);
     assert_eq!(write("/api/oauth/connections/all/revoke").status, 200, "all, with nothing left, is fine");
+}
+
+// ---------------------------------------------------------------------------
+// A file from the user, over a connector (specs/2026-11-27-learn-file.md)
+// ---------------------------------------------------------------------------
+
+/// A blank space like Branda's: one domain, no types yet.
+struct Blank(PathBuf);
+impl Blank {
+    fn new(port: u16) -> Blank {
+        let dir = std::env::temp_dir().join(format!("lorefile-oauth-learn-{}-{}", port, std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("types")).unwrap();
+        fs::write(dir.join("ontology.yaml"), "name: branda\ndomains:\n  - name: Core\n    types: []\n").unwrap();
+        fs::write(dir.join("glossary.yaml"), "terms: []\n").unwrap();
+        Blank(dir)
+    }
+}
+impl Drop for Blank {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+fn file_args(file: &str, file_name: &str, described: bool) -> Json {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/learn").join(file);
+    let mut rdr = csv::Reader::from_path(path).unwrap();
+    let headers: Vec<String> = rdr.headers().unwrap().iter().map(|s| s.to_string()).collect();
+    let rows: Vec<Vec<String>> = rdr.records().map(|r| r.unwrap().iter().map(|s| s.to_string()).collect()).collect();
+    let columns: Vec<Json> = headers
+        .iter()
+        .enumerate()
+        .map(|(i, h)| {
+            let vals: Vec<&String> = rows.iter().map(|r| &r[i]).collect();
+            let mut c = json!({ "name": h, "examples": vals.iter().take(5).collect::<Vec<_>>(), "distinct": vals.iter().collect::<std::collections::HashSet<_>>().len(), "empty": 0 });
+            if described {
+                c["description"] = json!(if h == "refunded" { "True when the line was refunded." } else { "A column of the promo-sales export." });
+            }
+            c
+        })
+        .collect();
+    json!({ "file_name": file_name, "row_count": rows.len(), "columns": columns })
+}
+
+fn tool(port: u16, bearer: &str, name: &str, args: Json) -> Json {
+    let r = mcp(port, OTTER, "/mcp", bearer, &json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":name,"arguments":args}}));
+    assert_eq!(r.status, 200, "{}", r.body);
+    r.json()["result"].clone()
+}
+
+fn tool_json(port: u16, bearer: &str, name: &str, args: Json) -> Json {
+    let r = tool(port, bearer, name, args);
+    let t = r["content"][0]["text"].as_str().unwrap_or("").to_string();
+    serde_json::from_str(&t).unwrap_or_else(|e| panic!("{} did not answer JSON ({}): {}", name, e, t))
+}
+
+#[test]
+fn a_file_is_learned_over_a_connector_accepted_on_the_page_and_next_month_is_read_the_same() {
+    let folder = Blank::new(7164);
+    let port = 7164;
+    let srv = start(&folder.0, port, &["--no-examples"], &[]);
+    let resource = "https://quiet-otter.example/mcp";
+
+    // a read-only connection does not see learn_file, is refused if it calls it, and can still match
+    let (_, read_only, _) = connect(port, OTTER, resource, false);
+    let names = tool_names(&mcp(port, OTTER, "/mcp", &read_only, &tools_list()));
+    assert!(names.contains(&"match_file".to_string()) && !names.contains(&"learn_file".to_string()), "{:?}", names);
+    let refused = tool(port, &read_only, "learn_file", file_args("promo_sales_2026-11.csv", "promo_sales.csv", true));
+    assert_eq!(refused["isError"], true);
+    assert!(refused["content"][0]["text"].as_str().unwrap().contains("may only read"), "{}", refused);
+
+    // ChatGPT, with both scopes: match → questions → one proposal
+    let (_, agent, _) = connect(port, OTTER, resource, true);
+    let m = tool_json(port, &agent, "match_file", file_args("promo_sales_2026-11.csv", "promo_sales.csv", false));
+    assert_eq!(m["match"], "new", "{}", m);
+    let dry = tool_json(port, &agent, "learn_file", file_args("promo_sales_2026-11.csv", "promo_sales.csv", true));
+    assert_eq!(dry["saved"], false);
+    assert!(dry["questions"].as_array().unwrap().len() >= 2, "{}", dry);
+    let mut learn = file_args("promo_sales_2026-11.csv", "promo_sales.csv", true);
+    learn["answers"] = json!({ "success": { "column": "revenue", "how": "sum" }, "exclude": [{ "column": "refunded", "equals": true }], "exclude_words": "Refunded lines never count.", "currency": "USD" });
+    let saved = tool_json(port, &agent, "learn_file", learn);
+    assert_eq!((saved["saved"].as_bool(), saved["ok"].as_bool(), saved["errors"].as_u64()), (Some(true), Some(true), Some(0)), "{}", saved);
+    let id = saved["queued"].as_str().unwrap().to_string();
+    let link = saved["accept_at"].as_str().unwrap_or("");
+    assert!(link.starts_with("https://quiet-otter.example/s/") && link.ends_with("/#agents"), "a link to Agents on the public address: {}", saved);
+    assert!(saved["say"].as_str().unwrap().contains(link));
+    let p: Json = serde_json::from_str(&fs::read_to_string(folder.0.join(format!(".lorefile/proposals/{}.json", id))).unwrap()).unwrap();
+    assert!(p["via"].as_str().unwrap().starts_with("agent via MCP (connection \"Test client\""), "{}", p["via"]);
+    assert_eq!(p["learned"]["entity"], "PromoSale");
+    drop(srv);
+
+    // the person opens the page on a server that may write, and accepts it (the tokens survive the restart)
+    let srv = start(&folder.0, port, &["--no-examples", "--allow-edit"], &[]);
+    let login = format!("Bearer {}", TOKEN);
+    let r = http(port, "POST", "/api/proposals/accept", &[("Authorization", &login), ("Content-Type", "application/json"), ("X-Lorefile", "write")], &json!({ "id": id, "by": "Vinay" }).to_string());
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert_eq!(r.json()["written"], true, "{}", r.body);
+
+    // next month, a new chat: the hint, then December is the same file, accepted by Vinay
+    let w = tool_json(port, &agent, "where_is", json!({ "type": "PromoSale" }));
+    assert_eq!((w["kind"].as_str(), w["readable_here"].as_bool()), (Some("from_user"), Some(false)), "{}", w);
+    assert!(w["hint"].as_str().unwrap().contains("arrive as a file a person gives you"));
+    let dec = tool_json(port, &agent, "match_file", file_args("promo_sales_2026-12.csv", "promo_sales_2026-12.csv", false));
+    assert_eq!(dec["match"], "same", "{}", dec);
+    assert_eq!(dec["entity"], "PromoSale");
+    let read = &dec["read_it"][0];
+    assert_eq!((read["measure"].as_str(), read["filter"].as_str()), (Some("sum(revenue)"), Some("refunded = false")));
+    assert_eq!(read["trust"]["grade"], "accepted");
+    assert_eq!(read["trust"]["by"], "Vinay via page");
+    assert!(dec["say"].as_str().unwrap().contains("(accepted by Vinay on "), "{}", dec);
+    drop(srv);
 }

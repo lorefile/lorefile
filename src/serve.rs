@@ -480,6 +480,17 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
         if str_field(body, "name") == "propose_patch" && str_field(&args, "op") == "record_check" {
             return json_response_private(200, &McpServer::record_check(&st.ont, &args, "agent via API"));
         }
+        if str_field(body, "name") == "learn_file" {
+            let (reply, reload) = {
+                let srv = McpServer::with_data(&st.ont, st.data()).with_edit(edit).with_via("agent via API");
+                let r = srv.call_tool("learn_file", &args);
+                (r, srv.reload_needed.get())
+            };
+            if reload {
+                st.reload();
+            }
+            return json_response_private(200, &reply);
+        }
         let (out, queued, summary) = if str_field(body, "name") == "propose_patch" && args.get("ops").map(|o| o.is_array()).unwrap_or(false) {
             let ops = args["ops"].as_array().cloned().unwrap_or_default();
             match patch::plan_many(&st.ont, &ops) {
@@ -925,6 +936,12 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
             return;
         }
     }
+    // a discovery address Lorefile does not serve (openid-configuration and the like): 404 for
+    // everyone, before the login. A 401 here tells a client to sign in to learn how to sign in.
+    if full_path.starts_with("/.well-known/") || path.starts_with("/.well-known/") {
+        let _ = req.respond(json_response(404, &json!({ "error": "not found" })));
+        return;
+    }
     if method == Method::Get && path == "/api/auth" {
         let me = signed_in(&req, ctx, true);
         let mut j = json!({ "required": ctx.token.is_some(), "signed_in": me });
@@ -1027,7 +1044,11 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     // MCP over Streamable HTTP: one JSON-RPC message or a batch per POST, answered as plain JSON
     if path == "/mcp" {
         let resp = match method {
-            Method::Post => mcp_http(&req, reg, ctx, prefix_space.as_deref(), json_body, &body_text, who.as_ref().unwrap_or(&Caller::Owner)),
+            Method::Post => {
+                // where a person opens the page from here: the public address, else this machine's own
+                let base = public.clone().or_else(|| header_value(&req, "Host").filter(|h| is_loopback(host_only(h))).map(|h| format!("http://{}", h)));
+                mcp_http(&req, reg, ctx, prefix_space.as_deref(), json_body, &body_text, who.as_ref().unwrap_or(&Caller::Owner), base)
+            }
             // no server-to-client stream and no sessions: this server only answers what it is asked
             Method::Get => json_response(405, &json!({ "error": "this MCP server sends no event stream; POST JSON-RPC messages to /mcp" })).with_header(header("Allow", "POST, DELETE")),
             Method::Delete => Response::from_string(String::new()).with_status_code(StatusCode(204)),
@@ -1158,7 +1179,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     };
 
     // writes: edit, create, delete, and propose_change through /api/tool
-    let as_tool = method == Method::Post && path == "/api/tool" && matches!(str_field(&body, "name"), "propose_change" | "propose_patch");
+    let as_tool = method == Method::Post && path == "/api/tool" && matches!(str_field(&body, "name"), "propose_change" | "propose_patch" | "learn_file");
     let is_write = as_tool
         || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/trust"))
         || (method == Method::Delete && path == "/api/file");
@@ -1306,6 +1327,15 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     let _ = req.respond(resp);
 }
 
+/// `127.0.0.1:7171` → `127.0.0.1`; `[::1]:7171` → `::1`.
+fn host_only(h: &str) -> &str {
+    let h = h.trim();
+    if let Some(rest) = h.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or(rest);
+    }
+    h.rsplit_once(':').map(|(a, _)| a).unwrap_or(h)
+}
+
 /// `POST /mcp`: the same `Hub` the stdio server runs, one body at a time, so
 /// `initialize`, `tools/list` and `tools/call` (with `space`, and with
 /// `--allow-edit` deciding whether proposals are written) answer identically.
@@ -1313,7 +1343,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
 /// A connection that signed in with OAuth gets the propose tools only with `lorefile:propose`,
 /// and is named in proposals and the activity log.
 #[allow(clippy::too_many_arguments)] // the request, its parts and who sent it; a struct would only rename them
-fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>, json_body: bool, body: &str, who: &Caller) -> Response<std::io::Cursor<Vec<u8>>> {
+fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>, json_body: bool, body: &str, who: &Caller, link_base: Option<String>) -> Response<std::io::Cursor<Vec<u8>>> {
     // the MCP spec asks servers to check Origin; the bearer header already keeps other sites out
     if !origin_matches(req) {
         return json_response(403, &json!({ "error": "cross-site requests are refused: the Origin does not match the Host" }));
@@ -1347,7 +1377,7 @@ fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>
         Caller::Owner => (true, crate::mcp::VIA.to_string()),
         Caller::Connection(g) => (g.can_propose(), g.label()),
     };
-    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only, can_propose, via, guest };
+    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only, can_propose, via, guest, link_base };
     match hub.handle_body(&msg) {
         Some(reply) => json_response(200, &reply),
         // notifications only: accepted, nothing to answer
