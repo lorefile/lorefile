@@ -35,7 +35,16 @@ use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Component, Path, PathBuf};
 
 /// Bumped if the shape of the `lorefile:` vocabulary ever changes.
-pub const FORMAT_VERSION: i64 = 1;
+/// The newest format this build reads and writes. A format-1 space is still written as 1, so a
+/// 0.1.0 Lorefile imports it; one with kinds, `distinct:` pairs or area colours is written as 2.
+pub const FORMAT_VERSION: i64 = 2;
+
+fn export_format(ont: &Ontology) -> i64 {
+    let format_2 = ont.types.values().any(|t| t.extends.is_some() || t.where_.is_some())
+        || ont.trust.as_ref().map(|b| !b.distinct.is_empty()).unwrap_or(false)
+        || ont.manifest.domains.iter().any(|d| d.color.is_some());
+    if format_2 { 2 } else { 1 }
+}
 
 const RDF: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
 const RDFS: &str = "http://www.w3.org/2000/01/rdf-schema#";
@@ -464,7 +473,7 @@ pub fn export(ont: &Ontology) -> Graph {
     for (p, base) in &ont.manifest.prefixes {
         b.add(v(SH, "declare"), Obj::Node(vec![(v(SH, "prefix"), lit(p)), (v(SH, "namespace"), any_uri(base))]));
     }
-    b.add(v(LF, "formatVersion"), int(FORMAT_VERSION));
+    b.add(v(LF, "formatVersion"), int(export_format(ont)));
     blocks.push(b);
 
     // ---- domains: one SKOS concept scheme each
@@ -478,6 +487,9 @@ pub fn export(ont: &Ontology) -> Graph {
             b.add(v(LF, "types"), Obj::List(d.types.iter().map(|t| iri_o(&ont.iri_type(t))).collect()));
         }
         b.add(v(LF, "order"), int(i as i64));
+        if let Some(c) = &d.color {
+            b.add(v(LF, "color"), lit(c));
+        }
         blocks.push(b);
     }
 
@@ -890,6 +902,17 @@ pub fn export(ont: &Ontology) -> Graph {
             notes.push(format!("{} grades in trust.yaml name something that no longer exists; left out", orphans));
         }
         blocks.extend(records);
+        // pairs a person said differ on purpose: the warning they silence must not come back after a round trip
+        for (i, d) in book.distinct.iter().enumerate() {
+            let mut r = Block::new(Some(format!("{}trust.distinct.{}", ns, i + 1)));
+            r.add(rdf_type.clone(), iri_o(&v(LF, "Distinct")));
+            r.add(v(LF, "definition"), json_lit(&json!(d)));
+            r.add(v(LF, "file"), lit(crate::trust::FILE));
+            blocks.push(r);
+        }
+        if !book.distinct.is_empty() {
+            notes.push(format!("{} pair{} marked distinct in trust.yaml: a lorefile:Distinct record each", book.distinct.len(), if book.distinct.len() == 1 { "" } else { "s" }));
+        }
     }
 
     // glossary words as alternative labels on what they mean
@@ -2542,6 +2565,12 @@ pub fn import(path: &Path, target: &Target, opts: &ImportOptions) -> Result<Impo
             _ => unread += 1,
         }
     }
+    for s in g.of_type(&v(LF, "Distinct")) {
+        match g.json(&s, &v(LF, "definition")).and_then(|d| serde_json::from_value::<crate::schema::Distinct>(d).ok()) {
+            Some(d) => claimed.distinct.push(d),
+            None => unread += 1,
+        }
+    }
     if unread > 0 {
         notes.dropped.push(format!("{} grade claim{} in the file could not be read and {} ignored", unread, if unread == 1 { "" } else { "s" }, if unread == 1 { "was" } else { "were" }));
     }
@@ -2638,7 +2667,11 @@ pub fn import(path: &Path, target: &Target, opts: &ImportOptions) -> Result<Impo
             for d in g.of_type(&v(SKOS, "ConceptScheme")) {
                 let Some(name) = g.text(&d, &rdfs_label) else { continue };
                 let types: Vec<String> = g.all(&d, &v(LF, "types")).first().map(|h| g.list(h)).unwrap_or_default().iter().filter_map(|t| if let Term::NamedNode(n) = t { Some(name_of_class(n.as_str())) } else { None }).collect();
-                domains.push((g.int(&d, &v(LF, "order")).unwrap_or(0), json!({ "name": name, "description": g.text(&d, &rdfs_comment).unwrap_or_default(), "types": types })));
+                let mut dj = json!({ "name": name, "description": g.text(&d, &rdfs_comment).unwrap_or_default(), "types": types });
+                if let Some(c) = g.text(&d, &v(LF, "color")) {
+                    dj["color"] = json!(c);
+                }
+                domains.push((g.int(&d, &v(LF, "order")).unwrap_or(0), dj));
             }
         }
         domains.sort_by_key(|d| d.0);

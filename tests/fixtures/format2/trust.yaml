@@ -1,0 +1,7 @@
+trust:
+  distinct:
+    - a: metric:gross_sales
+      b: metric:sale_revenue
+      by: Priya via page
+      at: "2026-11-27"
+      why: Finance reports gross; growth reports revenue after a rule change next quarter.

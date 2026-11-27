@@ -1,0 +1,11 @@
+type: Sale
+description: One sale of one product to one customer.
+owner: Priya Shah
+properties:
+  sale_id: { type: string, key: true, description: "The sale's id." }
+  kind: { type: string, description: "promo or regular." }
+  revenue: { type: number, unit: USD, description: "What was paid." }
+  customer_id: { type: string, description: "Who bought." }
+relationships:
+  placed_by: { to: Customer, cardinality: many-to-one, description: "A sale is placed by one customer." }
+source: { connection: warehouse, table: core.sales, key: sale_id }

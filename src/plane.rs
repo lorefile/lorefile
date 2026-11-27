@@ -494,11 +494,13 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
         // a word that means two things shows on the entity it names first ("term:promo=PromoSale")
         let word_on = d.subject.as_ref().filter(|s| s.kind == "term").and(d.pair.as_ref()).and_then(|p| p[0].rsplit_once('=').map(|(_, e)| e.to_string())).filter(|e| ont.types.contains_key(e));
         match (known, diag_reason(d, ont)) {
-            (Some(true), Some(r)) if word_on.is_some() => own.entry(("entity".to_string(), word_on.unwrap())).or_default().push(r),
-            (Some(true), Some(r)) => {
-                let s = d.subject.as_ref().unwrap();
-                own.entry((s.kind.to_string(), s.name.clone())).or_default().push(r);
-            }
+            (Some(true), Some(r)) => match word_on {
+                Some(entity) => own.entry(("entity".to_string(), entity)).or_default().push(r),
+                None => {
+                    let s = d.subject.as_ref().unwrap();
+                    own.entry((s.kind.to_string(), s.name.clone())).or_default().push(r);
+                }
+            },
             (Some(true), None) => {}
             _ if d.level == Level::Error => space_reasons.push(Reason::new(Light::Red, d.code, clean(&d.message))),
             (None, _) => space_reasons.push(Reason::new(Light::Amber, d.code, clean(&d.message))),

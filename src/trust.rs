@@ -765,7 +765,7 @@ pub fn parse(text: &str) -> Result<TrustBook, String> {
 
 /// True when a book holds no entry at all.
 pub fn is_empty(book: &TrustBook) -> bool {
-    Kind::ALL.iter().all(|k| entries(book, *k).is_empty())
+    Kind::ALL.iter().all(|k| entries(book, *k).is_empty()) && book.distinct.is_empty()
 }
 
 /// Undo of a commit that touched `trust.yaml`: the file goes back with the
@@ -819,6 +819,14 @@ pub fn claims_from_json(v: &Json, notes: &mut Vec<String>) -> TrustBook {
     match v.as_object() {
         Some(o) => {
             for (key, lines) in o {
+                if key == "distinct" {
+                    // pairs a person said differ on purpose, kept whole
+                    match serde_json::from_value::<Vec<crate::schema::Distinct>>(lines.clone()) {
+                        Ok(d) => book.distinct = d,
+                        Err(_) => unread.push("the distinct pairs".into()),
+                    }
+                    continue;
+                }
                 let kind = Kind::ALL.into_iter().find(|k| k.key() == key);
                 match (kind, lines.as_object()) {
                     (Some(k), Some(m)) => {
@@ -864,13 +872,20 @@ pub fn after_import(ont: &Ontology, claimed: Option<&TrustBook>, keep_grades: bo
         notes.push(format!("{} grades in the file were not restored: {} already has a trust.yaml, which an import never overwrites", total, into.display()));
         return None;
     }
-    let (kept, dropped) = keep_matching(ont, book);
+    let (mut kept, dropped) = keep_matching(ont, book);
     let n: usize = Kind::ALL.iter().map(|k| entries(&kept, *k).len()).sum();
     notes.push(format!("restored {} of {} grades with --keep-grades (each still matches what was graded)", n, total));
     for d in dropped {
         notes.push(format!("dropped grade: {}", d));
     }
-    if n == 0 {
+    kept.distinct = book.distinct.clone();
+    prune_distinct(&mut kept, ont);
+    if kept.distinct.len() < book.distinct.len() {
+        notes.push(format!("{} distinct pair{} named something that is not here; dropped", book.distinct.len() - kept.distinct.len(), if book.distinct.len() - kept.distinct.len() == 1 { "" } else { "s" }));
+    } else if !kept.distinct.is_empty() {
+        notes.push(format!("kept {} pair{} marked distinct", kept.distinct.len(), if kept.distinct.len() == 1 { "" } else { "s" }));
+    }
+    if n == 0 && kept.distinct.is_empty() {
         return None;
     }
     Some((FILE.to_string(), render(&kept)))

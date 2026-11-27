@@ -503,7 +503,9 @@ fn with_edits_on_a_learned_file_is_written_and_graded_proposed() {
     assert_eq!((w["kind"].as_str(), w["readable_here"].as_bool()), (Some("from_user"), Some(false)));
     assert!(w["hint"].as_str().unwrap().starts_with("Rows of PromoSale arrive as a file a person gives you (usually named promo_sales…)"), "{}", w);
     assert!(text(&r[3]).contains("arrive as a file a person gives you"), "instances says so instead of 0 rows: {}", text(&r[3]));
-    assert!(text(&r[4]).contains("arrive as a file a person gives you"), "query too: {}", text(&r[4]));
+    if cfg!(feature = "duckdb") {
+        assert!(text(&r[4]).contains("arrive as a file a person gives you"), "query too: {}", text(&r[4]));
+    }
     let line = text(&r[5]).lines().find(|l| l.starts_with("- **PromoSale**")).unwrap_or("").to_string();
     assert!(line.contains("[file from the user]") && line.contains("UNVERIFIED"), "{}", line);
     let _ = fs::remove_dir_all(&dir);

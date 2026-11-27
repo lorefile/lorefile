@@ -1,14 +1,15 @@
 # Changelog
 
-## 0.2.0 (not released yet)
+## 0.2.0 (2026-11-28)
 
 > **Kinds of entities, people and area colours need format 2.** An entity can now be a kind of another (`extends: Sale`), with `where:` to pick the parent's rows; a space can now keep `people.yaml` and area colours. A space that uses any of these says `format: 2` in ontology.yaml, and Lorefile 0.1.0 refuses to load it ("unknown field `format`"). Upgrade every copy that reads the space first. Plain area changes (add, rename, move) write no new key.
 
-Also new since 0.1.0, each tested end to end and not yet tried live:
+Also new since 0.1.0. OAuth sign-in and `learn_file` were tried live with ChatGPT on the web on 27 Nov 2026; everything else is tested end to end through the real binary and not yet tried live:
 
 - **Kinds of entities** ([README](README.md#kinds-of-entities)): fields, links and guardrails come from the parent; `where` kinds read the parent's rows; `validate` takes `kinds`; RDF, SHACL and Ossie bring class hierarchies in as kinds (`--no-parents` keeps tags). New codes E019 to E024 and W118.
 - **The same thing said twice**: W115 (same metric recipe), W116 (same rows, most fields shared, overlapping `where`), W117 (one word, two meanings). Saying a pair differs on purpose is kept under `distinct:` in `trust.yaml`. Three entities sharing a core get the rule-of-three advice, and `make_parent` acts on it.
-- **OAuth sign-in** for ChatGPT's and Claude's connectors through any HTTPS tunnel.
+- **OAuth sign-in** for ChatGPT's and Claude's connectors through any HTTPS tunnel. A connection approved for one space is never told where files live on the server (`where_is`, `tables` and `query` answer with paths relative to the space), and one address may register ten apps in ten minutes.
+- **Exports keep format 2**: kinds, area colours and `distinct:` pairs survive the RDF and Ossie round trips, a kind imported from Ossie keeps only its own fields, and the RDF graph says `lorefile:formatVersion 2` when the space needs it. `people.yaml` stays behind on purpose.
 - **`learn_file`**: a file a user gives an agent is learned, not stored.
 - **The review screen**: what an agent proposes, by meaning, with a link from the chat.
 - **Page fixes**: one set of words across the page and what agents say; decisions carry a name; Put your name on it.

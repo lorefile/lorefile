@@ -1,0 +1,7 @@
+type: Customer
+description: Someone who bought.
+owner: Priya Shah
+properties:
+  customer_id: { type: string, key: true, description: "The customer's id." }
+  name: { type: string, description: "Their name." }
+source: { connection: warehouse, table: core.customers, key: customer_id }

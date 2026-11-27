@@ -157,8 +157,10 @@ fn a_kind_gets_its_parents_fields_first_and_reads_only_its_rows() {
     let md = http(port, "GET", "/api/summary", "");
     let _ = md;
     // the SQL door: the kind is a view over its parent's rows
-    let (err, text) = tool(port, "query", json!({ "sql": "select count(*) as n from PromoSale" }));
-    assert!(!err && text.contains('2'), "{}", text);
+    if cfg!(feature = "duckdb") {
+        let (err, text) = tool(port, "query", json!({ "sql": "select count(*) as n from PromoSale" }));
+        assert!(!err && text.contains('2'), "{}", text);
+    }
     // removing a parent that has kinds is refused, naming the kind
     let gone = http(port, "DELETE", "/api/file?file=types/sale.yaml", "");
     assert!(gone["written"] != true, "{}", gone);

@@ -1,0 +1,7 @@
+type: PromoSale
+description: A sale made with a promo code.
+owner: Growth team
+extends: Sale
+where: { kind: promo }
+properties:
+  promo_code: { type: string, description: "The code used." }

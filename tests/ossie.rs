@@ -57,6 +57,10 @@ fn with_suffix(stem: &Path, suffix: &str) -> PathBuf {
 }
 
 fn import(args: &[&Path], into: &Path) -> Output {
+    import_with(args, into, &[])
+}
+
+fn import_with(args: &[&Path], into: &Path, extra: &[&str]) -> Output {
     let mut c = bin();
     c.arg("import").arg("--from-ossie").arg(args[0]);
     if let Some(o) = args.get(1) {
@@ -65,7 +69,7 @@ fn import(args: &[&Path], into: &Path) -> Output {
     if let Some(m) = args.get(2) {
         c.arg("--mapping").arg(m);
     }
-    c.arg("--into").arg(into).arg("--report").output().unwrap()
+    c.arg("--into").arg(into).arg("--report").args(extra).output().unwrap()
 }
 
 /// What the compiler made of a space, through the public CLI: the summary, the
@@ -131,6 +135,48 @@ fn round_trip(space: &Path) {
             let _ = fs::remove_dir_all(&work);
         }
     }
+}
+
+#[test]
+fn a_format_2_space_survives_export_then_import() {
+    // the same round trip as every shipped folder, with --keep-grades so trust.yaml (here: one
+    // distinct pair) comes back too; then the files themselves: a kind keeps only its own field,
+    // the area its colour, and people.yaml stays behind on purpose
+    let space = root().join("tests/fixtures/format2");
+    let work = scratch("rt-format2");
+    let stem = export(&space, &work.join("exp"));
+    let imp = work.join("imp");
+    ok(import_with(&[&with_suffix(&stem, ".semantic_model.yaml"), &with_suffix(&stem, ".ontology.yaml"), &with_suffix(&stem, ".mapping.yaml")], &imp, &["--keep-grades"]), "import of format2");
+    let before = json(&["export", "--ossie"], &space);
+    let after = json(&["export", "--ossie"], &imp);
+    let (a, b) = (compiled(&space, &before), compiled(&imp, &before));
+    assert_eq!(a["summary"], b["summary"], "format2: the summary changed");
+    // every count but the file count: people.yaml stays behind, so the copy has one file fewer
+    let (mut sa, mut sb) = (a["stats"].clone(), b["stats"].clone());
+    for s in [&mut sa, &mut sb] {
+        s.as_object_mut().unwrap().remove("files");
+    }
+    assert_eq!(sa, sb, "format2: the counts changed");
+    for (n, d) in a["entities"].as_object().unwrap() {
+        assert_eq!(d, &b["entities"][n], "format2: entity {} changed", n);
+    }
+    for (n, d) in a["metrics"].as_object().unwrap() {
+        assert_eq!(d, &b["metrics"][n], "format2: metric {} changed", n);
+    }
+    for doc in ["semantic_model", "ontology", "mapping"] {
+        assert_eq!(before[doc], after[doc], "format2: exporting the imported space gave a different {}", doc);
+    }
+    let promo = fs::read_to_string(imp.join("types/promo_sale.yaml")).unwrap();
+    assert!(promo.contains("extends: Sale") && promo.contains("promo_code"), "{}", promo);
+    for parents_field in ["sale_id", "revenue", "customer_id"] {
+        assert!(!promo.contains(parents_field), "the kind does not redeclare {}:\n{}", parents_field, promo);
+    }
+    let manifest = fs::read_to_string(imp.join("ontology.yaml")).unwrap();
+    assert!(manifest.contains("color: teal") && manifest.contains("format: 2"), "{}", manifest);
+    let trust = fs::read_to_string(imp.join("trust.yaml")).unwrap();
+    assert!(trust.contains("distinct:") && trust.contains("metric:gross_sales"), "{}", trust);
+    assert!(!imp.join("people.yaml").exists(), "people.yaml is this team's and does not travel");
+    let _ = fs::remove_dir_all(&work);
 }
 
 #[test]

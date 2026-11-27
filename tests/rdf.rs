@@ -111,6 +111,43 @@ fn round_trip(space: &Path) {
 }
 
 #[test]
+fn a_format_2_space_survives_turtle_and_back() {
+    // the same round trip as every shipped folder, with --keep-grades so trust.yaml (here: one
+    // distinct pair) comes back too; then the files themselves
+    let space = root().join("tests/fixtures/format2");
+    let work = scratch("rt-format2");
+    let ttl = work.join("shop.ttl");
+    export(&space, &ttl);
+    let turtle = fs::read_to_string(&ttl).unwrap();
+    assert!(turtle.contains("lorefile:formatVersion 2") || turtle.contains("formatVersion> 2"), "a format-2 space says so in the graph:\n{}", &turtle[..turtle.len().min(1500)]);
+    let imp = work.join("imp");
+    ok(import(&ttl, &imp, &["--keep-grades"]), "import of format2");
+    let all = names(&space);
+    let (a, b) = (compiled(&space, &all), compiled(&imp, &all));
+    assert_eq!(a["summary"], b["summary"], "format2: the summary changed");
+    // every count but the file count: people.yaml stays behind, so the copy has one file fewer
+    let (mut sa, mut sb) = (a["stats"].clone(), b["stats"].clone());
+    for s in [&mut sa, &mut sb] {
+        s.as_object_mut().unwrap().remove("files");
+    }
+    assert_eq!(sa, sb, "format2: the counts changed");
+    for (n, d) in a["described"].as_object().unwrap() {
+        assert_eq!(d, &b["described"][n], "format2: {} changed", n);
+    }
+    let again = work.join("again.ttl");
+    export(&imp, &again);
+    assert_eq!(turtle, fs::read_to_string(&again).unwrap(), "format2: exporting the imported space gave different Turtle");
+    let promo = fs::read_to_string(imp.join("types/promo_sale.yaml")).unwrap();
+    assert!(promo.contains("extends: Sale") && promo.contains("promo_code") && !promo.contains("revenue"), "{}", promo);
+    let manifest = fs::read_to_string(imp.join("ontology.yaml")).unwrap();
+    assert!(manifest.contains("color: teal"), "the area keeps its colour: {}", manifest);
+    let trust = fs::read_to_string(imp.join("trust.yaml")).unwrap();
+    assert!(trust.contains("distinct:") && trust.contains("metric:gross_sales"), "{}", trust);
+    assert!(!imp.join("people.yaml").exists(), "people.yaml is this team's and does not travel");
+    let _ = fs::remove_dir_all(&work);
+}
+
+#[test]
 fn every_shipped_folder_survives_turtle_and_back() {
     let spaces: Vec<PathBuf> = ["examples", "packs"]
         .iter()

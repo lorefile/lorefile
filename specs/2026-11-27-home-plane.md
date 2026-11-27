@@ -1,6 +1,6 @@
 # Spec: a home page that shows how things are, and a map you can open up
 
-Written 2026-11-27 for Vinay to decide on. **Status: built 2026-11-27**, every decision as recommended (Vinay approved all 28). What differs from the text below is in "What changed during the build" at the end.
+Written 2026-11-27 for Vinay to decide on. **Status: built 2026-11-27**, every decision as recommended (Vinay approved all 28). What differs from the text below is in "What changed during the build" at the end. **Superseded in part the same day** by `specs/2026-11-27-people-areas-graph.md` (decisions 31–32): the flat Map this spec describes was replaced by the Graph, and Home's tabs are Overview, Graph and List.
 
 After the live test, Vinay asked for a home page people want to touch:
 - the space's entities as icons on a 3D plane

@@ -1,6 +1,6 @@
 {
   "name": "lorefile",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A team's business knowledge in plain YAML files, for AI agents: an MCP server, a CLI and a web page in one binary. This package downloads and runs it.",
   "keywords": [
     "ontology",

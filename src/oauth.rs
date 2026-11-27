@@ -45,6 +45,11 @@ const REFRESH_IDLE: i64 = 30 * 24 * 3600;
 const GRACE: i64 = 60;
 const CLIENT_UNUSED: i64 = 24 * 3600;
 const MAX_CLIENTS: usize = 200;
+/// Registrations one address may make in ten minutes; a connector registers once.
+const MAX_REGISTER_PER_PEER: usize = 10;
+const REGISTER_WINDOW: i64 = 600;
+/// A registration that no sign-in link follows within this long is the first to give way.
+const NEVER_ASKED: i64 = 90;
 const MAX_REDIRECTS: usize = 10;
 const MAX_NAME: usize = 100;
 const MAX_STATE: usize = 1024;
@@ -517,6 +522,9 @@ struct Client {
     secret: Option<String>,
     #[serde(with = "at")]
     registered: i64,
+    /// Set once a sign-in link named this client: a registration nobody follows up gives way first.
+    #[serde(default, skip_serializing)]
+    asked: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -694,6 +702,8 @@ struct State {
     /// Clients that registered and have no connection yet: memory only, written to
     /// `oauth.json` with their first connection, so a registration costs no disk write.
     fresh: Vec<Client>,
+    /// When each address last registered, for the per-address limit.
+    registrations: Vec<(i64, String)>,
     pending: HashMap<String, Pending>,
     seq: u64,
     codes: HashMap<String, Code>,
@@ -738,6 +748,9 @@ pub struct Req<'a> {
     /// How the request already proves the login: `Some("login token")` for the bearer header,
     /// `Some("signed-in browser")` for the page's cookie.
     pub approver: Option<&'static str>,
+    /// Where the request came from, for the registration limit: the address a tunnel or proxy
+    /// reports when there is one, else the peer's. Empty when unknown.
+    pub peer: &'a str,
 }
 
 /// What `serve` sends back. `sign_in`: also set the page's cookie (a correct token on the approval page).
@@ -1160,10 +1173,18 @@ impl Server {
         let id = format!("lfc_{}", id);
         let secret = (auth != "none").then(|| format!("lfs_{}", secret));
         let mut st = self.lock();
+        // one address registers a few times at most: a connector registers once per connection
+        st.registrations.retain(|(t, _)| now - t < REGISTER_WINDOW);
+        if st.registrations.iter().filter(|(_, p)| p == r.peer).count() >= MAX_REGISTER_PER_PEER {
+            return Reply::error(429, "temporarily_unavailable", "this address has registered too many apps in the last ten minutes; try again later");
+        }
+        st.registrations.push((now, r.peer.to_string()));
         st.fresh.retain(|c| now - c.registered < CLIENT_UNUSED);
         if st.fresh.len() >= MAX_CLIENTS {
-            // only a client past the 10-minute sign-in window makes room; one still signing in is never pushed out
-            match st.fresh.iter().position(|c| now - c.registered >= REQUEST_LIFE) {
+            // a registration no sign-in link followed gives way first, then a client past the
+            // 10-minute sign-in window; one still signing in is never pushed out
+            let gone = st.fresh.iter().position(|c| !c.asked && now - c.registered >= NEVER_ASKED).or_else(|| st.fresh.iter().position(|c| now - c.registered >= REQUEST_LIFE));
+            match gone {
                 Some(i) => {
                     let gone = st.fresh.remove(i);
                     st.pending.retain(|_, p| p.client != gone.id);
@@ -1172,7 +1193,7 @@ impl Server {
             }
         }
         // memory only: written to oauth.json with the client's first connection
-        st.fresh.push(Client { id: id.clone(), name: name.clone(), redirect_uris: uris.clone(), auth: auth.clone(), secret: secret.as_deref().map(hash), registered: now });
+        st.fresh.push(Client { id: id.clone(), name: name.clone(), redirect_uris: uris.clone(), auth: auth.clone(), secret: secret.as_deref().map(hash), registered: now, asked: false });
         let mut out = json!({
             "client_id": id, "client_id_issued_at": now, "client_name": name, "redirect_uris": uris,
             "grant_types": ["authorization_code", "refresh_token"], "response_types": ["code"],
@@ -1194,6 +1215,9 @@ impl Server {
         let Some(client) = q("client_id").and_then(|id| st.client(id)) else {
             return error_page(400, "This sign-in link names an app this server does not know (its client_id is unknown or was removed). Nothing was sent back. Add the connector again in ChatGPT or Claude.");
         };
+        if let Some(c) = st.fresh.iter_mut().find(|c| c.id == client.id) {
+            c.asked = true;
+        }
         let redirect_given = q("redirect_uri").is_some();
         let redirect = match q("redirect_uri") {
             Some(u) => u.to_string(),
@@ -1653,6 +1677,7 @@ mod tests {
 
     const LOGIN: &str = "a-login-token-that-is-long-enough-0123456789";
     const ORIGIN: &str = "https://quiet-otter.example";
+    const PEER: &str = "203.0.113.5";
     const VERIFIER: &str = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
     const CHALLENGE: &str = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
     const LOOPBACK: &str = "http://127.0.0.1:33418/callback";
@@ -1777,13 +1802,25 @@ mod tests {
 
     impl Call<'_> {
         fn run(&self, method: &str, path: &str, query: &[(&str, &str)], hdrs: &[(&'static str, &str)], body: &str, signed_in: bool) -> Reply {
-            let q: HashMap<String, String> = query.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-            let get = headers(hdrs);
-            self.srv.handle(&Req { method, path, query: &q, header: &get, body, origin: ORIGIN, approver: if signed_in { Some("signed-in browser") } else { None } })
+            self.run_from(PEER, method, path, query, hdrs, body, signed_in)
         }
 
+        #[allow(clippy::too_many_arguments)]
+        fn run_from(&self, peer: &str, method: &str, path: &str, query: &[(&str, &str)], hdrs: &[(&'static str, &str)], body: &str, signed_in: bool) -> Reply {
+            let q: HashMap<String, String> = query.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            let get = headers(hdrs);
+            self.srv.handle(&Req { method, path, query: &q, header: &get, body, origin: ORIGIN, approver: if signed_in { Some("signed-in browser") } else { None }, peer })
+        }
+
+        fn register_from(&self, peer: &str) -> Reply {
+            self.run_from(peer, "POST", "/oauth/register", &[], &[("Content-Type", "application/json")], &json!({ "client_name": "ChatGPT", "redirect_uris": [LOOPBACK] }).to_string(), false)
+        }
+
+        /// One more app registering, each from an address of its own (one address may only register ten).
         fn register(&self) -> String {
-            let r = self.run("POST", "/oauth/register", &[], &[("Content-Type", "application/json")], &json!({ "client_name": "ChatGPT", "redirect_uris": [LOOPBACK] }).to_string(), false);
+            static N: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+            let n = N.fetch_add(1, Ordering::SeqCst);
+            let r = self.register_from(&format!("198.18.{}.{}", (n / 200) % 256, n % 200 + 1));
             assert_eq!(r.status, 201, "{}", r.body);
             serde_json::from_str::<Json>(&r.body).unwrap()["client_id"].as_str().unwrap().to_string()
         }
@@ -1966,11 +2003,13 @@ mod tests {
         assert_eq!(refused.status, 429, "refused at the cap, nobody evicted: {}", refused.body);
         let ok = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow&token={}", waiting, LOGIN), false);
         assert_eq!(ok.status, 302, "the client signing in was kept");
-        // past the 10-minute sign-in window, the oldest unconnected client makes room
+        // past the 10-minute sign-in window, a registration no sign-in link followed makes room first
         t.fetch_add(REQUEST_LIFE, Ordering::SeqCst);
         let oldest = srv.lock().fresh[0].id.clone();
+        let never_asked: Vec<String> = srv.lock().fresh.iter().filter(|c| !c.asked).map(|c| c.id.clone()).collect();
         call.register();
-        assert!(srv.lock().client(&oldest).is_none(), "the oldest went");
+        assert!(srv.lock().client(&oldest).is_some(), "the oldest had a sign-in link open and stays");
+        assert!(never_asked.iter().any(|id| srv.lock().client(id).is_none()), "a registration nobody followed up went");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -2099,7 +2138,7 @@ mod tests {
         let id = page.body.split("name=\"request\" value=\"").nth(1).unwrap().split('"').next().unwrap().to_string();
         let q: HashMap<String, String> = HashMap::new();
         let get = headers(&[]);
-        let r = srv.handle(&Req { method: "POST", path: "/oauth/authorize", query: &q, header: &get, body: &format!("request={}&decision=allow", id), origin: ORIGIN, approver: Some("login token") });
+        let r = srv.handle(&Req { method: "POST", path: "/oauth/authorize", query: &q, header: &get, body: &format!("request={}&decision=allow", id), origin: ORIGIN, approver: Some("login token"), peer: PEER });
         assert_eq!(r.status, 302, "the bearer header approves during the pause");
         let code = r.headers.iter().find(|(k, _)| k == "Location").unwrap().1.split("code=").nth(1).unwrap().split('&').next().unwrap().to_string();
         assert_eq!(call.exchange(&client, &code).status, 200);
@@ -2109,6 +2148,54 @@ mod tests {
         let id = page.body.split("name=\"request\" value=\"").nth(1).unwrap().split('"').next().unwrap().to_string();
         let r = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow&token={}", id, LOGIN), false);
         assert_eq!(r.status, 302, "ten minutes later it works again");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn one_address_registers_ten_apps_in_ten_minutes_and_no_more() {
+        let dir = scratch("register-limit");
+        let (clock, t) = Clock::fake(1_700_000_000);
+        let srv = server(&dir, LOGIN, clock);
+        let c = Call { srv: &srv };
+        for i in 0..MAX_REGISTER_PER_PEER {
+            assert_eq!(c.register_from("198.51.100.7").status, 201, "registration {}", i + 1);
+        }
+        let r = c.register_from("198.51.100.7");
+        assert_eq!(r.status, 429, "{}", r.body);
+        assert!(r.body.contains("this address"), "{}", r.body);
+        assert_eq!(c.register_from("198.51.100.8").status, 201, "another address is not held up");
+        t.fetch_add(REGISTER_WINDOW, Ordering::SeqCst);
+        assert_eq!(c.register_from("198.51.100.7").status, 201, "the window has passed");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_registration_nobody_follows_up_gives_way_after_ninety_seconds() {
+        let dir = scratch("register-room");
+        let (clock, t) = Clock::fake(1_700_000_000);
+        let srv = server(&dir, LOGIN, clock);
+        let c = Call { srv: &srv };
+        // the waiting room fills from many addresses, none of which opens a sign-in link
+        for i in 0..MAX_CLIENTS {
+            let peer = format!("203.0.113.{}", 10 + i / MAX_REGISTER_PER_PEER);
+            assert_eq!(c.register_from(&peer).status, 201, "registration {}", i + 1);
+        }
+        let r = c.register_from("198.51.100.9");
+        assert_eq!(r.status, 429, "full, and nothing old enough to give way: {}", r.body);
+        t.fetch_add(NEVER_ASKED, Ordering::SeqCst);
+        let r = c.register_from("198.51.100.9");
+        assert_eq!(r.status, 201, "a registration no link followed gave way: {}", r.body);
+        // one that a sign-in link did name is kept for the full ten minutes
+        let kept = serde_json::from_str::<Json>(&r.body).unwrap()["client_id"].as_str().unwrap().to_string();
+        let page = c.run("GET", "/oauth/authorize", &[("response_type", "code"), ("client_id", &kept), ("redirect_uri", LOOPBACK), ("code_challenge", CHALLENGE), ("code_challenge_method", "S256"), ("resource", ORIGIN)], &[], "", false);
+        assert_eq!(page.status, 200, "{}", page.body);
+        t.fetch_add(NEVER_ASKED, Ordering::SeqCst);
+        for i in 0..MAX_CLIENTS - 1 {
+            let peer = format!("203.0.113.{}", 100 + i / MAX_REGISTER_PER_PEER);
+            assert_eq!(c.register_from(&peer).status, 201, "refill {}", i + 1);
+        }
+        assert_eq!(c.register_from("198.51.100.11").status, 429, "the room is full again and the one with a link open is not pushed out");
+        assert!(srv.lock().fresh.iter().any(|f| f.id == kept), "the client with a sign-in link open was not pushed out");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -776,6 +776,23 @@ fn a_one_space_token_stays_in_its_space_and_is_not_told_where_files_live() {
     assert_eq!(ids, ["@ecommerce"], "only its own space: {}", text);
     assert!(j.get("root").is_none() && !text.contains("\"dir\"") && !text.contains(folder.0.to_str().unwrap()), "no folders: {}", text);
 
+    // nor through where_is, the SQL catalogue or a DuckDB settings query
+    let call = |name: &str, args: Json| rpc_result(&mcp(port, OTTER, "/s/%40ecommerce/mcp", &access, &json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":name,"arguments":args}})));
+    let home = std::env::var("HOME").unwrap_or_default();
+    let machine = |text: &str| text.contains(folder.0.to_str().unwrap()) || (home.len() > 3 && text.contains(home.as_str()));
+    let w = call("where_is", json!({"type": "Order"}));
+    let text = w["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("\"path\"") && text.contains("data/") && !machine(text), "a path relative to the space, nothing else: {}", text);
+    let t = call("tables", json!({}));
+    let text = t["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(!machine(text), "the catalogue names no folder on this machine: {}", text);
+    let q = call("query", json!({"sql": "select current_setting('allowed_directories')"}));
+    assert_eq!(q["result"]["isError"], true, "{}", q);
+    assert!(q["result"]["content"][0]["text"].as_str().unwrap().contains("not available to a connection"), "{}", q);
+    // the owner's header still gets the real path
+    let w = rpc_result(&mcp(port, OTTER, "/s/%40ecommerce/mcp", TOKEN, &json!({"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"where_is","arguments":{"type":"Order"}}})));
+    assert!(machine(w["result"]["content"][0]["text"].as_str().unwrap()), "{}", w);
+
     // an all-spaces connection sees every space, still without folders
     let (_, all, _) = connect(port, OTTER, "https://quiet-otter.example/mcp", false);
     let text = rpc_result(&mcp(port, OTTER, "/mcp", &all, &json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"spaces","arguments":{}}})))["result"]["content"][0]["text"].as_str().unwrap().to_string();

@@ -198,6 +198,23 @@ fn signed_in(req: &Request, ctx: &Ctx, cookie_ok: bool) -> bool {
     cookie_ok && cookie_values(req, &ctx.cookie).iter().any(|t| same_token(t, want))
 }
 
+/// The address a request came from, for the OAuth registration limit. A tunnel agent or
+/// reverse proxy on this machine or network connects from a loopback or private address and
+/// reports the real one in X-Forwarded-For (its own entry is the last); anyone else is taken
+/// at their address, whatever headers they send.
+pub fn peer_of(remote: Option<std::net::IpAddr>, forwarded_for: Option<String>) -> String {
+    let local = remote.map(|ip| match ip {
+        std::net::IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
+        std::net::IpAddr::V6(v6) => v6.is_loopback() || v6.is_unique_local() || v6.is_unicast_link_local(),
+    });
+    if local.unwrap_or(true) {
+        if let Some(hop) = forwarded_for.and_then(|v| v.rsplit(',').next().map(|s| s.trim().to_string())).filter(|s| !s.is_empty() && s.len() <= 64) {
+            return hop;
+        }
+    }
+    remote.map(|ip| ip.to_string()).unwrap_or_default()
+}
+
 /// The page's cookie, or (with `None`) the header that clears it. One name per
 /// port, because browsers share cookies across the ports of one host.
 fn cookie_header(req: &Request, ctx: &Ctx, value: Option<&str>) -> Header {
@@ -1265,7 +1282,8 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
                 Some(want) if cookie_values(&req, &ctx.cookie).iter().any(|t| same_token(t, want)) => Some("signed-in browser"),
                 _ => None,
             };
-            let r = oauth::Req { method: method.as_str(), path: &full_path, query: &params, header: &get, body: &body, origin, approver };
+            let peer = peer_of(req.remote_addr().map(|a| a.ip()), get("X-Forwarded-For"));
+            let r = oauth::Req { method: method.as_str(), path: &full_path, query: &params, header: &get, body: &body, origin, approver, peer: &peer };
             let reply = o.handle(&r);
             let sign_in = reply.sign_in;
             let mut resp = reply_response(reply);
@@ -1818,6 +1836,21 @@ fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_registration_limit_sees_the_forwarded_address_only_behind_a_local_proxy() {
+        use std::net::IpAddr;
+        let lo: IpAddr = "127.0.0.1".parse().unwrap();
+        let lan: IpAddr = "10.0.0.4".parse().unwrap();
+        let far: IpAddr = "198.51.100.20".parse().unwrap();
+        assert_eq!(super::peer_of(Some(lo), Some("203.0.113.9".into())), "203.0.113.9", "a tunnel agent on this machine reports the real address");
+        assert_eq!(super::peer_of(Some(lo), Some("1.2.3.4, 203.0.113.9".into())), "203.0.113.9", "the proxy's own entry is the last");
+        assert_eq!(super::peer_of(Some(lan), Some("203.0.113.9".into())), "203.0.113.9");
+        assert_eq!(super::peer_of(Some(far), Some("203.0.113.9".into())), "198.51.100.20", "a header from the internet is not believed");
+        assert_eq!(super::peer_of(Some(far), None), "198.51.100.20");
+        assert_eq!(super::peer_of(Some(lo), None), "127.0.0.1");
+        assert_eq!(super::peer_of(None, None), "");
+    }
+
     use super::{base64url, is_loopback, local_path, same_token, split_space, token_ok};
 
     #[test]

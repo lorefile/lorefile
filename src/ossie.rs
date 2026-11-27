@@ -1957,6 +1957,17 @@ pub fn import(sm_path: &Path, ontology_path: Option<&Path>, mapping_path: Option
         layout.add(FileKind::Manifest, None, "ontology.yaml", manifest);
     }
 
+    // a kind's dataset lists its parent's columns too (the rows are the parent's); the YAML keeps
+    // only what the kind adds, so a later change to the parent is not contradicted by every kind
+    let all_props: HashMap<String, Json> = entities.iter().filter_map(|(n, e)| e.json.get("properties").cloned().map(|p| (n.clone(), p))).collect();
+    for e in entities.values_mut() {
+        let Some(parent) = e.json.get("extends").and_then(|p| p.as_str()).map(str::to_string) else { continue };
+        let Some(theirs) = all_props.get(&parent).and_then(|p| p.as_object()) else { continue };
+        if let Some(mine) = e.json.get_mut("properties").and_then(|p| p.as_object_mut()) {
+            mine.retain(|k, v| theirs.get(k) != Some(v));
+        }
+    }
+
     // ---- lay the files out
     let mut ents: Vec<(String, Entity)> = entities.into_iter().collect();
     if let Some(order) = root.get("type_order").and_then(|o| o.as_array()) {

@@ -1,0 +1,9 @@
+metrics:
+  - metric: sale_revenue
+    description: Sum of revenue over sales.
+    owner: Priya Shah
+    source: { connection: warehouse, table: core.sales, measure: sum(revenue) }
+  - metric: gross_sales
+    description: The same sum under another name.
+    owner: Growth team
+    source: { connection: warehouse, table: core.sales, measure: sum(revenue) }

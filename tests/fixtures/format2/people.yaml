@@ -1,0 +1,7 @@
+people:
+  - name: Priya Shah
+    also: [Priya]
+  - name: Growth team
+    team: true
+  - name: Sam
+    left: 2026-11-01

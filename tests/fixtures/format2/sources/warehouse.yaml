@@ -1,0 +1,5 @@
+connection: warehouse
+kind: bigquery
+project: shop-prod
+dataset: core
+description: The shop's warehouse.

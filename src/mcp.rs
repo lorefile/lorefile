@@ -19,6 +19,8 @@ use serde_json::{json, Value as Json};
 use std::cell::Cell;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+use regex::Regex;
 
 const PROTOCOL: &str = "2025-06-18";
 
@@ -234,7 +236,7 @@ fn tool_list() -> Json {
         },
         {
             "name": "learn_file",
-            "description": "Save what a file means, so the next file of the same shape is read the same way by any agent: one entity with every column as a field (the file's own names, types, the key), where its rows come from (a file the user gives the agent), and from the user's answers the number that counts and the rows that do not. Saved as one change a person accepts. Send the same columns as to match_file, one short description per column (what it is and its unit; never quote values from the file), and `answers`. Without `answers` nothing is saved and you get the questions to ask; with `answers: {}` only the shape is saved. Lorefile never stores rows or example values.",
+            "description": "Save what a file means, so the next file of the same shape is read the same way by any agent: one entity with every column as a field (the file's own names, types, the key), where its rows come from (a file the user gives the agent), and from the user's answers the number that counts and the rows that do not. Saved as one change a person accepts. Send the same columns as to match_file, one short description per column (what it is and its unit; never quote values from the file), and `answers`. Without `answers` nothing is saved and you get the questions to ask. `answers: {}` saves the shape alone, and only together with `skip_because`, the user's own words for leaving the number out; without them the questions come back marked 'ask the user now'. Lorefile never stores rows or example values.",
             "inputSchema": file_schema(true)
         },
         {
@@ -517,7 +519,36 @@ impl<'a> Server<'a> {
     }
 
     /// Run one tool. Returns an MCP `tools/call` result object.
+    /// Runs a tool. For a guest (an OAuth connection) the reply never names a folder on this
+    /// machine: a path under the space comes back relative to it, one under the home folder as
+    /// `~/…`, and `query` refuses DuckDB's settings and catalogue functions, which would list them.
     pub fn call_tool(&self, name: &str, args: &Json) -> Json {
+        if self.guest && matches!(name, "query" | "sql") {
+            let sql = Self::arg_str(args, &["sql", "query"]).unwrap_or_default();
+            if let Some(what) = guest_blocked_sql(&sql) {
+                return Self::text(format!("`{}` is not available to a connection: this server's settings and catalogue stay on the machine. `tables` lists what you can read.", what), true);
+            }
+        }
+        let out = self.call_tool_inner(name, args);
+        if self.guest { hide_machine_paths(out, &self.machine_folders()) } else { out }
+    }
+
+    /// The folders a guest is never told: the space, the folder that holds the spaces, and home.
+    fn machine_folders(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for p in std::iter::once(&self.ont.root).chain(self.history_root.iter()) {
+            out.push(p.display().to_string());
+            if let Ok(c) = std::fs::canonicalize(p) {
+                out.push(c.display().to_string());
+            }
+        }
+        if let Some(h) = std::env::var_os("HOME") {
+            out.push(h.to_string_lossy().to_string());
+        }
+        out
+    }
+
+    fn call_tool_inner(&self, name: &str, args: &Json) -> Json {
         let ont = self.ont;
         match name {
             "search" => {
@@ -1232,4 +1263,41 @@ pub fn run_stdio(mut reg: Registry, edit: EditConfig, only: Option<String>) -> R
         }
     }
     Ok(())
+}
+
+static GUEST_BLOCKED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?i)\b(current_setting|duckdb_settings|duckdb_secrets|duckdb_extensions|duckdb_databases|duckdb_views|getenv|pragma_[a-z_]+)\b").unwrap());
+
+/// The DuckDB function a guest's SQL reaches for that would describe this machine, if any.
+fn guest_blocked_sql(sql: &str) -> Option<String> {
+    GUEST_BLOCKED.find(sql).map(|m| m.as_str().to_ascii_lowercase())
+}
+
+/// Every string in a tool reply with the machine's folders taken out: `<space>/data/x.csv`
+/// becomes `data/x.csv`, the bare folder becomes `.`, and anything under home starts with `~`.
+fn hide_machine_paths(j: Json, folders: &[String]) -> Json {
+    let home = std::env::var_os("HOME").map(|h| h.to_string_lossy().trim_end_matches('/').to_string()).filter(|h| h.len() > 3);
+    let mut folders: Vec<String> = folders.iter().map(|f| f.trim_end_matches('/').to_string()).filter(|f| f.len() > 3 && f != ".").collect();
+    folders.sort_by_key(|f| std::cmp::Reverse(f.len()));
+    folders.dedup();
+    fn walk(j: Json, folders: &[String], home: Option<&str>) -> Json {
+        match j {
+            Json::String(mut s) => {
+                for f in folders {
+                    if s.contains(f.as_str()) {
+                        s = s.replace(&format!("{}/", f), "").replace(f.as_str(), ".");
+                    }
+                }
+                if let Some(h) = home {
+                    if s.contains(h) {
+                        s = s.replace(h, "~");
+                    }
+                }
+                Json::String(s)
+            }
+            Json::Array(a) => Json::Array(a.into_iter().map(|x| walk(x, folders, home)).collect()),
+            Json::Object(o) => Json::Object(o.into_iter().map(|(k, x)| (k, walk(x, folders, home))).collect()),
+            other => other,
+        }
+    }
+    walk(j, &folders, home.as_deref())
 }

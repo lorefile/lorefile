@@ -1521,9 +1521,9 @@ pub fn take_back_state(ont: &Ontology, p: &Proposal, history_on: bool) -> (bool,
 }
 
 /// Every code the validator gives, so an error remembered as text becomes a diagnostic again.
-const CODES: [&str; 33] = [
-    "E000", "E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010", "E011", "E012", "E013", "E014", "E015", "E016", "E017", "E018",
-    "W101", "W102", "W103", "W104", "W105", "W106", "W107", "W108", "W109", "W111", "W112", "W113", "W114", "W110",
+const CODES: [&str; 45] = [
+    "E000", "E001", "E002", "E003", "E004", "E005", "E006", "E007", "E008", "E009", "E010", "E011", "E012", "E013", "E014", "E015", "E016", "E017", "E018", "E019", "E020", "E021", "E022", "E023", "E024",
+    "W101", "W102", "W103", "W104", "W105", "W106", "W107", "W108", "W109", "W111", "W112", "W113", "W114", "W115", "W116", "W117", "W118", "W119", "W120", "W121",
 ];
 
 /// An error remembered at Accept, as the diagnostic it was.

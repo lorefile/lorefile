@@ -88,10 +88,12 @@ fn reads_are_not_cors_open_and_sql_is_post_only() {
     assert!(body.contains("\"manifest\""));
     let (status, _, _) = http(srv.port, "GET", "/api/query?sql=select%201", &[], "");
     assert_ne!(status, 200, "SQL over GET is gone");
-    let (status, _, body) = http(srv.port, "POST", "/api/query", &[JSON], r#"{"sql":"select name from Supplier limit 1"}"#);
-    assert_eq!(status, 200, "{}", body);
-    let (status, _, body) = http(srv.port, "POST", "/api/query", &[JSON], r#"{"sql":"select * from read_text('/etc/passwd')"}"#);
-    assert_eq!(status, 400, "the fence holds over HTTP too: {}", body);
+    if cfg!(feature = "duckdb") {
+        let (status, _, body) = http(srv.port, "POST", "/api/query", &[JSON], r#"{"sql":"select name from Supplier limit 1"}"#);
+        assert_eq!(status, 200, "{}", body);
+        let (status, _, body) = http(srv.port, "POST", "/api/query", &[JSON], r#"{"sql":"select * from read_text('/etc/passwd')"}"#);
+        assert_eq!(status, 400, "the fence holds over HTTP too: {}", body);
+    }
 }
 
 #[test]

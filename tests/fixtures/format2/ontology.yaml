@@ -1,0 +1,13 @@
+name: shop
+version: 0.1.0
+format: 2
+namespace: https://shop.example/ns#
+description: A small format-2 space, for the export round trips. Kinds, a coloured area, a distinct pair and a people file.
+domains:
+  - name: Sales
+    description: Selling things.
+    types: [Sale, PromoSale]
+    color: teal
+  - name: Buyers
+    description: Who buys.
+    types: [Customer]

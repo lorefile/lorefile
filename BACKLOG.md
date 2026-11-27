@@ -9,7 +9,7 @@ A plain list of what is in the repository, what it is for, and what to do with i
 | The YAML format: entities, links, guardrails, actions, sources, glossary, metrics, functions | The whole value. Everything else is a view of it. |
 | The compiler and `validate` codes | What makes agent-written files safe to accept. |
 | Spaces, with the shipped examples and packs in the picker | One server per team, one space per brand; examples show how it is done. |
-| The page: Sources, Entities, Links, Logic, Guardrails, Actions; Map; Agents; How to use it; Files; Settings | The review surface. People accept, read and demo; they do not type YAML. |
+| The page: Home (Overview, Graph, List); Sources, Entities, Links, Logic, Guardrails, Actions; People; Agents; How to use it; Files; Settings; panels that fold | The review surface. People accept, read and demo; they do not type YAML. |
 | MCP over stdio and over HTTP with `summary`, `describe`, `where_is`, `constraints_for`, `validate`, `search`, `neighbors` | How agents read it. |
 | The login token (`--token`, `LOREFILE_TOKEN`, `auth.toml`) | What a container or a team server needs before anyone else can reach it. |
 | Apache Ossie and OWL / SKOS / SHACL import and export, an IRI on everything | Teams start from what they have; nothing is locked in. |
