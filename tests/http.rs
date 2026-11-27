@@ -222,7 +222,7 @@ fn history_starts_with_the_space_and_undo_and_share_round_trip() {
     fs::write(pdir.join("p-agent.json"), proposal.to_string()).unwrap();
     let (status, accepted) = post("/s/brand-two/api/proposals/accept", serde_json::json!({ "id": "p-agent" }));
     assert_eq!(status, 200, "{}", accepted);
-    assert_eq!(git(&space, &["log", "-1", "--format=%an <%ae>|%cn|%s"]), "agent via MCP <agent-via-mcp@localhost>|person via page|An agent learned: 2 changes: added the word \"patron\" for Customer; created Widget");
+    assert_eq!(git(&space, &["log", "-1", "--format=%an <%ae>|%cn|%s"]), "agent via MCP <agent-via-mcp@localhost>|person via page|An agent suggests 2 changes: Widget, patron", "the commit says the review's headline");
     assert_eq!(git(&space, &["show", "--format=", "--name-only", "HEAD"]), "glossary.yaml\ntrust.yaml\ntypes/widget.yaml", "both files in one commit, and the grade with them");
     let trust = fs::read_to_string(space.join("trust.yaml")).unwrap();
     assert!(trust.contains("patron: { grade: accepted, by: \"person via page\""), "the person who accepted stands behind the word, not the agent: {}", trust);

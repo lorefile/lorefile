@@ -70,6 +70,9 @@ pub struct FileInput {
     pub answers: Option<Answers>,
     #[serde(default)]
     pub reason: Option<String>,
+    /// The user's own words asking to save the file without saying which number counts.
+    #[serde(default)]
+    pub skip_because: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -827,6 +830,47 @@ fn reads_column(m: &MetricDef, col: &str) -> bool {
 }
 
 /// The normalized headers of the file, in order.
+/// `learn_file`'s input as it can be stored for a replay: each column's name with the type,
+/// unit and description the draft settled on, plus the entity, key and answers. Never the
+/// examples, and never a description that quoted one (the draft already left those out).
+pub fn replay_input(ont: &Ontology, input: &FileInput, args: &Json) -> Json {
+    let d = draft(ont, input).ok();
+    let columns: Vec<Json> = input
+        .columns
+        .iter()
+        .map(|c| {
+            let f = d.as_ref().and_then(|d| d.fields.iter().find(|f| f.header == c.name));
+            let mut j = json!({ "name": c.name });
+            if let Some(f) = f {
+                j["type"] = json!(f.kind);
+                if let Some(u) = &f.unit {
+                    j["unit"] = json!(u);
+                }
+                if let Some(desc) = &f.description {
+                    j["description"] = json!(desc);
+                }
+            }
+            j
+        })
+        .collect();
+    let mut out = json!({ "file_name": input.file_name, "columns": columns });
+    let key = d.as_ref().and_then(|d| d.key_name().map(|k| k.to_string())).or_else(|| input.key.clone());
+    if let Some(k) = key {
+        out["key"] = json!(k);
+    }
+    if let Some(e) = &input.entity {
+        out["entity"] = json!(e);
+    }
+    if let Some(desc) = d.as_ref().and_then(|d| d.description.clone()) {
+        out["description"] = json!(desc);
+    }
+    // the answers are what the user said; the values they name (`exclude.equals`) are written into the metric anyway
+    if let Some(a) = args.get("answers") {
+        out["answers"] = a.clone();
+    }
+    out
+}
+
 pub fn file_headers(input: &FileInput) -> Vec<String> {
     input.columns.iter().map(|c| normalize_header(&c.name)).collect()
 }

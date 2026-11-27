@@ -651,21 +651,34 @@ pub fn is_trust_file(rel: &str) -> bool {
     r == trust::FILE || r == "trust.yml"
 }
 
-/// A lock file under `.lorefile/` around the read-modify-write of
-/// `trust.yaml`: `mcp` on stdio and `serve` are separate processes that may
-/// save into the same space at once. A lock older than 30 seconds is stale.
-struct TrustLock(PathBuf);
+/// A lock file under `.lorefile/`: `trust.lock` around the read-modify-write of
+/// `trust.yaml`, `decide.lock` around a person's decision on a proposal (Accept,
+/// Not now, Look again, Take it back, and the replace rule). `mcp` on stdio and
+/// `serve` are separate processes that may work on the same space at once. A
+/// lock older than 30 seconds is stale.
+pub struct SpaceLock(PathBuf);
+
+/// The lock around a decision on a proposal; it is held outside the save gate's own lock.
+pub const DECIDE_LOCK: &str = "decide.lock";
+
+struct TrustLock;
 
 impl TrustLock {
-    fn take(root: &Path) -> Result<TrustLock, String> {
+    fn take(root: &Path) -> Result<SpaceLock, String> {
+        SpaceLock::take(root, "trust.lock")
+    }
+}
+
+impl SpaceLock {
+    pub fn take(root: &Path, name: &str) -> Result<SpaceLock, String> {
         let dir = crate::spaces::lorefile_dir(root);
-        let path = dir.join("trust.lock");
+        let path = dir.join(name);
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
         loop {
             match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
                 Ok(mut f) => {
                     let _ = std::io::Write::write_all(&mut f, std::process::id().to_string().as_bytes());
-                    return Ok(TrustLock(path));
+                    return Ok(SpaceLock(path));
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                     let stale = std::fs::metadata(&path).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).map(|age| age.as_secs() > 30).unwrap_or(false);
@@ -679,14 +692,14 @@ impl TrustLock {
                     std::thread::sleep(std::time::Duration::from_millis(20));
                 }
                 // a folder we cannot write into: the write itself will say so
-                Err(_) if !dir.is_dir() => return Ok(TrustLock(PathBuf::new())),
+                Err(_) if !dir.is_dir() => return Ok(SpaceLock(PathBuf::new())),
                 Err(e) => return Err(format!("could not take the save lock {}: {}", path.display(), e)),
             }
         }
     }
 }
 
-impl Drop for TrustLock {
+impl Drop for SpaceLock {
     fn drop(&mut self) {
         if !self.0.as_os_str().is_empty() {
             let _ = std::fs::remove_file(&self.0);

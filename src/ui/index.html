@@ -79,6 +79,44 @@ textarea.yaml{width:100%;min-height:420px;font-family:var(--mono);font-size:12.5
 .hist .when{font-size:12.5px;color:var(--muted);width:112px;flex:0 0 auto}.hist .chip{margin:0}.hist b{font-size:13.5px}
 .grade{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;background:var(--chip);color:var(--muted)}
 .grade.proposed,.grade.changed{background:var(--warn-bg);color:var(--warn)}.grade.accepted{background:var(--info-bg);color:var(--info)}.grade.checked{background:var(--ok-bg);color:var(--ok)}
+.chip.bad{background:var(--block-bg);color:var(--block)}
+button.lnk{background:none;border:none;color:var(--accent);padding:0;min-height:0;cursor:pointer;font:inherit;text-align:left}button.lnk:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.rv{display:flex;flex-direction:column;gap:12px;max-width:880px;min-width:0}
+.rv-title{font-size:22px;line-height:1.3}
+.rv-says{background:var(--bg);border-left:3px solid var(--line2);padding:8px 12px;border-radius:6px;font-size:13.5px;overflow-wrap:anywhere}
+.rv-state{font-weight:600;padding:8px 12px;border-radius:10px;background:var(--chip)}.rv-state.ok{background:var(--ok-bg);color:var(--ok)}
+.rv-note{display:flex;gap:8px;align-items:flex-start;background:var(--info-bg);border-radius:10px;padding:8px 12px;font-size:13px}.rv-note.bad{background:var(--block-bg);color:var(--block)}
+.rv-counts{display:flex;flex-direction:column;gap:4px}
+.rv-count{display:flex;gap:10px;font-size:13.5px}.rv-count-l{flex:0 0 72px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.rv-changes{display:flex;flex-direction:column;gap:8px}
+.rv-change{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:13.5px;min-width:0;overflow-wrap:anywhere}
+.rv-op-add{border-left-color:var(--ok)}.rv-op-change{border-left-color:var(--warn)}.rv-op-remove{border-left-color:var(--block);background:#fff8f8}
+.rv-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.rv-sym{font-family:var(--mono);font-weight:700;width:14px;flex:none;text-align:center}
+.rv-op-add .rv-head .rv-sym{color:var(--ok)}.rv-op-change .rv-head .rv-sym{color:var(--warn)}.rv-op-remove .rv-head .rv-sym{color:var(--block)}
+.rv-fields{font-size:13px}.rv-fields td{padding:4px 6px}
+.rv-field{display:flex;gap:6px;flex-wrap:wrap;align-items:baseline;font-size:13px}.rv-field.rv-add .rv-sym{color:var(--ok)}.rv-field.rv-remove{color:var(--block)}.rv-field.rv-remove .mono{text-decoration:line-through}
+.rv-diff{font-size:13px}.rv-before{text-decoration:line-through;color:var(--muted)}
+.rv-uses{font-size:12.5px;color:var(--block);flex-basis:100%}
+.rv-qs{display:flex;flex-direction:column;gap:10px}.rv-q{display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.rv-actions{position:sticky;bottom:-22px;background:var(--bg);padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line)}
+.rv-bar{position:sticky;top:0;left:0;z-index:3;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 14px;font-size:13px}
+.node.st-new{border:2px solid var(--ok)}.node.st-changed{border:2px dashed var(--warn)}.node.st-removed{border:2px solid var(--block);opacity:.8}.node.st-removed b{text-decoration:line-through}
+.edge.st-new{background:var(--ok)}.edge.st-changed{background:var(--warn)}.edge.st-removed{background:var(--block);opacity:.5}
+.st-tag.st-new{background:var(--ok-bg);color:var(--ok)}.st-tag.st-changed{background:var(--warn-bg);color:var(--warn)}.st-tag.st-removed{background:var(--block-bg);color:var(--block)}
+.legend i.st-dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;background:var(--panel)}.st-dot.st-new{border:2px solid var(--ok)}.st-dot.st-changed{border:2px dashed var(--warn)}.st-dot.st-removed{border:2px solid var(--block)}
+@media (max-width:760px){
+  #app{grid-template-columns:1fr;grid-template-rows:auto auto 1fr auto;height:auto;min-height:100vh}
+  header{grid-column:1;padding:8px 12px}header .counts,header .meter,#h-ready{display:none}header select{max-width:100%}
+  nav{grid-column:1;flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);padding:6px 8px;gap:4px}
+  nav input,nav h4,nav .s,nav .result,nav > div{display:none}
+  nav .step{width:auto;flex:0 0 auto;min-height:36px;padding:6px 8px}
+  #view{grid-column:1;flex-direction:column;min-width:0}.main{padding:14px 16px;overflow:visible}.aside,.list{flex:0 0 auto;border:none}
+  footer{grid-column:1;flex-wrap:wrap;padding:6px 12px}
+  .rv-count{flex-direction:column;gap:2px}.rv-count-l{flex:none}
+  .rv-fields tr{display:flex;flex-wrap:wrap;gap:2px 8px;border-bottom:1px solid var(--line);padding:4px 0}.rv-fields td{border:none;padding:0}
+  .rv-actions{bottom:0}
+}
 .sheet{position:fixed;inset:0;background:rgba(26,26,31,.28);display:flex;align-items:center;justify-content:center;z-index:40}.sheet .card{width:min(620px,92vw);box-shadow:0 18px 50px rgba(0,0,0,.18)}
 </style>
 </head>
@@ -200,6 +238,8 @@ const whenOf = (c) => { const rel = (O.relationships || []).find(r => r.name ===
 
 // ---------- boot / routing ----------
 async function boot(){
+  // a review link from a chat: /s/<space>/?review=<id> opens that review, and the address is tidied so a reload does not repeat it
+  try { const rv = new URLSearchParams(location.search).get('review'); if (rv) history.replaceState(null, '', location.pathname + '#review/' + encodeURIComponent(rv)); } catch (e) {}
   try { AUTH = await api('/api/auth'); } catch (e) { AUTH = null; }
   try { SPACES = await api('/api/spaces'); } catch (e) { SPACES = null; }
   if (SPACES) {
@@ -293,7 +333,7 @@ function renderNav(){
   ];
   h += '<h4>Build</h4>' + build.map(([k, t, s, warn], i) => `<button class="step ${route.screen===k?'active':''}" onclick="go('${k}')"><span class="dot ${warn?'warn':'ok'}">${warn ? i+1 : '✓'}</span><span><div class="t">${t}</div><div class="s ${warn?'warn':''}">${esc(s)}</div></span></button>`).join('');
   const use = [['usage', 'How to use it', 'what agents can answer now', 0], ['map', 'Map', 'the whole shape', 0], ['agents', 'Agents', 'MCP, proposals, activity', f.pending], ['history', 'History', 'what changed, who, when', 0], ['data', 'Data & SQL', 'one door across sources', 0], ['files', 'Files', 'every YAML, explained', 0], ['settings', 'Settings', 'sharing, server, MCP', 0]];
-  h += '<h4>Use</h4>' + use.map(([k, t, s, b]) => `<button class="step ${route.screen===k?'active':''}" onclick="go('${k}')"><span><div class="t">${t}</div><div class="s">${s}</div></span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('');
+  h += '<h4>Use</h4>' + use.map(([k, t, s, b]) => `<button class="step ${route.screen===k || (k==='agents' && route.screen==='review')?'active':''}" onclick="go('${k}')"><span><div class="t">${t}</div><div class="s">${s}</div></span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('');
   h += `<div style="margin-top:auto;font-size:12px;color:var(--faint);padding:8px;line-height:1.5">Everything here is YAML files. Agents read the same files over MCP.</div>`;
   n.innerHTML = h;
 }
@@ -323,7 +363,7 @@ function renderFooter(){
 // ---------- screens ----------
 function render(){
   const v = $('view'); v.innerHTML = '';
-  const fn = { map: renderMap, sources: renderSources, entities: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace, logic: renderLogic, usage: renderUsage, files: renderFiles, settings: renderSettings, history: renderHistory }[route.screen] || renderMap;
+  const fn = { map: renderMap, sources: renderSources, entities: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, review: renderReview, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace, logic: renderLogic, usage: renderUsage, files: renderFiles, settings: renderSettings, history: renderHistory }[route.screen] || renderMap;
   fn(v);
 }
 const main = (inner, extra) => `<div class="main">${inner}</div>${extra || ''}`;
@@ -573,10 +613,17 @@ const scopeWords = (scopes) => (scopes || []).includes('lorefile:propose') ? 're
 function connectionsCard(){
   if (!oauthOn()) return `<div class="card"><b>Connections</b><div class="hint">${esc(oauthOffWords())}</div></div>`;
   const list = OAUTH.connections || [];
-  const rows = list.map(c => `<div class="row" style="font-size:13px;gap:10px;flex-wrap:wrap;align-items:center"><b>${esc(c.name)}</b><span>${c.space ? `${esc(c.space)} only` : 'all spaces'}</span><span>${scopeWords(c.scopes)}</span><span class="hint">approved ${esc(shortDate(c.approved))} with the ${esc(c.approved_with || '')}</span><span class="hint">${esc(usedWords(c.last_used))}</span><span class="hint mono" title="the address it was approved on">${esc(c.address)}</span><span style="margin-left:auto"></span><button class="small danger" onclick="disconnect(${jq(c.id)})">Disconnect</button></div>`).join('');
+  const rows = list.map(c => `<div class="row" style="font-size:13px;gap:10px;flex-wrap:wrap;align-items:center"><b>${esc(c.name)}</b><span>${c.space ? `${esc(c.space)} only` : 'all spaces'}</span><span>${scopeWords(c.scopes)}</span><span class="hint">approved ${esc(shortDate(c.approved))} with the ${esc(c.approved_with || '')}</span><span class="hint">${esc(usedWords(c.last_used))}</span><span class="hint mono" title="the address it was approved on">${esc(c.address)}</span>${writesCtl(c)}<span style="margin-left:auto"></span><button class="small danger" onclick="disconnect(${jq(c.id)})">Disconnect</button></div>`).join('');
   const none = '<div class="hint">None yet. When ChatGPT or Claude connects and someone presses Allow, it shows up here.</div>';
   const all = list.length ? `<div class="row" style="align-items:center"><button class="small danger" onclick="disconnect('all')">Disconnect all</button><span class="hint">Changing the login token also disconnects every one.</span></div>` : '<div class="hint">Changing the login token disconnects every connection.</div>';
   return `<div class="card"><b>Connections <span class="hint" style="font-weight:400">agents that signed in with OAuth</span></b>${list.length ? rows : none}${all}</div>`;
+}
+// what happens to a connection's suggestions on a server with --allow-edit: wait for a person, or go in straight away (unverified)
+const writesCtl = (c) => !(c.scopes || []).includes('lorefile:propose') ? '' : (OAUTH.edit_allowed ? `<label class="hint">its suggestions <select onchange="setWrites(${jq(c.id)}, this.value)"><option value="wait" ${c.writes !== 'direct' ? 'selected' : ''}>wait for me to accept</option><option value="direct" ${c.writes === 'direct' ? 'selected' : ''}>go in straight away, unverified</option></select></label>` : `<span class="hint">its suggestions wait for a person (this server is read-only)</span>`);
+async function setWrites(id, w){
+  const r = await post('/api/oauth/connections/' + encodeURIComponent(id) + '/writes', { writes: w });
+  if (r.error) { note(r.error, true); return; }
+  OAUTH = r; note(w === 'direct' ? 'Its suggestions now go in straight away, marked unverified until a person looks' : 'Its suggestions now wait for you to accept them'); render();
 }
 async function disconnect(id){
   if (id === 'all' && !confirm('Disconnect every connection? ChatGPT and Claude will have to connect again, and someone has to press Allow again.')) return;
@@ -786,31 +833,206 @@ async function runTry(name){
 }
 
 // --- agents ---
+// a time in this browser's own time zone: "today 1:37 pm", "yesterday 9:02 am", "27 Nov, 1:37 pm"
+function localWhen(iso){
+  const t = new Date(iso); if (!iso || isNaN(t)) return '';
+  const time = t.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(' AM', ' am').replace(' PM', ' pm');
+  const day = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(t)) / 86400000);
+  if (diff === 0) return 'today ' + time;
+  if (diff === 1) return 'yesterday ' + time;
+  return t.toLocaleDateString([], { day: 'numeric', month: 'short', year: t.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) + ', ' + time;
+}
+const agentOf = (via) => { const m = /connection "([^"]+)"/.exec(via || ''); return m ? m[1] : 'An agent'; };
+const decidedWords = (p) => p.status === 'accepted' ? `accepted by ${whoSaid(p.accepted_by)}` : p.status === 'replaced' ? 'replaced by a newer version' : p.status === 'set_aside' ? `set aside by ${whoSaid(p.decided_by)}${p.why ? ': “' + p.why + '”' : ''}` : p.status;
 async function renderAgents(v){
   TOOLS = TOOLS || await api(B + '/api/tools');
   await loadOAuth();
   PR = await api(B + '/api/proposals');
+  const cards = PR.cards || {};
   const pending = PR.proposals.filter(p => p.status === 'pending'), done = PR.proposals.filter(p => p.status !== 'pending').slice(0, 10);
-  const card = (p) => p.check ? checkCard(p) : `<div class="card ${p.status==='pending'?'need':''}"><div class="row"><b>${esc(p.learned ? p.summary.charAt(0).toUpperCase() + p.summary.slice(1) : (p.summary ? ((/agent/i.test(p.via) ? 'An agent learned: ' : '') + p.summary) : (p.name || p.file)))}</b><span class="chip">${esc(p.learned ? 'a file' : (p.kind || 'file'))}</span><span class="mono" style="color:var(--faint)">${esc(p.file)}</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">${esc(p.via)} · ${esc(p.created_at.replace('T',' ').replace('Z',''))}</span></div><div style="font-size:13px">${esc(p.reason || 'No reason given.')}</div>${p.ok ? '' : `<div style="font-size:12.5px;color:var(--block)">Has ${p.errors} error(s); fix the proposal before it can be accepted.</div>`}${(p.diagnostics||[]).slice(0,3).map(d => `<div class="d ${d.level}">${d.level==='error'?'✗':'⚠'} ${esc(d.code)} ${esc(d.message)}</div>`).join('')}<div class="row"><a style="font-size:12.5px" onclick="ui.showProposal=ui.showProposal===${jq(p.id)}?null:${jq(p.id)};render()">${ui.showProposal===p.id?'Hide':'Show'} what changes</a>${p.status==='pending'?`<span style="margin-left:auto"></span><button class="primary small" ${ro()||!p.ok?'disabled':''} title="${ro()?'start with --allow-edit':''}" onclick="decide(${jq(p.id)},'accept')">Accept</button><button class="small" onclick="decide(${jq(p.id)},'dismiss')">Not now</button><span class="hint" style="flex-basis:100%;text-align:right">Accept saves it as accepted by ${esc(ME() || 'a person')}</span>`:`<span style="margin-left:auto;font-size:12.5px;color:var(--muted)">${p.replaced_by ? 'replaced by ' + esc(p.replaced_by) : esc(p.status)} ${esc((p.resolved_at||'').replace('T',' ').replace('Z',''))}</span>`}</div>${ui.showProposal===p.id?((p.files||[]).length > 1 ? p.files.map(f => `<div style="font-size:12.5px;margin-top:6px"><b>${esc(f.summary || f.file)}</b> <span class="mono" style="color:var(--faint)">${esc(f.file)}</span></div><div class="diff">${diffHtml(f.before, f.content)}</div>`).join('') : `<div class="diff">${diffHtml(p.before, p.content)}</div>`):''}</div>`;
+  // the short card: who wants what, what it adds, how many questions, and one Review button
+  const card = (p) => {
+    if (p.check) return checkCard(p);
+    const c = cards[p.id] || {};
+    const chips = (c.chips || []).map(x => `<span class="chip ${x === 'removes' || x === "can't accept" ? 'bad' : ''}">${esc(x)}</span>`).join('');
+    const asks = c.questions ? ` · ${plural(c.questions, 'question')}` : '';
+    return `<div class="card need rv-card"><div class="row"><b>${esc(c.headline || p.summary || p.file)}</b>${chips}<span class="hint" style="margin-left:auto">${esc(localWhen(p.created_at))}</span></div><div class="row"><span style="font-size:13px">${esc(c.line || 'Nothing changes in meaning.')}${esc(asks)}</span><span style="margin-left:auto"></span><button class="primary small" onclick="go('review',${jq(p.id)})">Review</button></div></div>`;
+  };
+  const doneCard = (p) => {
+    const words = decidedWords(p);
+    const act = p.status === 'set_aside' && !p.replaced_by ? `<button class="small" ${ro() ? 'disabled' : ''} onclick="reopenP(${jq(p.id)})">Look again</button>` : '';
+    return `<div class="card rv-card"><div class="row"><span>${p.status === 'accepted' ? '✓' : p.status === 'replaced' ? '↷' : '–'}</span><b style="font-weight:600;min-width:0;flex:1 1 300px">${esc(p.check ? `A check of ${p.check.kind} ${p.check.name}` : (p.summary ? (p.summary.charAt(0).toUpperCase() + p.summary.slice(1)).replace(/^(.{140}).+$/s, '$1…') : p.file))}</b><span class="hint" style="margin-left:auto">${esc(localWhen(p.resolved_at || p.created_at))}</span></div><div class="row"><span class="hint">${esc(agentOf(p.via))} · ${esc(words)}</span><span style="margin-left:auto"></span>${act}${p.check ? '' : `<button class="small" onclick="go('review',${jq(p.id)})">Open</button>`}</div></div>`;
+  };
+  // more than five waiting: grouped under the agent that sent them
+  let waiting;
+  if (!pending.length) waiting = `<div class="card"><b>Nothing waiting</b><div class="hint">When an agent saves something and it waits for a person, it shows up here.</div></div>`;
+  else if (pending.length > 5) {
+    const groups = {}; pending.forEach(p => { (groups[agentOf(p.via)] = groups[agentOf(p.via)] || []).push(p); });
+    waiting = Object.entries(groups).map(([a, list]) => `<div class="hint" style="font-weight:600">From ${esc(a)} (${list.length})</div>` + list.map(card).join('')).join('');
+  } else waiting = pending.map(card).join('');
   const items = ((O.trust && O.trust.items) || []).filter(x => x.grade === 'proposed' || x.changed_since);
   const goTo = (x) => x.kind === 'metric' ? "go('logic')" : x.kind === 'guardrail' ? `go('rules',${jq(x.name)})` : x.kind === 'binding' ? `ui.typeTab='data';go('entities',${jq(x.name)})` : `openHit('term',${jq(x.name)})`;
-  const kindWord = { metric: 'metric', binding: 'data binding', term: 'word', guardrail: 'guardrail' };
-  const row = (x) => `<div class="card need" style="flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap"><span>${esc(kindWord[x.kind] || x.kind)} <b class="mono">${esc(x.name)}</b></span>${gradeChip(x.kind, x.name)}<span class="hint">${x.changed_since ? 'changed since ' + esc(x.changed_since) : esc(shortDate(x.at)) + ' · ' + esc(x.by)}</span><span style="margin-left:auto"></span>${gradeButtons(x.kind, x.name)}<button class="small" onclick="${goTo(x)}">Show</button></div>`;
-  const byAgents = items.filter(x => !x.changed_since), moved = items.filter(x => x.changed_since);
-  const unreviewed = (byAgents.length ? `<h4 style="padding:0">Written by agents, not reviewed</h4>` + byAgents.map(row).join('') : '') + (moved.length ? `<h4 style="padding:0">Changed since a person graded them</h4><div class="hint">Edited outside Lorefile (by hand, a merge, another tool). The grade stopped counting; look again, then Looks right.</div>` + moved.map(row).join('') : '');
-  const inbox = pending.length ? `<h4 style="padding:0">Waiting for your review</h4>` + pending.map(card).join('') : `<div class="card"><b>Nothing waiting</b><div style="font-size:13px;color:var(--muted)">When an agent calls <span class="mono">propose_change</span> and the change is not written straight away, it shows up here for a person to accept.</div></div>`;
+  const kindWord = { metric: 'Number', binding: 'Where rows come from', term: 'Word', guardrail: 'Rule' };
+  const row = (x) => `<div class="card need rv-card"><div class="row"><b>${esc(kindWord[x.kind] || x.kind)}: <span class="mono">${esc(x.name)}</span></b>${gradeChip(x.kind, x.name)}<span class="hint" style="margin-left:auto">${x.changed_since ? 'changed since ' + esc(x.changed_since) : esc(shortDate(x.at)) + ' · ' + esc(whoSaid(x.by))}</span></div><div class="row"><span class="hint">${x.changed_since ? 'Edited outside Lorefile, so the grade stopped counting.' : 'In use, marked unverified: an agent wrote it and no person has looked.'}</span><span style="margin-left:auto"></span>${gradeButtons(x.kind, x.name)}<button class="small" onclick="${goTo(x)}">Show</button></div></div>`;
+  const inUse = items.length ? `<div class="hint" style="font-weight:600;margin-top:4px">In use, not reviewed</div>` + items.map(row).join('') : '';
   const tools = `<div class="card"><b>What an agent can ask</b>${TOOLS.map(t => `<div style="display:flex;gap:10px;font-size:13px"><span class="mono" style="color:var(--accent);width:124px;flex:0 0 auto">${esc(t.name)}</span><span style="color:var(--muted)">${esc(t.description.split('.')[0])}.</span></div>`).join('')}<div class="row" style="margin-top:6px"><select id="tool-name" onchange="toolTemplate()">${TOOLS.map(t => `<option>${esc(t.name)}</option>`).join('')}</select><button class="small" onclick="runTool()">Call it from here</button></div><textarea id="tool-args" class="mono" rows="3" spellcheck="false">{"query": "lead time"}</textarea><pre id="tool-out" style="display:none"></pre></div>`;
   const spaceNote = O.single ? '' : `<div style="font-size:12.5px;color:var(--muted)">One server holds every space here. Agents pass <code>space: "${esc(O.space.id)}"</code> in each tool call (the tool list names the spaces); add <code>--space ${esc(O.space.id)}</code> to the command instead for a server that only ever sees this one.</div>`;
   const connect = `<div class="card"><b>Connect</b><div style="font-size:12.5px;color:var(--muted)">Claude Code, on this machine</div>${cmdRow(`claude mcp add lorefile -- ${stdioCmd()}`, 'claude')}<div style="font-size:12.5px;color:var(--muted)">Claude Desktop (claude_desktop_config.json)</div><code class="block">${esc(JSON.stringify({ mcpServers: { 'lorefile': { command: 'lorefile', args: ['mcp', '--dir', O.root].concat(O.editable ? ['--allow-edit'] : []) } } }, null, 2))}</code><div style="font-size:12.5px;color:var(--muted)">Desktop needs the full path to the binary if it is not on your PATH (<code>which lorefile</code>).</div><div style="font-size:12.5px;color:var(--muted)">Claude Code, to a container or a server (HTTP)</div>${cmdRow(httpCmd(MASK), 'http')}${spaceNote}<div style="font-size:12.5px;color:var(--muted)">${esc(DESKTOP_HTTPS)}</div>${connectorRecipes()}</div>`;
-  const activity = (PR.activity||[]).length ? PR.activity.slice(0, 30).map(a => `<div style="display:flex;gap:10px;font-size:13px;align-items:flex-start"><i style="flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:7px;background:${/agent/.test(a.who)?'var(--warn)':'var(--ok)'}"></i><span>${esc(a.text)} <span style="color:var(--faint)">· ${esc(a.who)} · ${esc(String(a.at).replace('T',' ').replace('Z',''))}</span></span></div>`).join('') : '<div style="color:var(--muted);font-size:13px">No activity recorded yet.</div>';
-  v.innerHTML = main(`<h1>Agents</h1><div class="desc">Claude, ChatGPT and your own agents read this ontology over MCP. The chat happens there; what they learn and propose shows up here.</div>${inbox}${unreviewed}${done.length?`<h4 style="padding:0">Recently decided</h4>`+done.map(card).join(''):''}<div style="display:flex;gap:16px;flex-wrap:wrap"><div style="flex:1 1 380px">${connect}</div><div style="flex:1 1 380px">${tools}</div></div><h4 style="padding:0">Activity</h4>${activity}`);
+  const activity = (PR.activity||[]).length ? PR.activity.slice(0, 30).map(a => `<div style="display:flex;gap:10px;font-size:13px;align-items:flex-start"><i style="flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:7px;background:${/agent/.test(a.who)?'var(--warn)':'var(--ok)'}"></i><span>${esc(a.text)} <span style="color:var(--faint)">· ${esc(whoSaid(a.who) === 'a person' || /agent/.test(a.who) ? a.who : whoSaid(a.who))} · ${esc(localWhen(a.at))}</span></span></div>`).join('') : '<div style="color:var(--muted);font-size:13px">No activity recorded yet.</div>';
+  const roNote = ro() ? `<div class="banner">This Lorefile server is read-only (started without --allow-edit), so nobody can accept or set aside here. You can still read each review.</div>` : '';
+  v.innerHTML = main(`<h1>Agents</h1><div class="desc">Claude, ChatGPT and your own agents read this ontology over MCP. The chat happens there; what they learn and propose shows up here.</div>${roNote}<h4 style="padding:0">To review</h4><div class="hint" style="font-weight:600">Waiting for you</div>${waiting}${inUse}${done.length?`<h4 style="padding:0">Recently decided</h4>`+done.map(doneCard).join(''):''}<div style="display:flex;gap:16px;flex-wrap:wrap"><div style="flex:1 1 380px;min-width:0">${connect}</div><div style="flex:1 1 380px;min-width:0">${tools}</div></div><h4 style="padding:0">Activity</h4>${activity}`);
   toolTemplate();
+}
+async function reopenP(id){ if (!rememberName()) return; const r = await post(B + '/api/proposals/reopen', { id }); if (r.error) { note(r.error, true); return; } note('Waiting for review again'); if (route.screen === 'review') renderReview($('view')); else render(); }
+
+// --- the review screen: one proposal, by meaning ---
+const SYM = { add: '+', change: '~', remove: '−', rename: '↷' };
+const KIND_WORD = { entity: 'thing', metric: 'number', source: 'place rows come from', link: 'link', rule: 'rule', word: 'word', function: 'function', action: 'action' };
+let RV = null;
+async function renderReview(v){
+  const [id, sub] = route.arg.split('/');
+  if (sub === 'map') return renderReviewMap(v, id);
+  v.innerHTML = main('<div class="empty">Loading the review…</div>');
+  const r = await api(B + '/api/proposals/' + encodeURIComponent(id) + '/review');
+  if (r.missing || r.error) { v.innerHTML = main(`<h1>Review</h1><div class="card"><b>${esc(r.error || ('There is no proposal ' + id))}</b><div class="hint">It may be in another space, or the link is wrong.</div><button class="small" style="align-self:flex-start" onclick="go('agents')">Go to Agents</button></div>`); return; }
+  RV = r; ui.rv = ui.rv && ui.rv.id === r.id ? ui.rv : { id: r.id, all: {}, files: false, why: null, fixes: {}, confirmRemove: false };
+  v.innerHTML = main(reviewHtml(r));
+}
+function changeHtml(c){
+  const sym = SYM[c.op] || '~', cls = c.op === 'remove' ? 'rv-op-remove' : c.op === 'add' ? 'rv-op-add' : 'rv-op-change';
+  const head = (title, extra) => `<div class="rv-head"><span class="rv-sym" aria-hidden="true">${sym}</span><b>${title}</b><span class="hint">${esc(KIND_WORD[c.kind] || c.kind)}${c.op === 'remove' ? ' · removed' : c.op === 'rename' ? ' · renamed' : c.op === 'add' ? ' · new' : ' · changed'}</span>${extra || ''}</div>`;
+  const diffs = (list) => (list || []).map(d => `<div class="rv-diff"><span class="hint">${esc(d.what)}:</span> ${d.before ? `<span class="rv-before">${esc(d.before)}</span> → ` : ''}<span>${esc(d.after)}</span></div>`).join('');
+  const uses = (list) => (list && list.length) ? `<div class="rv-uses"><b>Still uses it:</b> ${list.map(esc).join(', ')}</div>` : '';
+  let body = '';
+  if (c.kind === 'entity' && c.op === 'add') {
+    const all = ui.rv.all[c.name], fields = c.fields || [], shown = all ? fields : fields.slice(0, 3);
+    body = `${c.description ? `<div>${esc(c.description)}</div>` : ''}<div class="hint">${esc(c.grain || 'no column identifies one row yet')}${c.binding ? ' · ' + esc(c.binding) : ''}</div><table class="rv-fields"><tbody>${shown.map(f => `<tr><td class="mono">${esc(f.name)}${f.key ? ' <span class="chip">key</span>' : ''}</td><td>${esc(f.type)}</td><td>${f.description ? esc(f.description) : '<span class="hint">Not described.</span>'}</td></tr>`).join('')}</tbody></table>${fields.length > 3 ? `<button type="button" class="lnk" style="font-size:12.5px" onclick="ui.rv.all[${jq(c.name)}]=!ui.rv.all[${jq(c.name)}];renderReviewAgain()">${all ? 'Show fewer' : `+ ${fields.length - 3} more columns · show all`}</button>` : ''}`;
+    return `<div class="rv-change ${cls}">${head(esc(c.label) + (c.label !== c.name ? ` <span class="mono hint">${esc(c.name)}</span>` : ''))}${body}</div>`;
+  }
+  if (c.kind === 'entity' && c.op === 'change') {
+    const f = (c.fields || []).map(x => `<div class="rv-field rv-${x.op}"><span class="rv-sym" aria-hidden="true">${SYM[x.op] || '~'}</span><span class="mono">${esc(x.name)}</span> <span>${esc(x.type || '')}</span> ${x.op === 'rename' ? `<span class="hint">${esc(x.sentence)}</span>` : x.op === 'change' ? diffs(x.diffs) : `<span class="hint">${esc(x.description || '')}</span>`}${x.op === 'remove' ? ` <span class="hint">(removed)</span>${uses(x.uses)}` : ''}</div>`).join('');
+    return `<div class="rv-change ${cls}">${head(esc(c.label) + (c.label !== c.name ? ` <span class="mono hint">${esc(c.name)}</span>` : ''), `<span class="hint">· ${esc(c.summary || '')}</span>`)}${f}${diffs(c.diffs)}</div>`;
+  }
+  if (c.kind === 'metric' && c.op === 'add') {
+    body = `<div><b>${esc(c.label)}</b> = ${esc(c.sentence)}</div>${c.as_written ? `<div class="hint">As written: <code>${esc(c.as_written)}</code></div>` : ''}${c.preview ? `<div class="hint">${esc(c.preview)}</div>` : ''}<div class="hint">${[c.from ? 'from ' + c.from : '', c.grain ? 'per ' + c.grain : '', c.basis ? c.basis : '', c.owner ? 'owner ' + c.owner : 'no owner yet'].filter(Boolean).map(esc).join(' · ')}</div>${c.caveats ? `<div class="hint">${esc(c.caveats)}</div>` : ''}`;
+    return `<div class="rv-change ${cls}">${head(`<span class="mono">${esc(c.name)}</span>`)}${body}</div>`;
+  }
+  if (c.op === 'add') {
+    const extra = c.kind === 'rule' ? `<div>${c.sentence ? esc(c.sentence) : `<code>${esc(c.as_written)}</code>`} <span class="hint">· applies to ${esc(c.applies_to)} · ${esc(c.severity)}</span></div>${c.rationale ? `<div class="hint">Why: ${esc(c.rationale)}</div>` : ''}` : c.kind === 'link' ? `<div>${esc(c.from)} → ${esc(c.to)} (${esc(c.cardinality || '')})</div>${c.description ? `<div class="hint">${esc(c.description)}</div>` : ''}` : `<div>${esc(c.sentence || c.description || '')}</div>${c.description && c.sentence && c.description !== c.sentence ? `<div class="hint">${esc(c.description)}</div>` : ''}`;
+    return `<div class="rv-change ${cls}">${head(esc(c.label))}${extra}</div>`;
+  }
+  if (c.op === 'remove') return `<div class="rv-change ${cls}">${head(esc(c.label))}${c.sentence ? `<div>${esc(c.sentence)}</div>` : ''}${uses(c.uses)}</div>`;
+  if (c.op === 'rename') return `<div class="rv-change ${cls}">${head(esc(c.label))}<div>${esc(c.sentence)}${c.updated ? ` · and ${plural(c.updated, 'place')} that said ${esc(c.from)}` : ''}</div></div>`;
+  return `<div class="rv-change ${cls}">${head(esc(c.label), c.sentence ? `<span class="hint">· ${esc(c.sentence)}</span>` : '')}${diffs(c.diffs)}${c.depends && c.depends.length ? `<div class="hint">Grades that depend on it: ${c.depends.map(esc).join(', ')}</div>` : ''}</div>`;
+}
+function questionHtml(q, i, editable){
+  if (!q.ask) return `<div class="rv-q"><span aria-hidden="true">⚠</span> ${esc(q.text)}</div>`;
+  const f = q.fix || {}, val = (ui.rv.fixes[i] || {});
+  if (f.op === 'add_metric') {
+    const nums = (f.numbers || []).map(n => `<option value="sum:${esc(n.name)}" ${val.pick === 'sum:' + n.name ? 'selected' : ''}>add up ${esc(n.name)} (${esc(n.type)})</option>`).join('');
+    const key = f.key ? `<option value="count_distinct:${esc(f.key)}" ${val.pick === 'count_distinct:' + f.key ? 'selected' : ''}>count the different ${esc(f.key)}</option>` : '';
+    const flags = (f.flags || []).map(n => `<option value="${esc(n)}" ${val.leave_out === n ? 'selected' : ''}>${esc(n)}</option>`).join('');
+    return `<div class="rv-q"><label for="fx-${i}"><b>? ${esc(q.ask)}</b> <span class="hint">(optional)</span></label><div class="row"><select id="fx-${i}" ${editable ? '' : 'disabled'} onchange="setFix(${i},'pick',this.value)"><option value="">Leave it for later</option>${nums}${key}<option value="count:*" ${val.pick === 'count:*' ? 'selected' : ''}>count the rows</option></select>${flags ? `<label class="hint" for="fx-${i}-lo">leave out rows where</label><select id="fx-${i}-lo" ${editable ? '' : 'disabled'} onchange="setFix(${i},'leave_out',this.value)"><option value="">(nothing)</option>${flags}</select><span class="hint">is true</span>` : ''}</div></div>`;
+  }
+  const field = f.field === 'owner' ? 'a name or a team' : 'one sentence';
+  return `<div class="rv-q"><label for="fx-${i}"><b>? ${esc(q.ask)}</b> <span class="hint">(optional)</span></label><input id="fx-${i}" ${editable ? '' : 'disabled'} placeholder="${esc(field)}" value="${esc(val.text || '')}" oninput="setFix(${i},'text',this.value)" style="max-width:420px"></div>`;
+}
+function setFix(i, k, v){ ui.rv.fixes[i] = Object.assign(ui.rv.fixes[i] || {}, { [k]: v }); }
+function renderReviewAgain(){ if (RV) $('view').innerHTML = main(reviewHtml(RV)); }
+function reviewHtml(r){
+  const c = r.context || {}, d = r.decided || {}, can = r.can || {};
+  const says = (c.says || '').trim(), long = says.length > 400;
+  const quote = says ? `<div class="rv-says"><span class="hint">${esc(c.agent)} says:</span> “${esc(long && !ui.rv.more ? says.slice(0, 400) + '…' : says)}”${long ? ` <button type="button" class="lnk" onclick="ui.rv.more=!ui.rv.more;renderReviewAgain()">${ui.rv.more ? 'less' : 'more'}</button>` : ''}</div>` : '';
+  const meta = [c.file_name, c.how, localWhen(c.at)].filter(Boolean).map(esc).join(' · ');
+  let state = '';
+  if (r.status === 'accepted') {
+    const tb = r.take_back || {};
+    state = `<div class="rv-state ok">✓ Accepted by ${esc(d.accepted_by || 'a person')} ${esc(localWhen(d.at))}${(d.fixes || []).length ? ` · with ${esc(d.fixes.join('; '))}` : ''}</div>` + (tb.possible ? `<div class="row"><button class="small" onclick="takeBack(${jq(r.id)})">${tb.undo ? 'Undo' : 'Take it back'}</button><span class="hint">${tb.undo ? 'History is on: this is the commit’s Undo.' : 'Puts the files and trust.yaml back as they were; the proposal waits again.'}</span></div>` : (tb.why_not ? `<div class="hint">${esc(tb.why_not)}</div>` : ''));
+  } else if (r.status === 'set_aside') {
+    state = `<div class="rv-state">– Set aside by ${esc(d.decided_by || 'a person')} ${esc(localWhen(d.at))}${d.why ? `: “${esc(d.why)}”` : ''}</div>${can.reopen ? `<div class="row"><button class="small" onclick="reopenP(${jq(r.id)})">Look again</button></div>` : ''}`;
+  } else if (r.status === 'replaced') {
+    state = `<div class="rv-state">↷ Replaced by a newer version from the same chat. <button type="button" class="lnk" onclick="go('review',${jq(d.replaced_by || '')})">Open the newer one</button></div>`;
+  }
+  const noteIcon = { replayed: '⟳', stale: '✗', grade: '★', comments: '#', replaces: '↷', undo: '↶' };
+  const notes = (r.notes || []).filter(n => n.kind !== 'undo').map(n => `<div class="rv-note ${n.kind === 'stale' ? 'bad' : ''}"><span aria-hidden="true">${noteIcon[n.kind] || '·'}</span> <span>${esc(n.text)}${n.kind === 'replaces' ? ` <button type="button" class="lnk" onclick="go('review',${jq(n.id)})">see it</button>` : ''}${n.copy ? `<div class="row" style="margin-top:6px"><code class="block" style="flex:1 1 auto;min-width:0">${esc(n.copy)}</code><button class="small" onclick="copyText(${jq(n.copy)})">Copy</button></div>` : ''}</span></div>`).join('');
+  const counts = r.counts || {};
+  const countRow = (label, list) => (list && list.length) ? `<div class="rv-count"><span class="rv-count-l">${label}</span><span>${list.map(esc).join(' · ')}</span></div>` : '';
+  const changes = (r.changes || []).length ? (r.changes || []).map(changeHtml).join('') : `<div class="hint">Nothing changes in meaning: only how the files are laid out.</div>`;
+  const editable = r.status === 'pending' && !!can.accept;
+  const qs = (r.questions || []), asks = qs.filter(q => q.ask);
+  const questions = qs.length ? `<div class="rv-qs">${qs.map((q, i) => questionHtml(q, i, editable)).join('')}</div>` : '';
+  const errors = (r.errors || []).length ? `<div class="rv-note bad"><span aria-hidden="true">✗</span> <span><b>This can't be accepted as it is</b>${r.errors.map(e => `<div>${esc(e.text)}</div>`).join('')}</span></div>` : '';
+  const others = r.other_warnings ? `<div class="hint">The space has ${plural(r.other_warnings, 'other warning')} this proposal did not cause (see Problems).</div>` : '';
+  const undo = (r.notes || []).find(n => n.kind === 'undo');
+  const removes = (r.changes || []).filter(x => x.op === 'remove');
+  const me = ME();
+  const decidable = (r.status === 'pending' && (can.accept || can.dismiss)) || (r.status === 'set_aside' && can.reopen) || (r.status === 'accepted' && r.take_back && r.take_back.possible);
+  const nameBox = decidable && !me ? `<div class="rv-q"><label for="rv-name"><b>Your name</b> <span class="hint">(recorded with every decision; kept in this browser, like Settings › Your name)</span></label><input id="rv-name" placeholder="e.g. Vinay" style="max-width:260px" oninput="const b=document.getElementById('rv-accept'); if (b && !ui.rv.confirmRemove) b.textContent='Accept as ' + (this.value.trim() || 'you')">${AUTH && !AUTH.required ? '<div class="hint">This server runs with --no-auth: anyone who can reach it can type any name.</div>' : ''}</div>` : '';
+  let actions = '';
+  if (r.status === 'pending') {
+    const whyBox = ui.rv.why !== null ? `<div class="rv-q"><label for="rv-why"><b>Why?</b> <span class="hint">(optional; the agent sees this)</span></label><textarea id="rv-why" rows="2" style="max-width:520px" oninput="ui.rv.why=this.value">${esc(ui.rv.why || '')}</textarea><div class="row"><button class="small" onclick="dismissP(${jq(r.id)})">Set aside</button><button class="small" onclick="ui.rv.why=null;renderReviewAgain()">Cancel</button></div></div>` : '';
+    const confirmRm = removes.length && ui.rv.confirmRemove ? `<div class="rv-note bad"><span aria-hidden="true">−</span> <span>Accepting removes ${removes.map(x => esc(x.label)).join(', ')}. Press again to confirm.</span></div>` : '';
+    actions = `${whyBox}${confirmRm}<div class="rv-actions"><button id="rv-accept" class="primary" ${can.accept ? '' : 'disabled'} onclick="acceptP(${jq(r.id)})">${removes.length && ui.rv.confirmRemove ? 'Yes, remove ' + esc(removes.map(x => x.label).join(', ')) : 'Accept as ' + esc(me || 'you')}</button><button ${can.dismiss && ui.rv.why === null ? '' : 'disabled'} onclick="ui.rv.why='';renderReviewAgain()">Not now</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>${can.why_not ? `<div class="hint">${esc(can.why_not)}</div>` : ''}`;
+  } else {
+    actions = `<div class="rv-actions"><button type="button" class="lnk" onclick="go('agents')">Back to Agents</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>`;
+  }
+  const files = ui.rv.files ? (r.files || []).map(f => `<div style="font-size:12.5px;margin-top:6px"><b class="mono">${esc(f.file)}</b> <span class="hint">${esc((f.summaries || []).join('; '))}${f.comments_lost ? ` · loses ${plural(f.comments_lost, 'comment')}` : ''}</span></div><div class="diff">${diffHtml(f.before, f.after)}</div>`).join('') : '';
+  return `<div class="rv"><div class="hint"><button type="button" class="lnk" onclick="go('agents')">Agents</button> › Review</div><h1 class="rv-title">${esc(r.headline)}</h1><div class="hint">${meta}</div>${quote}${state}${r.status !== 'pending' ? nameBox : ''}${notes}<div class="rv-counts">${countRow('Adds', counts.adds)}${countRow('Changes', counts.changes)}${countRow('Removes', counts.removes)}</div><div class="rv-changes">${changes}</div>${errors}${questions}${asks.length ? '' : ''}${others}${undo && r.status === 'pending' ? `<div class="hint">${esc(undo.text)}</div>` : ''}${r.status === 'pending' ? nameBox : ''}${files}${actions}</div>`;
+}
+function copyText(t){ try { navigator.clipboard.writeText(t); note('Copied'); } catch (e) { note('Copy did not work here; select the text instead', true); } }
+async function acceptP(id){
+  const r = RV; if (!r || r.id !== id) return;
+  const removes = (r.changes || []).filter(x => x.op === 'remove');
+  if (removes.length && !ui.rv.confirmRemove) { ui.rv.confirmRemove = true; renderReviewAgain(); return; }
+  if (!rememberName()) return;
+  const fixes = [];
+  (r.questions || []).forEach((q, i) => {
+    const v = ui.rv.fixes[i]; if (!q.ask || !v) return; const f = q.fix || {};
+    if (f.op === 'add_metric') { if (!v.pick) return; const [how, column] = v.pick.split(':'); fixes.push({ op: 'add_metric', entity: f.entity, how, column, leave_out: v.leave_out || '' }); return; }
+    const t = (v.text || '').trim(); if (!t) return;
+    if (f.op === 'set_metric') fixes.push({ op: 'set_metric', metric: f.metric, [f.field]: t });
+    else if (f.op === 'set_type_description') fixes.push({ op: 'set_type_description', type: f.type, description: t });
+  });
+  const res = await post(B + '/api/proposals/accept', { id, seen: r.fingerprint || '', fixes });
+  if (res.written) { toast(res); ui.rv = null; await loadSummary(); renderReview($('view')); return; }
+  toast(res.error ? res : { ...res, error: res.error || 'Not accepted' });
+  renderReview($('view'));
+}
+// the name typed on the review screen, kept like Settings › Your name, before any decision is sent
+function rememberName(){ const nb = $('rv-name'); if (nb && nb.value.trim()) { const v = nb.value.trim(); if (!nameOk(v)) { note('That name cannot be used. ' + NAME_RULE, true); return false; } try { localStorage.setItem('lorefile-name', v); } catch (e) {} } return true; }
+async function dismissP(id){
+  if (!rememberName()) return;
+  const res = await post(B + '/api/proposals/dismiss', { id, why: (ui.rv && ui.rv.why) || '' });
+  if (res.error) { note(res.error, true); return; }
+  note('Set aside'); ui.rv = null; await loadSummary(); renderReview($('view'));
+}
+async function takeBack(id){
+  if (!rememberName()) return;
+  if (!confirm('Take this back? The files go back to how they were before Accept, and the proposal waits for review again.')) return;
+  const res = await post(B + '/api/proposals/take_back', { id });
+  toast(res.written ? res : { ...res, error: res.error || 'Not taken back' });
+  ui.rv = null; await loadSummary(); renderReview($('view'));
+}
+// the space as it would be after Accept: new green, changed amber, removed red, with a legend in words
+async function renderReviewMap(v, id){
+  const g = await api(B + '/api/graph?proposal=' + encodeURIComponent(id));
+  if (g.error) { v.innerHTML = main(`<div class="card"><b>${esc(g.error)}</b><button class="small" onclick="go('review',${jq(id)})">Back to the review</button></div>`); return; }
+  const doms = []; (g.nodes || []).forEach(n => { if (!doms.includes(n.domain)) doms.push(n.domain); });
+  const W = 220, H = 70, gx = 130, gy = 90, per = 3; const pos = {}; let y = 70, maxW = 0;
+  for (const d of doms) { const list = g.nodes.filter(n => n.domain === d); list.forEach((n, i) => { const col = i % per, row = Math.floor(i / per); pos[n.name] = [30 + col * (W + gx), y + row * (H + gy)]; maxW = Math.max(maxW, 30 + (col + 1) * (W + gx)); }); y += Math.ceil(list.length / per) * (H + gy) + 30; }
+  const word = { new: 'new', changed: 'changed', removed: 'removed', same: '' };
+  let edges = '', nodes = '';
+  for (const e of (g.edges || [])) { const p = pos[e.from], q = pos[e.to]; if (!p || !q) continue; const a = { x: p[0] + W/2, y: p[1] + H/2 }, b = { x: q[0] + W/2, y: q[1] + H/2 }; const dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx*dx + dy*dy), ang = Math.atan2(dy, dx) * 180 / Math.PI; edges += `<div class="edge st-${e.status}" style="left:${a.x}px;top:${a.y}px;width:${len}px;transform:rotate(${ang}deg)"></div><div class="elabel st-${e.status}" style="left:${(a.x+b.x)/2-44}px;top:${(a.y+b.y)/2-10}px">${esc(e.name)}${word[e.status] ? ' · ' + word[e.status] : ''}</div>`; }
+  for (const n of (g.nodes || [])) { const [x, yy] = pos[n.name]; nodes += `<div class="node st-${n.status}" style="left:${x}px;top:${yy}px"><b>${esc(n.name)}</b><div class="tags">${word[n.status] ? `<span class="st-tag st-${n.status}">${word[n.status]}</span>` : ''}<span style="background:var(--chip);color:var(--muted)">${plural(n.fields, 'field')}</span></div></div>`; }
+  const legend = `<span><i class="st-dot st-new"></i>new (solid outline)</span><span><i class="st-dot st-changed"></i>changed (dashed outline)</span><span><i class="st-dot st-removed"></i>removed (struck through)</span>`;
+  v.innerHTML = `<div class="map"><div class="rv-bar">What this proposal would change: ${esc(g.headline || '')} · read-only · <button type="button" class="lnk" onclick="go('review',${jq(id)})">Back to the review</button></div><div style="position:relative;width:${Math.max(maxW + 30, 600)}px;height:${y + 20}px;margin:0 auto">${edges}${nodes}</div><div class="legend">${legend}</div></div>`;
 }
 // an agent reporting a check: a person promotes it, or not
 function checkCard(p){
   const c = p.check || {};
   const what = c.kind === 'binding' ? `the data binding of ${c.name}` : `${c.kind} ${c.name}`;
-  return `<div class="card ${p.status==='pending'?'need':''}"><div class="row"><b>An agent reports a check: ${esc(what)} against ${esc(c.against)}</b><span class="chip">check</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">${esc(p.via)} · ${esc(p.created_at.replace('T',' ').replace('Z',''))}</span></div><div style="font-size:13px">“${esc(c.note)}”</div>${p.reason ? `<div class="hint">${esc(p.reason)}</div>` : ''}<div class="row">${p.status==='pending' ? `<span style="font-size:13px">Did you see this match yourself?</span><span style="margin-left:auto"></span><button class="primary small" ${ro()?'disabled':''} onclick="decide(${jq(p.id)},'accept')">Yes, mark as checked</button><button class="small" onclick="decide(${jq(p.id)},'dismiss')">Not now</button>` : `<span style="margin-left:auto;font-size:12.5px;color:var(--muted)">${esc(p.status)} ${esc((p.resolved_at||'').replace('T',' ').replace('Z',''))}</span>`}</div></div>`;
+  return `<div class="card ${p.status==='pending'?'need':''}"><div class="row"><b>An agent reports a check: ${esc(what)} against ${esc(c.against)}</b><span class="chip">check</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">${esc(agentOf(p.via))} · ${esc(localWhen(p.created_at))}</span></div><div style="font-size:13px">“${esc(c.note)}”</div>${p.reason ? `<div class="hint">${esc(p.reason)}</div>` : ''}<div class="row">${p.status==='pending' ? `<span style="font-size:13px">Did you see this match yourself?</span><span style="margin-left:auto"></span><button class="primary small" ${ro()?'disabled':''} onclick="decide(${jq(p.id)},'accept')">Yes, mark as checked</button><button class="small" onclick="decide(${jq(p.id)},'dismiss')">Not now</button>` : `<span style="margin-left:auto;font-size:12.5px;color:var(--muted)">${esc(decidedWords(p))} · ${esc(localWhen(p.resolved_at))}</span>`}</div></div>`;
 }
 function diffHtml(before, after){
   const a = (before||'').split('\n'), b = (after||'').split('\n'); const sa = new Set(a), sb = new Set(b);
@@ -826,7 +1048,7 @@ function diffHtml(before, after){
   if (!changed) return '(identical to the current file)';
   return keep.map(([m, l]) => `<div class="${m==='+'?'add':(m==='-'?'del':'')}">${m==='='?' ':m} ${esc(l)}</div>`).join('');
 }
-async function decide(id, what){ const p = (PR.proposals || []).find(x => x.id === id) || {}; const r = await post(B + '/api/proposals/' + what, { id }); if (what === 'accept') await afterWrite({ ...r, summary: r.written ? (p.check ? `Marked ${p.check.kind} ${p.check.name} as checked` : 'Accepted and written to ' + r.file) : undefined }); else { toast({ written: true, summary: 'Set aside' }); } render(); }
+async function decide(id, what){ const p = (PR.proposals || []).find(x => x.id === id) || {}; const r = await post(B + '/api/proposals/' + what, { id }); if (what === 'accept') await afterWrite({ ...r, summary: r.written ? (p.check ? `Marked ${p.check.kind} ${p.check.name} as checked` : 'Accepted') : undefined }); else if (r.error) { toast(r); } else { toast({ written: true, summary: 'Set aside' }); } render(); }
 const toolExamples = { search: {query: 'lead time'}, describe: {name: ''}, neighbors: {name: '', depth: 1}, path: {from: '', to: ''}, constraints_for: {name: ''}, validate: {action: '', inputs: {}}, where_is: {type: ''}, instances: {type: '', limit: 3}, summary: {}, query: {sql: 'select name from nodes limit 5'}, tables: {}, propose_change: {file: 'glossary.yaml', content: '', reason: ''}, match_file: {file_name: 'promo_sales.csv', columns: [{name: 'line_id', examples: ['L-1', 'L-2']}, {name: 'revenue', examples: ['43.20', '19.80']}]} };
 function toolTemplate(){ const n = $('tool-name'); if (!n) return; const ex = JSON.parse(JSON.stringify(toolExamples[n.value] || {})); const t0 = (O.types[0]||{}).name || ''; for (const k of ['name','type','from']) if (k in ex && !ex[k]) ex[k] = t0; if ('to' in ex && !ex.to) ex.to = (O.types[1]||O.types[0]||{}).name || ''; if ('action' in ex) ex.action = (O.actions[0]||{}).action || ''; $('tool-args').value = JSON.stringify(ex, null, 2); }
 async function runTool(){ let args = {}; try { args = JSON.parse($('tool-args').value || '{}'); } catch (e) { $('tool-out').style.display = 'block'; $('tool-out').textContent = 'arguments are not valid JSON: ' + e.message; return; } const r = await post(B + '/api/tool', { name: $('tool-name').value, arguments: args }); $('tool-out').style.display = 'block'; $('tool-out').textContent = (r.isError ? '[error] ' : '') + (r.content && r.content[0] ? r.content[0].text : JSON.stringify(r, null, 2)); if ($('tool-name').value === 'propose_change') { PR = await api(B + '/api/proposals'); await loadSummary(); } }

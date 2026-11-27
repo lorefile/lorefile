@@ -534,6 +534,19 @@ struct Connection {
     access: Vec<Access>,
     #[serde(default, with = "at_opt", skip_serializing_if = "Option::is_none")]
     last_used: Option<i64>,
+    /// What happens to what it suggests on a server with `--allow-edit`: `wait` for a person
+    /// to accept (the default, also for connections approved before this setting existed), or
+    /// `direct`: written straight away, graded proposed (unverified) until a person looks.
+    /// Only the page changes it; the OAuth endpoints never do after approval.
+    #[serde(default = "wait")]
+    writes: String,
+}
+
+pub const WAIT: &str = "wait";
+pub const DIRECT: &str = "direct";
+
+fn wait() -> String {
+    WAIT.to_string()
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -626,6 +639,8 @@ pub struct Grant {
     pub name: String,
     pub scopes: Vec<String>,
     pub approved: i64,
+    /// The person who approved it chose "go in straight away, marked unverified".
+    pub direct: bool,
 }
 
 impl Grant {
@@ -669,6 +684,8 @@ struct Code {
     approved_with: String,
     /// The connection the first use created: a second use revokes it.
     used_by: Option<String>,
+    /// `wait` or `direct`, as chosen on the approval page.
+    writes: String,
 }
 
 #[derive(Default)]
@@ -987,7 +1004,7 @@ impl Server {
         }
         let stale = c.last_used.map(|t| now - t >= USE_SAVE_EVERY).unwrap_or(true);
         c.last_used = Some(now);
-        let grant = Grant { name: c.name.clone(), scopes: c.scopes.clone(), approved: c.approved };
+        let grant = Grant { name: c.name.clone(), scopes: c.scopes.clone(), approved: c.approved, direct: c.writes == DIRECT };
         if stale {
             let _ = self.save(&st);
         }
@@ -1011,11 +1028,25 @@ impl Server {
                 json!({
                     "id": c.id, "name": c.name, "address": issuer, "resource": c.resource, "space": space,
                     "scopes": c.scopes, "approved": stamp(c.approved), "approved_with": c.approved_with,
-                    "last_used": c.last_used.map(stamp),
+                    "last_used": c.last_used.map(stamp), "writes": c.writes,
                 })
             })
             .collect();
-        json!({ "on": true, "pinned": self.cfg.pinned, "connections": list })
+        json!({ "on": true, "pinned": self.cfg.pinned, "edit_allowed": self.cfg.edit_allowed, "connections": list })
+    }
+
+    /// Settings › Connections: what happens to one connection's suggestions, `wait` or `direct`.
+    pub fn set_writes(&self, id: &str, writes: &str) -> Result<(), String> {
+        if writes != WAIT && writes != DIRECT {
+            return Err(format!("writes is wait or direct, not `{}`", writes));
+        }
+        let mut st = self.lock();
+        let c = st.store.connections.iter_mut().find(|c| c.id == id).ok_or_else(|| format!("no connection {}", id))?;
+        if writes == DIRECT && !c.scopes.iter().any(|s| s == PROPOSE) {
+            return Err("this connection may only read, so it suggests nothing".into());
+        }
+        c.writes = writes.to_string();
+        self.save(&st)
     }
 
     /// Disconnect one connection, or `all`. Returns how many went.
@@ -1241,8 +1272,15 @@ impl Server {
             Some(s) => format!("read only the space <b>{}</b>", html_escape(s)),
         };
         let propose = if p.scopes.iter().any(|s| s == PROPOSE) {
-            let after = if self.cfg.edit_allowed { "with edit mode on they are written straight away, marked proposed until a person accepts them" } else { "they wait for a person to accept" };
-            format!("<li><label><input type=\"checkbox\" name=\"propose\" value=\"on\" checked> suggest changes ({})</label></li>", after)
+            if self.cfg.edit_allowed {
+                // the person approving decides how far they trust it; waiting is the default
+                "<li style=\"flex-direction:column;gap:4px\"><label><input type=\"checkbox\" name=\"propose\" value=\"on\" checked> suggest changes</label>\
+<div style=\"display:flex;flex-direction:column;gap:4px;padding-left:24px\">\
+<label><input type=\"radio\" name=\"writes\" value=\"wait\" checked> wait for me to accept them</label>\
+<label><input type=\"radio\" name=\"writes\" value=\"direct\"> go in straight away, marked unverified until a person looks</label></div></li>".to_string()
+            } else {
+                "<li><label><input type=\"checkbox\" name=\"propose\" value=\"on\" checked> suggest changes (they wait for a person to accept)</label></li>".to_string()
+            }
         } else {
             String::new()
         };
@@ -1325,6 +1363,8 @@ impl Server {
         if p.scopes.iter().any(|s| s == PROPOSE) && f("propose") == "on" {
             scopes.push(PROPOSE.to_string());
         }
+        // straight away only when it may suggest at all, and the server takes writes
+        let writes = if scopes.iter().any(|s| s == PROPOSE) && self.cfg.edit_allowed && f("writes") == DIRECT { DIRECT } else { WAIT };
         let Some(code) = random(32) else { return error_page(500, "The operating system gave no random bytes. Try again.") };
         st.codes.retain(|_, c| now - c.created < CODE_MEMORY);
         if st.codes.len() >= MAX_CODES {
@@ -1332,7 +1372,7 @@ impl Server {
                 st.codes.remove(&oldest);
             }
         }
-        st.codes.insert(hash(&code), Code { client: p.client.clone(), redirect: p.redirect.clone(), redirect_given: p.redirect_given, challenge: p.challenge.clone(), resource: p.resource.clone(), scopes, origin: p.origin.clone(), created: now, approved_with: approved_with.into(), used_by: None });
+        st.codes.insert(hash(&code), Code { client: p.client.clone(), redirect: p.redirect.clone(), redirect_given: p.redirect_given, challenge: p.challenge.clone(), resource: p.resource.clone(), scopes, origin: p.origin.clone(), created: now, approved_with: approved_with.into(), used_by: None, writes: writes.to_string() });
         let mut reply = Reply::redirect(back(&p, &mut vec![("code", code)]));
         reply.sign_in = by_token;
         drop(st);
@@ -1435,6 +1475,7 @@ impl Server {
                     refresh: Refresh { hash: hash(&refresh), expires: now + REFRESH_IDLE, retired: vec![] },
                     access: vec![Access { hash: hash(&access), expires: now + ACCESS_LIFE }],
                     last_used: None,
+                    writes: code.writes.clone(),
                 };
                 if let Some(c) = st.codes.get_mut(&h) {
                     c.used_by = Some(conn.id.clone());

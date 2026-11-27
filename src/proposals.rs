@@ -18,7 +18,8 @@ pub struct Proposal {
     #[serde(default)]
     pub via: String,
     pub created_at: String,
-    /// pending | accepted | dismissed
+    /// pending | accepted | set_aside | replaced. Files written before 2026-11-27 say
+    /// `dismissed`, which reads as set_aside (or replaced, when `replaced_by` is set).
     pub status: String,
     /// True when the proposed file compiled without errors.
     pub ok: bool,
@@ -52,6 +53,129 @@ pub struct Proposal {
     /// Set aside because a newer `learn_file` for the same file replaced it: that proposal's id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub replaced_by: Option<String>,
+    /// How to make this proposal again on today's files, without values: `propose_patch`'s
+    /// ops, or `learn_file`'s input without its examples. None for `propose_change`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replay: Option<Replay>,
+    /// The person who accepted it ("Priya via page").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepted_by: Option<String>,
+    /// The person who set it aside or looked again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_by: Option<String>,
+    /// Why it was set aside, in the person's words (the agent sees this).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+    /// The person who took an Accept back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub taken_back_by: Option<String>,
+    /// The person's fixes that rode along with Accept, as sentences.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fixes: Vec<String>,
+    /// History off: the texts before and after Accept, so Take it back can put them back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<Snapshot>,
+    /// History on: the commit Accept made, so Take it back is that commit's Undo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit: Option<String>,
+    /// The errors the space had before Accept, so Take it back may bring them back.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub errors_before: Vec<KnownError>,
+}
+
+/// How a proposal made from ops is made again when the files moved on since.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Replay {
+    /// `propose_patch`: the ops as the agent sent them.
+    Ops { ops: Vec<Json> },
+    /// `learn_file`: the column names, their types, units and descriptions, the key and the
+    /// answers. Never the examples: they are dropped before this is made.
+    Learn { input: Json },
+}
+
+/// The files as they were before Accept and as Accept wrote them; `None` means the file did not exist.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct Snapshot {
+    pub files: Vec<SnapFile>,
+    #[serde(default)]
+    pub trust_before: Option<String>,
+    #[serde(default)]
+    pub trust_after: Option<String>,
+}
+
+/// An error the space already had before Accept (a blank space's "no types found"): taking the
+/// Accept back may bring exactly these back, and nothing else.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct KnownError {
+    pub code: String,
+    #[serde(default)]
+    pub file: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct SnapFile {
+    pub file: String,
+    #[serde(default)]
+    pub before: Option<String>,
+    #[serde(default)]
+    pub after: Option<String>,
+}
+
+impl Proposal {
+    /// Every file of the proposal as (file, proposed text, text when proposed).
+    pub fn parts(&self) -> Vec<(String, String, String)> {
+        if self.files.is_empty() {
+            if self.file.is_empty() {
+                return vec![];
+            }
+            vec![(self.file.clone(), self.content.clone(), self.before.clone())]
+        } else {
+            self.files.iter().map(|f| (f.file.clone(), f.content.clone(), f.before.clone())).collect()
+        }
+    }
+
+    /// The person's name from `by` words: "Priya via page" → "Priya", "person via page" → "a person".
+    pub fn who(by: &str) -> String {
+        crate::trust::who_said(by)
+    }
+
+    /// What happened to it, in words, for a refusal or a linked screen: "accepted by Priya 3 minutes ago".
+    pub fn state_words(&self) -> String {
+        let when = ago(&self.resolved_at);
+        match self.status.as_str() {
+            "accepted" => format!("accepted by {} {}", Self::who(self.accepted_by.as_deref().unwrap_or("")), when),
+            "set_aside" => {
+                let why = self.why.as_ref().filter(|w| !w.trim().is_empty()).map(|w| format!(": \"{}\"", w)).unwrap_or_default();
+                format!("set aside by {} {}{}", Self::who(self.decided_by.as_deref().unwrap_or("")), when, why)
+            }
+            "replaced" => format!("replaced by a newer version from the same chat ({})", self.replaced_by.as_deref().unwrap_or("?")),
+            "pending" => "waiting for review".to_string(),
+            other => other.to_string(),
+        }
+    }
+
+    /// Old files said `dismissed`; it means set aside, or replaced when a newer learn replaced it.
+    fn normalize(mut self) -> Proposal {
+        if self.status == "dismissed" {
+            self.status = if self.replaced_by.is_some() { "replaced".into() } else { "set_aside".into() };
+        }
+        self
+    }
+}
+
+/// "a moment ago", "5 minutes ago", "2 hours ago", "on 27 Nov": no time zone needed.
+pub fn ago(at: &str) -> String {
+    let Ok(t) = chrono::DateTime::parse_from_rfc3339(at) else { return String::new() };
+    let secs = (chrono::Utc::now() - t.with_timezone(&chrono::Utc)).num_seconds();
+    match secs {
+        s if s < 90 => "a moment ago".into(),
+        s if s < 3600 => format!("{} minutes ago", s / 60),
+        s if s < 2 * 3600 => "an hour ago".into(),
+        s if s < 24 * 3600 => format!("{} hours ago", s / 3600),
+        _ => format!("on {}", t.format("%-d %b")),
+    }
 }
 
 /// What a `learn_file` proposal is about.
@@ -136,9 +260,7 @@ pub fn store(root: &Path, file: &str, content: &str, reason: &str, via: &str, ou
         before,
         summary: summary.to_string(),
         files: Vec::new(),
-        check: None,
-        learned: None,
-        replaced_by: None,
+        ..Default::default()
     };
     let mut p = p;
     write_new(root, &mut p)?;
@@ -169,6 +291,10 @@ pub fn store_check(root: &Path, claim: &CheckClaim, reason: &str, via: &str) -> 
     };
     write_new(root, &mut p)?;
     Ok(p)
+}
+
+pub fn save(root: &Path, p: &Proposal) -> Result<(), String> {
+    write(root, p)
 }
 
 fn write(root: &Path, p: &Proposal) -> Result<(), String> {
@@ -208,6 +334,7 @@ pub fn list(root: &Path) -> Vec<Proposal> {
             .filter(|e| e.path().extension().map(|x| x == "json").unwrap_or(false))
             .filter_map(|e| std::fs::read_to_string(e.path()).ok())
             .filter_map(|t| serde_json::from_str::<Proposal>(&t).ok())
+            .map(Proposal::normalize)
             .collect(),
         Err(_) => vec![],
     };
@@ -220,15 +347,7 @@ pub fn get(root: &Path, id: &str) -> Option<Proposal> {
         return None;
     }
     let path = proposals_dir(root).join(format!("{}.json", id));
-    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok())
-}
-
-pub fn set_status(root: &Path, id: &str, status: &str) -> Result<Proposal, String> {
-    let mut p = get(root, id).ok_or_else(|| format!("no proposal {}", id))?;
-    p.status = status.to_string();
-    p.resolved_at = now();
-    write(root, &p)?;
-    Ok(p)
+    std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str::<Proposal>(&t).ok()).map(Proposal::normalize)
 }
 
 /// Record what a `learn_file` proposal is about, so `match_file` recognises the file while it waits.
@@ -245,9 +364,69 @@ pub fn dismiss_replaced(root: &Path, id: &str, by: &str) -> Result<Proposal, Str
     if p.status != "pending" {
         return Ok(p);
     }
-    p.status = "dismissed".into();
+    p.status = "replaced".into();
     p.resolved_at = now();
     p.replaced_by = Some(by.to_string());
+    write(root, &p)?;
+    Ok(p)
+}
+
+/// Not now: the proposal waits no more, with who and why. Only a waiting proposal.
+pub fn set_aside(root: &Path, id: &str, by: &str, why: &str) -> Result<Proposal, String> {
+    let mut p = get(root, id).ok_or_else(|| format!("there is no proposal {}", id))?;
+    if p.status != "pending" {
+        return Err(format!("{} is {}", p.id, p.state_words()));
+    }
+    p.status = "set_aside".into();
+    p.resolved_at = now();
+    p.decided_by = Some(by.to_string());
+    let why: String = why.trim().chars().take(300).collect();
+    p.why = if why.is_empty() { None } else { Some(why) };
+    write(root, &p)?;
+    Ok(p)
+}
+
+/// Look again: a set-aside proposal waits again. A replaced one never does: its replacement is the one to review.
+pub fn reopen(root: &Path, id: &str, by: &str) -> Result<Proposal, String> {
+    let mut p = get(root, id).ok_or_else(|| format!("there is no proposal {}", id))?;
+    match p.status.as_str() {
+        "set_aside" => {}
+        "replaced" => return Err(format!("{} was replaced by a newer version from the same chat ({}); review that one instead", p.id, p.replaced_by.as_deref().unwrap_or("?"))),
+        _ => return Err(format!("{} is {}, not set aside", p.id, p.state_words())),
+    }
+    p.status = "pending".into();
+    p.resolved_at = String::new();
+    p.decided_by = Some(by.to_string());
+    p.why = None;
+    write(root, &p)?;
+    Ok(p)
+}
+
+/// Accept wrote it: who, the fixes that rode along, and how to take it back.
+pub fn mark_accepted(root: &Path, id: &str, by: &str, fixes: Vec<String>, snapshot: Option<Snapshot>, commit: Option<String>, errors_before: Vec<KnownError>) -> Result<Proposal, String> {
+    let mut p = get(root, id).ok_or_else(|| format!("there is no proposal {}", id))?;
+    p.status = "accepted".into();
+    p.resolved_at = now();
+    p.accepted_by = Some(by.to_string());
+    p.fixes = fixes;
+    p.snapshot = snapshot;
+    p.commit = commit;
+    p.errors_before = errors_before;
+    p.taken_back_by = None;
+    write(root, &p)?;
+    Ok(p)
+}
+
+/// Take it back: the files are as they were, and the proposal waits again.
+pub fn mark_taken_back(root: &Path, id: &str, by: &str) -> Result<Proposal, String> {
+    let mut p = get(root, id).ok_or_else(|| format!("there is no proposal {}", id))?;
+    p.status = "pending".into();
+    p.resolved_at = String::new();
+    p.taken_back_by = Some(by.to_string());
+    p.snapshot = None;
+    p.commit = None;
+    p.fixes = Vec::new();
+    p.errors_before = Vec::new();
     write(root, &p)?;
     Ok(p)
 }

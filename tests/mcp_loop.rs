@@ -454,7 +454,7 @@ fn learning_the_same_file_again_replaces_what_waits_instead_of_piling_up() {
     let ps = proposals_of(&dir);
     assert_eq!(ps.len(), 2);
     let old = ps.iter().find(|p| p["id"] == first.as_str()).unwrap();
-    assert_eq!((old["status"].as_str(), old["replaced_by"].as_str()), (Some("dismissed"), third["queued"].as_str()));
+    assert_eq!((old["status"].as_str(), old["replaced_by"].as_str()), (Some("replaced"), third["queued"].as_str()));
     assert_eq!(ps.iter().filter(|p| p["status"] == "pending").count(), 1, "one waiting, never a pile");
     let _ = fs::remove_dir_all(&dir);
 }

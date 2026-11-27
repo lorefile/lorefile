@@ -60,6 +60,8 @@ ChatGPT on the web connected over OAuth and called tools. Then "@Lorefile save t
 2. ~~**"Save this file" has no recipe**: ChatGPT looked for an upload tool, split a flat export into six entities, made up keys and never asked which number counts.~~ Built 2026-11-27: `match_file` and `learn_file` (`specs/2026-11-27-learn-file.md`).
 3. ~~**ChatGPT asks to confirm every read**~~, ~~**`/.well-known/openid-configuration` answers 401**~~, ~~**`offline_access` not listed**~~. Fixed 2026-11-27 (whether ChatGPT then stops asking is still to check live).
 4. Item 6 above (strict schemas) is done for `match_file` and `learn_file`; `propose_patch` still describes its ops in prose.
+5. ~~**ChatGPT skipped `learn_file`'s questions** with `answers: {}`~~. Built 2026-11-27: `answers: {}` needs `skip_because`, the user's own words (`specs/2026-11-27-review-flow.md`, decision 23).
+6. ~~**The review card was hard to read**, **Accept needed a second server**, **the link from chat lost its way at sign-in**, **Not now was logged as "person via page"**, **proposals with errors still queued**, **batch file headings were off by one**~~. Built 2026-11-27: the review screen (`specs/2026-11-27-review-flow.md`).
 
 
 ## From the three reviews (2026-11-26)
@@ -112,7 +114,7 @@ Three independent reviewers on the Fable model read the working tree, built it, 
 7. **Semantic search** over descriptions (nice to have).
 8. **Python and TypeScript readers** for the format (ecosystem).
 9. **`--push-edits`** (small): when a space has a remote, push after every commit, with the same no-prompt, words-for-errors handling as the Push button. Today a person presses Push.
-10. **A branch per experiment** (medium): try a set of changes on a branch, with the MCP pinned to `main` so agents never read a half-made idea. Not in v1 on purpose: the proposals inbox is the local pull request and Accept is the merge; teams that want branch review push and review on GitHub or GitLab.
+10. **A branch per experiment** (medium): try a set of changes on a branch, with the MCP pinned to `main` so agents never read a half-made idea. Not in v1 on purpose: the proposals inbox is the local pull request and Accept is the merge; teams that want branch review push and review on GitHub or GitLab. Checked again on 2026-11-27 for the review screen (`specs/2026-11-27-review-flow.md`, question 4): still no branches. They would need agents that run git (ChatGPT cannot), history on, and people reading YAML diffs.
 11. **A `history` MCP tool** (small): the space's recent changes and who made them, so an agent can say "Finance changed `success` yesterday". Today `summary` has one History line.
 12. **Embedded git for hosts without git** (large, only if needed): `git2` or `gix` compiled in. The system `git` is the engine because it uses the person's own login for push; embedding would make push credentials Lorefile's problem. The Docker image has git, so this waits for a host that cannot.
 
@@ -225,3 +227,16 @@ Status: design only.
 7. **Grades per field** (medium).
 8. **An owner for a learned number** (small): a learned metric has none, so it carries warning W109 until a person adds one. Lorefile does not invent who decides what a number means.
 9. **Empty flags** (small): `refunded = false` also leaves out rows where `refunded` is empty. Fine for these files; a file with empty flags may want `refunded is distinct from true`.
+
+### Left for later by the review screen (2026-11-27, `specs/2026-11-27-review-flow.md`)
+
+1. **A preview number** (medium) for metrics whose rows are readable here (csv, duckdb), run through the frozen DuckDB door. Files a user gives an agent (`from_user`) never have one: Lorefile has no rows.
+2. **Agents seeing what happened to all their proposals** (small): a `my_proposals` tool, or a line in `summary`. Today `match_file` says when a file was set aside, and nothing else does.
+3. **Changing a guessed column type on the review screen** (small): needs the `set_property` op.
+4. **Review comments that go back to the agent** (medium). Today the "why" of Not now is the only one.
+5. **Per-person accounts** (large), so "who accepted" is a signed-in person, not a typed name.
+6. **Keeping comments when type files are rewritten** (medium). The screen says how many a change would drop; `set_metric` rewrites the metrics file the same way.
+7. **Notifications** (medium): "ChatGPT proposed something", by email or Slack.
+8. **"In use, not reviewed" on the review screen** (small): an agent's write in edit mode (or from a connection set to "straight away") keeps no proposal, so its rows open the thing's own page with Looks right instead of the review screen. Keeping a record of each direct write would let the same screen show it.
+9. **History's Undo on a blank space** (small): Undo refuses to bring back the space's own "no types found" error, so the first entity of a blank space cannot be undone from History. Take it back remembers the errors the space had and works.
+

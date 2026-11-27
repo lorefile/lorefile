@@ -16,6 +16,7 @@ use crate::mcp::{Hub, Server as McpServer};
 use crate::oauth;
 use crate::patch;
 use crate::proposals;
+use crate::review;
 use crate::spaces::{Loaded, Registry, Space};
 use anyhow::Result;
 use serde_json::{json, Value as Json};
@@ -274,7 +275,7 @@ const LOGIN_HTML: &str = r##"<!doctype html>
   const k = 'lorefile-auth-retry', last = +(sessionStorage.getItem(k) || 0);
   if (Date.now() - last < 10000) return;
   const r = await fetch('/api/auth', { credentials: 'same-origin' }); const j = await r.json();
-  if (j.signed_in) { sessionStorage.setItem(k, String(Date.now())); location.replace(location.pathname + location.hash); }
+  if (j.signed_in) { sessionStorage.setItem(k, String(Date.now())); location.replace(location.pathname + location.search + location.hash); }
 } catch (e) {} })();
 </script>
 </body></html>
@@ -473,59 +474,22 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
     if builtin {
         return json_response_private(403, &json!({ "error": SHIPPED_READ_ONLY, "editable": false, "builtin": true }));
     }
-    // an agent's proposal is validated and queued even when edit mode is off
+    // an agent's proposal is validated and queued even when edit mode is off: the same code as MCP
     if as_tool {
         let args = body.get("arguments").cloned().unwrap_or(json!({}));
-        let reason = str_field(&args, "reason").to_string();
-        if str_field(body, "name") == "propose_patch" && str_field(&args, "op") == "record_check" {
-            return json_response_private(200, &McpServer::record_check(&st.ont, &args, "agent via API"));
-        }
-        if str_field(body, "name") == "learn_file" {
-            let (reply, reload) = {
-                let srv = McpServer::with_data(&st.ont, st.data()).with_edit(edit).with_via("agent via API");
-                let r = srv.call_tool("learn_file", &args);
-                (r, srv.reload_needed.get())
-            };
-            if reload {
-                st.reload();
-            }
-            return json_response_private(200, &reply);
-        }
-        let (out, queued, summary) = if str_field(body, "name") == "propose_patch" && args.get("ops").map(|o| o.is_array()).unwrap_or(false) {
-            let ops = args["ops"].as_array().cloned().unwrap_or_default();
-            match patch::plan_many(&st.ont, &ops) {
-                Ok(plan) => {
-                    let summary = if plan.summaries.len() == 1 { plan.summaries[0].clone() } else { format!("{} changes: {}", plan.summaries.len(), plan.summaries.join("; ")) };
-                    let (o, q) = McpServer::propose_many(&st.dir, edit, &st.report, &plan, &reason, "agent via API");
-                    (o, q, summary)
-                }
-                Err(e) => return json_response_private(200, &McpServer::text(format!("{} (nothing was written)", e), true)),
-            }
-        } else if str_field(body, "name") == "propose_patch" {
-            match patch::plan(&st.ont, &args) {
-                Ok(p) => {
-                    let (o, q) = McpServer::propose(&st.dir, edit, &st.report, &p.file, &p.text, &reason, "agent via API", Some((&p.kind, &p.name)), &p.summary);
-                    (o, q, p.summary)
-                }
-                Err(e) => return json_response_private(200, &McpServer::text(format!("{} (nothing was written)", e), true)),
-            }
-        } else {
-            let (o, q) = McpServer::propose(&st.dir, edit, &st.report, str_field(&args, "file"), str_field(&args, "content"), &reason, "agent via API", None, "");
-            (o, q, String::new())
+        let (reply, reload) = {
+            let srv = McpServer::with_data(&st.ont, st.data()).with_edit(edit).with_via("agent via API");
+            let r = srv.call_tool(str_field(body, "name"), &args);
+            (r, srv.reload_needed.get())
         };
-        if out.written {
+        if reload {
             st.reload();
         }
-        return json_response_private(200, &McpServer::propose_change_result(&out, edit, queued.as_ref(), &summary));
+        return json_response_private(200, &reply);
     }
-    if path == "/api/proposals/dismiss" {
-        return match proposals::set_status(&st.dir, str_field(body, "id"), "dismissed") {
-            Ok(p) => {
-                proposals::log(&st.dir, PAGE, &format!("set aside the proposed change to {}", p.file), &p.file);
-                json_response_private(200, &json!({ "ok": true, "proposal": p }))
-            }
-            Err(e) => json_response_private(404, &json!({ "error": e })),
-        };
+    // a person's decision on a proposal: Accept, Not now, Look again, Take it back
+    if matches!(path, "/api/proposals/accept" | "/api/proposals/dismiss" | "/api/proposals/reopen" | "/api/proposals/take_back") {
+        return decide(st, edit, path, body);
     }
     if !edit.allow {
         return json_response_private(403, &json!({ "error": "edit mode is off; start the server with --allow-edit", "editable": false }));
@@ -577,60 +541,6 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
             }
             Err(e) => Outcome { file: str_field(body, "type").to_string(), refused: Some(e), ..Default::default() },
         }
-    } else if path == "/api/proposals/accept" {
-        match proposals::get(&st.dir, str_field(body, "id")) {
-            Some(p) if p.status != "pending" => Outcome { refused: Some(format!("proposal {} is already {}", p.id, p.status)), ..Default::default() },
-            // an agent's report of a check: the person's click makes it checked, in their name
-            Some(p) if p.check.is_some() => {
-                let c = p.check.clone().unwrap_or_default();
-                let note = format!("{} (reported by {})", c.note, if p.via.is_empty() { "an agent" } else { p.via.as_str() });
-                let op = edit::find_graded(&st.ont, crate::trust::Kind::parse(&c.kind), &c.name).and_then(|(kind, name)| {
-                    // the agent compared one recipe; if the definition changed since, that comparison says nothing about the new one
-                    let now = crate::trust::things(&st.ont, kind).get(&name).map(crate::trust::fingerprint).unwrap_or_default();
-                    if c.of.is_empty() || c.of != now {
-                        return Err(format!("{} {} has changed since the agent compared it, so this report is about an older definition; set it aside and ask the agent to compare again", kind.word(), name));
-                    }
-                    Ok(edit::GradeOp::Check { kind, name, against: c.against.clone(), note })
-                });
-                let out = match op {
-                    Ok(op) => edit::grade(&st.dir, edit, &st.report, &op, &by),
-                    Err(e) => Outcome { file: crate::trust::FILE.into(), refused: Some(e), ..Default::default() },
-                };
-                if out.written {
-                    let _ = proposals::set_status(&st.dir, &p.id, "accepted");
-                    proposals::log(&st.dir, &by, &format!("confirmed the check of {} {} against {} reported by an agent", c.kind, c.name, c.against), crate::trust::FILE);
-                }
-                extra["proposal_id"] = json!(p.id);
-                out
-            }
-            Some(p) => {
-                // the file moved on since the agent looked at it: accepting would drop those changes
-                let parts: Vec<(String, String, String)> = if p.files.is_empty() { vec![(p.file.clone(), p.content.clone(), p.before.clone())] } else { p.files.iter().map(|f| (f.file.clone(), f.content.clone(), f.before.clone())).collect() };
-                for (file, _, before) in &parts {
-                    let now_text = std::fs::read_to_string(st.dir.join(file)).unwrap_or_default();
-                    if &now_text != before {
-                        return json_response_private(409, &json!({ "error": format!("{} has changed since this was proposed, so accepting it would drop the newer changes; ask the agent to propose it again", file), "stale": true }));
-                    }
-                }
-                // the agent stays the author; the person who accepted is the committer
-                let via = if p.via.trim().is_empty() { "agent" } else { p.via.as_str() };
-                let line = edit::agent_line(via, &p.summary);
-                let note = Note { via, summary: &line, reason: &p.reason, accepted_by: Some(&by), ..Default::default() };
-                let out = if parts.len() == 1 {
-                    edit::apply(&st.dir, edit, &st.report, &p.file, Change::Write(p.content.clone()), &note, Some((&p.kind, &p.name)))
-                } else {
-                    let files: Vec<(String, String)> = parts.iter().map(|(f, t, _)| (f.clone(), t.clone())).collect();
-                    edit::apply_many(&st.dir, edit, &st.report, &files, &note, None)
-                };
-                if out.written {
-                    let _ = proposals::set_status(&st.dir, &p.id, "accepted");
-                    proposals::log(&st.dir, &by, &format!("accepted the change to {} proposed by an agent", p.file), &p.file);
-                }
-                extra["proposal_id"] = json!(p.id);
-                out
-            }
-            None => Outcome { refused: Some("no such proposal".into()), ..Default::default() },
-        }
     } else {
         edit::apply(&st.dir, edit, &st.report, str_field(body, "file"), Change::Write(str_field(body, "content").to_string()), &Note { via: &by, reason: str_field(body, "reason"), ..Default::default() }, None)
     };
@@ -658,6 +568,224 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
         j["by"] = json!(by);
     }
     json_response_private(outcome.status(), &j)
+}
+
+const REVIEW_READ_ONLY: &str = "This Lorefile server is read-only (started without --allow-edit), so nobody can accept or set aside here. Restart it with --allow-edit.";
+
+/// The decisions on a proposal, each under the space's decision lock, in the order the spec
+/// gives (specs/2026-11-27-review-flow.md, Part 3). Every refusal says what happened in words.
+fn decide(st: &mut State, edit: EditConfig, path: &str, body: &Json) -> Response<std::io::Cursor<Vec<u8>>> {
+    if !edit.allow {
+        return json_response_private(403, &json!({ "error": REVIEW_READ_ONLY, "editable": false }));
+    }
+    let by = page_by(body);
+    let name = edit::sentence(&crate::trust::who_said(&by));
+    let id = str_field(body, "id").to_string();
+    // 1. one decision at a time per space, across processes; held until the log line is written
+    let _lock = match edit::SpaceLock::take(&st.dir, edit::DECIDE_LOCK) {
+        Ok(l) => l,
+        Err(e) => return json_response_private(409, &json!({ "error": e })),
+    };
+    // the files may have moved on in another process since this request began
+    st.reload();
+    // 2. read the proposal again
+    let Some(p) = proposals::get(&st.dir, &id) else {
+        return json_response_private(404, &json!({ "error": format!("There is no proposal {} in this space.", id), "missing": true }));
+    };
+    match path {
+        "/api/proposals/dismiss" => {
+            let changes = review::own_changes(&st.ont, &p);
+            match proposals::set_aside(&st.dir, &id, &by, str_field(body, "why")) {
+                Ok(p) => {
+                    let why = p.why.as_ref().map(|w| format!(": \"{}\"", w)).unwrap_or_default();
+                    proposals::log(&st.dir, &by, &format!("{} set aside {}{}", name, review::object_words(&p, &changes), why), &p.file);
+                    json_response_private(200, &json!({ "ok": true, "proposal": p, "summary": "Set aside" }))
+                }
+                Err(e) => json_response_private(409, &json!({ "error": e, "state": p.status })),
+            }
+        }
+        "/api/proposals/reopen" => {
+            let changes = review::own_changes(&st.ont, &p);
+            match proposals::reopen(&st.dir, &id, &by) {
+                Ok(p) => {
+                    proposals::log(&st.dir, &by, &format!("{} looked again at {}", name, review::object_words(&p, &changes)), &p.file);
+                    json_response_private(200, &json!({ "ok": true, "proposal": p, "summary": "Waiting for review again" }))
+                }
+                Err(e) => json_response_private(409, &json!({ "error": e, "state": p.status })),
+            }
+        }
+        "/api/proposals/take_back" => take_back(st, edit, &p, &by, &name),
+        _ => accept(st, edit, &p, body, &by, &name),
+    }
+}
+
+/// Accept: fresh or replayed, the person's fixes on top, then the save gate.
+fn accept(st: &mut State, edit: EditConfig, p: &proposals::Proposal, body: &Json, by: &str, name: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+    if p.status != "pending" {
+        return json_response_private(409, &json!({ "error": format!("{} is {}.", p.id, p.state_words()), "state": p.status }));
+    }
+    // an agent's report of a check: the person's click makes it checked, in their name
+    if let Some(c) = &p.check {
+        let note = format!("{} (reported by {})", c.note, if p.via.is_empty() { "an agent" } else { p.via.as_str() });
+        let op = edit::find_graded(&st.ont, crate::trust::Kind::parse(&c.kind), &c.name).and_then(|(kind, n)| {
+            // the agent compared one recipe; if the definition changed since, that comparison says nothing about the new one
+            let now = crate::trust::things(&st.ont, kind).get(&n).map(crate::trust::fingerprint).unwrap_or_default();
+            if c.of.is_empty() || c.of != now {
+                return Err(format!("{} {} has changed since the agent compared it, so this report is about an older definition; set it aside and ask the agent to compare again", kind.word(), n));
+            }
+            Ok(edit::GradeOp::Check { kind, name: n, against: c.against.clone(), note })
+        });
+        let out = match op {
+            Ok(op) => edit::grade(&st.dir, edit, &st.report, &op, by),
+            Err(e) => Outcome { file: crate::trust::FILE.into(), refused: Some(e), ..Default::default() },
+        };
+        if out.written {
+            let _ = proposals::mark_accepted(&st.dir, &p.id, by, vec![], None, out.commit.clone(), vec![]);
+            proposals::log(&st.dir, by, &format!("{} confirmed the check of {} {} against {} reported by {}", name, c.kind, c.name, c.against, review::agent_name(&p.via)), crate::trust::FILE);
+            st.reload();
+        }
+        let mut j = out.to_json();
+        j["proposal_id"] = json!(p.id);
+        if out.written {
+            j["summary"] = json!(format!("Marked {} {} as checked", c.kind, c.name));
+            j["trust"] = trust_json(&st.ont);
+            j["by"] = json!(by);
+        }
+        return json_response_private(out.status(), &j);
+    }
+    // 3. fresh, or changed since: replayed on today's files, or refused in words
+    let files = match review::prepare(&st.ont, p) {
+        review::Prepared::Fresh { files, .. } => files,
+        review::Prepared::Replayed { files, .. } => {
+            // the person accepts exactly what the screen showed them
+            if str_field(body, "seen") != review::fingerprint(&files) {
+                return json_response_private(409, &json!({ "error": "The space changed since this was proposed, and the screen you accepted from is older than that. Review it again.", "stale": true }));
+            }
+            files
+        }
+        review::Prepared::Stale { why, .. } => return json_response_private(409, &json!({ "error": why, "stale": true })),
+    };
+    let seen = str_field(body, "seen");
+    if !seen.is_empty() && seen != review::fingerprint(&files) {
+        return json_response_private(409, &json!({ "error": "The space changed while you were looking. Review it again.", "stale": true }));
+    }
+    // 4. the fixes the screen offered, planned on top
+    let mut fix_words: Vec<String> = Vec::new();
+    let files = match body.get("fixes").and_then(|f| f.as_array()).filter(|f| !f.is_empty()) {
+        None => files,
+        Some(fixes) => {
+            let ov: Vec<(String, Option<String>)> = files.iter().map(|(f, t)| (f.clone(), Some(t.clone()))).collect();
+            let Some((after, after_report)) = review::overlay(&st.dir, &ov) else {
+                return json_response_private(400, &json!({ "error": "the proposed files do not load" }));
+            };
+            let (qs, _, _) = review::questions(&st.report, &after, &after_report, p);
+            let mut ops = Vec::new();
+            for f in fixes {
+                match review::fix_op(f, &qs, &after) {
+                    Ok((op, words)) => {
+                        ops.push(op);
+                        fix_words.push(words);
+                    }
+                    Err(e) => return json_response_private(400, &json!({ "error": format!("That fix can't ride along with Accept: {}.", e) })),
+                }
+            }
+            match patch::plan_many_over(&st.ont, &files, &ops) {
+                Ok(plan) => plan.files,
+                Err(e) => return json_response_private(400, &json!({ "error": format!("That fix does not apply: {}.", e) })),
+            }
+        }
+    };
+    // 5. the save gate: one change, the agent as author and the person as committer
+    let changes = {
+        let ov: Vec<(String, Option<String>)> = files.iter().map(|(f, t)| (f.clone(), Some(t.clone()))).collect();
+        review::overlay(&st.dir, &ov).map(|(a, _)| review::compare(&st.ont, &a)).unwrap_or_default()
+    };
+    let headline = review::headline(p, &changes);
+    let mut message_body = p.reason.clone();
+    if !fix_words.is_empty() {
+        message_body = format!("{}{}Fixes by {}: {}.", message_body, if message_body.is_empty() { "" } else { "\n\n" }, name, fix_words.join("; "));
+    }
+    let via = if p.via.trim().is_empty() { "agent" } else { p.via.as_str() };
+    let trust_before = std::fs::read_to_string(st.dir.join(crate::trust::FILE)).ok();
+    let errors_before: Vec<proposals::KnownError> = st.report.diags.iter().filter(|d| d.level == crate::validate::Level::Error).map(|d| proposals::KnownError { code: d.code.to_string(), file: d.file.clone(), message: d.message.clone() }).collect();
+    let befores: Vec<Option<String>> = files.iter().map(|(f, _)| std::fs::read_to_string(st.dir.join(f)).ok()).collect();
+    let note = Note { via, summary: &headline, reason: &message_body, accepted_by: Some(by), ..Default::default() };
+    let label = if files.len() == 1 && !p.kind.is_empty() && p.kind != "batch" { Some((p.kind.as_str(), p.name.as_str())) } else { None };
+    let out = edit::apply_many(&st.dir, edit, &st.report, &files, &note, label);
+    let mut j = out.to_json();
+    j["proposal_id"] = json!(p.id);
+    if out.written {
+        // 6. accepted, with what Take it back needs when there is no history to undo from
+        let snapshot = if out.commit.is_none() {
+            Some(proposals::Snapshot {
+                files: files.iter().zip(befores).map(|((f, t), b)| proposals::SnapFile { file: f.clone(), before: b, after: Some(t.clone()) }).collect(),
+                trust_before,
+                trust_after: std::fs::read_to_string(st.dir.join(crate::trust::FILE)).ok(),
+            })
+        } else {
+            None
+        };
+        let _ = proposals::mark_accepted(&st.dir, &p.id, by, fix_words.clone(), snapshot, out.commit.clone(), errors_before);
+        // 7. the log, in words
+        let fixes = if fix_words.is_empty() { String::new() } else { format!(" ({})", fix_words.join("; ")) };
+        proposals::log(&st.dir, by, &format!("{} accepted {}{}", name, review::object_words(p, &changes), fixes), &out.file);
+        st.reload();
+        j["summary"] = json!(format!("Accepted: {}", review::object_words(p, &changes)));
+        j["git"] = edit::git_status(&st.dir).unwrap_or(Json::Null);
+        j["stats"] = json!(st.ont.stats());
+        j["trust"] = trust_json(&st.ont);
+        j["by"] = json!(by);
+    }
+    json_response_private(out.status(), &j)
+}
+
+/// Take it back: history off puts the snapshot's texts back; history on is that commit's Undo.
+fn take_back(st: &mut State, edit: EditConfig, p: &proposals::Proposal, by: &str, name: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+    if p.status != "accepted" {
+        return json_response_private(409, &json!({ "error": format!("{} is {}, so there is nothing to take back.", p.id, p.state_words()), "state": p.status }));
+    }
+    let (ok, why) = review::take_back_state(&st.ont, p, edit.commit);
+    if !ok {
+        return json_response_private(409, &json!({ "error": why.unwrap_or_else(|| "this can't be taken back".into()) }));
+    }
+    let changes = review::own_changes(&st.ont, p);
+    let what = review::object_words(p, &changes);
+    let summary = format!("Took back {}", what);
+    // the errors the space had before Accept may come back with its files; nothing else may
+    let mut baseline = crate::validate::Report { diags: st.report.diags.clone() };
+    baseline.diags.extend(p.errors_before.iter().filter_map(review::known_diag));
+    let out = match (&p.snapshot, &p.commit) {
+        (Some(snap), _) => {
+            let mut files: Vec<(String, Option<String>)> = snap.files.iter().filter(|f| f.before != f.after).map(|f| (f.file.clone(), f.before.clone())).collect();
+            if snap.trust_before != snap.trust_after {
+                files.push((crate::trust::FILE.to_string(), snap.trust_before.clone()));
+            }
+            edit::apply_files(&st.dir, edit, &baseline, &files, &Note { via: by, summary: &summary, keep_grades: true, ..Default::default() }, Some(("take back", &p.id)))
+        }
+        (None, Some(hash)) => edit::undo(&st.dir, edit, &baseline, hash, by),
+        (None, None) => Outcome { refused: Some("nothing recorded to take back".into()), ..Default::default() },
+    };
+    let mut j = out.to_json();
+    j["proposal_id"] = json!(p.id);
+    if out.written {
+        // a folder the Accept made and the take-back emptied goes too (remove_dir leaves a folder with anything in it)
+        if let Some(snap) = &p.snapshot {
+            for f in snap.files.iter().filter(|f| f.before.is_none()) {
+                if let Some(parent) = st.dir.join(&f.file).parent().filter(|d| *d != st.dir.as_path()) {
+                    let _ = std::fs::remove_dir(parent);
+                }
+            }
+        }
+        let _ = proposals::mark_taken_back(&st.dir, &p.id, by);
+        proposals::log(&st.dir, by, &format!("{} took back {}", name, what), &p.file);
+        st.reload();
+        j["summary"] = json!(format!("{}; it waits for review again", summary));
+        j["git"] = edit::git_status(&st.dir).unwrap_or(Json::Null);
+        j["stats"] = json!(st.ont.stats());
+        j["trust"] = trust_json(&st.ont);
+        j["by"] = json!(by);
+    }
+    json_response_private(out.status(), &j)
 }
 
 /// `/s/<id>/rest` → (Some(id), "/rest"); anything else is left alone.
@@ -851,7 +979,7 @@ fn reply_response(r: oauth::Reply) -> Response<std::io::Cursor<Vec<u8>>> {
 }
 
 /// Settings › Connections: list, and Disconnect (one, or `all`).
-fn oauth_api(req: &Request, ctx: &Ctx, method: &Method, path: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+fn oauth_api(req: &Request, ctx: &Ctx, method: &Method, path: &str, body: &Json) -> Response<std::io::Cursor<Vec<u8>>> {
     let list = path == "/api/oauth/connections";
     let Some(o) = &ctx.oauth else {
         let (reason, why) = ctx.oauth_off.clone().unwrap_or(("off", "off".into()));
@@ -863,6 +991,23 @@ fn oauth_api(req: &Request, ctx: &Ctx, method: &Method, path: &str) -> Response<
     };
     match method {
         Method::Get if list => json_response(200, &o.connections_json()),
+        Method::Post if path.ends_with("/writes") && !list => {
+            if !write_allowed(req) {
+                return json_response_private(403, &json!({ "error": WRITE_REFUSED }));
+            }
+            let id = path.strip_prefix("/api/oauth/connections/").and_then(|r| r.strip_suffix("/writes")).map(percent_decode).unwrap_or_default();
+            if id.is_empty() || id.contains('/') {
+                return json_response_private(400, &json!({ "error": "say which connection: POST /api/oauth/connections/<id>/writes" }));
+            }
+            match o.set_writes(&id, str_field(body, "writes")) {
+                Ok(()) => {
+                    let mut j = o.connections_json();
+                    j["ok"] = json!(true);
+                    json_response_private(200, &j)
+                }
+                Err(e) => json_response_private(400, &json!({ "error": e })),
+            }
+        }
         Method::Post if path.ends_with("/revoke") && !list => {
             if !write_allowed(req) {
                 return json_response_private(403, &json!({ "error": WRITE_REFUSED }));
@@ -983,7 +1128,12 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
         }
     } else if !is_login && !is_logout && !signed_in(&req, ctx, true) {
         // checked before the body is read: no one without the token gets 4 MB of our time
-        let resp = if is_page { login_page(&full_path, None) } else { json_response(401, &json!({ "error": SIGN_IN_FIRST })).with_header(header("WWW-Authenticate", "Bearer")) };
+        // the page's address keeps a review link's `?review=<id>` through the sign-in form
+        let next = match params.get("review").filter(|r| r.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')) {
+            Some(r) => format!("{}?review={}", full_path, r),
+            None => full_path.clone(),
+        };
+        let resp = if is_page { login_page(&next, None) } else { json_response(401, &json!({ "error": SIGN_IN_FIRST })).with_header(header("WWW-Authenticate", "Bearer")) };
         let _ = req.respond(resp);
         return;
     }
@@ -1030,7 +1180,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
 
     // Settings › Connections: the agents that signed in with OAuth
     if path == "/api/oauth/connections" || path.starts_with("/api/oauth/connections/") {
-        let resp = oauth_api(&req, ctx, &method, &path);
+        let resp = oauth_api(&req, ctx, &method, &path, &body);
         let _ = req.respond(resp);
         return;
     }
@@ -1181,7 +1331,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     // writes: edit, create, delete, and propose_change through /api/tool
     let as_tool = method == Method::Post && path == "/api/tool" && matches!(str_field(&body, "name"), "propose_change" | "propose_patch" | "learn_file");
     let is_write = as_tool
-        || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/trust"))
+        || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/proposals/reopen" || path == "/api/proposals/take_back" || path == "/api/trust"))
         || (method == Method::Delete && path == "/api/file");
     if is_write {
         let resp = if !write_allowed(&req) {
@@ -1301,7 +1451,29 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
             Err(e) => json_response(404, &json!({ "error": e })),
         },
         (Method::Get, "/api/trust") => json_response(200, &trust_json(ont)),
-        (Method::Get, "/api/proposals") => json_response(200, &json!({ "proposals": proposals::list(&st.dir), "activity": proposals::activity(&st.dir, 50), "editable": base_edit.allow })),
+        (Method::Get, "/api/proposals") => {
+            let all = proposals::list(&st.dir);
+            let history_on = space_edit().commit;
+            let ctx = review::Ctx { editable: base_edit.allow, history_on, space: &space_id, all: &all };
+            // the short cards: what each waiting proposal adds, in words (decided ones keep their line)
+            let cards: serde_json::Map<String, Json> = all.iter().filter(|p| p.status == "pending" && p.check.is_none()).take(50).map(|p| (p.id.clone(), review::card(ont, &st.report, p, &ctx))).collect();
+            json_response(200, &json!({ "proposals": all, "cards": cards, "activity": proposals::activity(&st.dir, 50), "editable": base_edit.allow, "history_on": history_on }))
+        }
+        (Method::Get, p) if p.starts_with("/api/proposals/") && p.ends_with("/review") => {
+            let id = percent_decode(p.trim_start_matches("/api/proposals/").trim_end_matches("/review"));
+            let all = proposals::list(&st.dir);
+            match proposals::get(&st.dir, &id) {
+                Some(prop) => {
+                    let ctx = review::Ctx { editable: base_edit.allow, history_on: space_edit().commit, space: &space_id, all: &all };
+                    json_response(200, &review::review(ont, &st.report, &prop, &ctx))
+                }
+                None => json_response(404, &json!({ "error": format!("There is no proposal {} in {}.", id, space_id), "missing": true, "id": id })),
+            }
+        }
+        (Method::Get, "/api/graph") => match params.get("proposal").and_then(|id| proposals::get(&st.dir, id)) {
+            Some(prop) => json_response(200, &review::graph(ont, &prop)),
+            None => json_response(404, &json!({ "error": "say which proposal: /api/graph?proposal=<id>" })),
+        },
         (Method::Get, "/api/activity") => json_response(200, &json!({ "activity": proposals::activity(&st.dir, 100) })),
         (Method::Get, "/api/tools") => json_response(200, &crate::mcp::tool_definitions()),
         (Method::Get, "/api/tables") => match st.data().sql_catalog() {
@@ -1377,7 +1549,12 @@ fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>
         Caller::Owner => (true, crate::mcp::VIA.to_string()),
         Caller::Connection(g) => (g.can_propose(), g.label()),
     };
-    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only, can_propose, via, guest, link_base };
+    // a connection set to "wait for me" never writes, whatever --allow-edit says; the owner's own agents keep the flag
+    let edit = match who {
+        Caller::Connection(g) if !g.direct => EditConfig { allow: false, commit: false, ..ctx.edit },
+        _ => ctx.edit,
+    };
+    let mut hub = Hub { reg: &mut reg, edit, only, can_propose, via, guest, link_base };
     match hub.handle_body(&msg) {
         Some(reply) => json_response(200, &reply),
         // notifications only: accepted, nothing to answer

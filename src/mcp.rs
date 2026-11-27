@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 const PROTOCOL: &str = "2025-06-18";
 
 /// The recipe for a file from the user, in the text every agent gets at `initialize`.
-const FILE_RECIPE: &str = "When the user gives you a file (a CSV, a spreadsheet, an export), call `match_file` with its name, its column names and up to five example values per column: it tells you whether Lorefile already knows this kind of file and how to read it (which number is the result, which rows do not count). If they ask you to save the file, they mean its shape and meaning, not its rows: ask the questions `match_file` returns, then call `learn_file` with the answers. Lorefile never stores rows or example values.";
+const FILE_RECIPE: &str = "When the user gives you a file (a CSV, a spreadsheet, an export), call `match_file` with its name, its column names and up to five example values per column: it tells you whether Lorefile already knows this kind of file and how to read it (which number is the result, which rows do not count). If they ask you to save the file, they mean its shape and meaning, not its rows: ask the questions `match_file` returns, then call `learn_file` with the answers. Save a file without saying which number counts only when the user says so, and pass their words as `skip_because`. Lorefile never stores rows or example values. A saved file waits for a person to accept it in Lorefile; give the user the `review_at` link when there is one.";
 const FILE_RECIPE_READ: &str = "When the user gives you a file (a CSV, a spreadsheet, an export), call `match_file` with its name, its column names and up to five example values per column: it tells you whether Lorefile already knows this kind of file and how to read it (which number is the result, which rows do not count). Lorefile never stores rows or example values.";
 
 /// Who an agent's change is by over MCP: stdio, Claude Code's header. A connection that signed
@@ -89,10 +89,11 @@ fn file_schema(learn: bool) -> Json {
         props["description"] = json!({ "type": "string", "description": "What one row is, e.g. \"One order line sold with a promo code, from the monthly promo-sales export.\"" });
         props["key"] = json!({ "type": "string", "description": "The column that identifies one row, when you know it" });
         props["reason"] = json!({ "type": "string", "description": "One sentence for the person who reviews it, e.g. what the user said" });
+        props["skip_because"] = json!({ "type": "string", "maxLength": 300, "description": "Only with answers that say no number: the user's own words asking to save the file without one, e.g. \"just save it, I'll say later\"" });
         props["answers"] = json!({
             "type": "object",
             "additionalProperties": false,
-            "description": "What the user said. Left out: nothing is saved and you get the questions. {} saves the shape only",
+            "description": "What the user said. Left out: nothing is saved and you get the questions. {} saves the shape only, and needs skip_because",
             "properties": {
                 "success": { "type": "object", "additionalProperties": false, "required": ["column"], "description": "Which number is the result", "properties": {
                     "column": { "type": "string" },
@@ -314,7 +315,7 @@ impl<'a> Server<'a> {
 
     /// The `tools/call` result for `propose_change`, shared with `/api/tool`.
     /// Diagnostics as JSON plus a `note` saying what happened to the file.
-    pub fn propose_change_result(out: &Outcome, edit: EditConfig, queued: Option<&Proposal>, summary: &str) -> Json {
+    pub fn propose_change_result(out: &Outcome, edit: EditConfig, queued: Option<&Proposal>, summary: &str, review: Option<String>, hint: Option<String>) -> Json {
         if let Some(why) = &out.refused {
             return Self::text(format!("{}: {}", out.file, why), true);
         }
@@ -324,16 +325,40 @@ impl<'a> Server<'a> {
             j["summary"] = json!(summary);
         }
         j["note"] = json!(note);
+        if let Some(p) = queued {
+            j["queued"] = json!(p.id);
+        }
+        if let Some(r) = review {
+            j["review_at"] = json!(r);
+            j["accept_at"] = json!(r);
+        }
+        if let Some(h) = hint {
+            j["hint"] = json!(h);
+        }
         Self::text(Self::pretty(&j), false)
+    }
+
+    /// Where a person reviews one proposal: the page, opened on it, through sign-in (HTTP only).
+    pub fn review_link(&self, id: &str) -> Option<String> {
+        self.link.as_ref().map(|l| format!("{}?review={}", l, id))
+    }
+
+    /// The "waiting in p-…" hint for errors that name what a waiting proposal adds.
+    fn hint_for(&self, out: &Outcome) -> Option<String> {
+        if out.ok {
+            return None;
+        }
+        let text: Vec<&str> = out.diagnostics.iter().filter(|d| d.level == crate::validate::Level::Error).map(|d| d.message.as_str()).collect();
+        crate::review::waiting_hint(self.ont, &text.join("\n"))
     }
 
     /// What happened to a proposed change, in a sentence: written, queued (and why), or refused.
     pub fn outcome_note(out: &Outcome, edit: EditConfig, queued: Option<&Proposal>) -> String {
         if let (Some(p), Some(held)) = (queued, &out.held) {
-            format!("{}: queued as {}. Nothing was written; a person can accept it in the web page (Agents › Waiting for your review), and on Accept its grade becomes accepted", held, p.id)
+            format!("{}: queued as {}. Nothing was written; a person can accept it in the web page (Agents › To review), and on Accept its grade becomes accepted", held, p.id)
         } else if let Some(p) = queued {
             if out.ok {
-                format!("queued for review as {}: nothing was written; a person can accept it in the web page (Agents › Waiting for your review)", p.id)
+                format!("queued for review as {}: nothing was written; a person can accept it in the web page (Agents › To review)", p.id)
             } else {
                 format!("queued as {} but it has {} error(s), so it cannot be accepted until they are fixed; nothing was written", p.id, out.errors())
             }
@@ -345,12 +370,12 @@ impl<'a> Server<'a> {
                 None => format!("written to {}; the change is uncommitted, review it with git diff", out.file),
             };
             if out.stamped.iter().any(|g| g.ends_with(": proposed")) {
-                format!("{}. Grade: proposed. Tell the user a person still has to accept it (Agents › Written by agents, not reviewed)", said)
+                format!("{}. Grade: proposed. Tell the user a person still has to accept it (Agents › In use, not reviewed)", said)
             } else {
                 said
             }
         } else if !out.ok {
-            format!("refused: the change leaves {} error(s); nothing was written", out.errors())
+            format!("refused: the change leaves {} error(s), so nothing was written or queued; fix them and send it again", out.errors())
         } else if !edit.allow {
             "edit mode is off; the change was validated but not written".to_string()
         } else {
@@ -362,7 +387,7 @@ impl<'a> Server<'a> {
     /// validated but not written (edit mode off, or errors) are queued for a
     /// person to review. Returns the outcome and the queued proposal, if any.
     #[allow(clippy::too_many_arguments)] // one call site per transport; a struct would only rename the arguments
-    pub fn propose(root: &Path, edit: EditConfig, before: &Report, file: &str, content: &str, reason: &str, via: &str, label: Option<(&str, &str)>, summary: &str) -> (Outcome, Option<Proposal>) {
+    pub fn propose(root: &Path, edit: EditConfig, before: &Report, file: &str, content: &str, reason: &str, via: &str, label: Option<(&str, &str)>, summary: &str, replay: Option<proposals::Replay>) -> (Outcome, Option<Proposal>) {
         // a raw file edit still gets a sentence, from what the file declares
         let derived = if summary.is_empty() {
             let (kind, name) = match label {
@@ -387,11 +412,16 @@ impl<'a> Server<'a> {
             proposals::log(root, via, &format!("{}{}", if summary.is_empty() { format!("changed {}", file) } else { summary.to_string() }, why), file);
             return (out, None);
         }
-        if out.refused.is_some() {
+        // a change with errors is never queued: nobody could fix it there, and the agent can now
+        if out.refused.is_some() || !out.ok {
             return (out, None);
         }
         match proposals::store(root, file, content, reason, via, &out, summary) {
-            Ok(p) => {
+            Ok(mut p) => {
+                if replay.is_some() {
+                    p.replay = replay;
+                    let _ = proposals::save(root, &p);
+                }
                 proposals::log(root, via, &format!("proposed {} (waiting for review){}", if summary.is_empty() { format!("a change to {}", file) } else { summary.to_string() }, why), file);
                 (out, Some(p))
             }
@@ -400,13 +430,14 @@ impl<'a> Server<'a> {
     }
 
     /// A batch of files as one change: written when allowed and clean, else queued as one proposal.
-    pub fn propose_many(root: &Path, edit: EditConfig, before: &Report, plan: &patch::BatchPlan, reason: &str, via: &str) -> (Outcome, Option<Proposal>) {
-        Self::propose_many_titled(root, edit, before, plan, reason, via, None)
+    pub fn propose_many(root: &Path, edit: EditConfig, before: &Report, plan: &patch::BatchPlan, reason: &str, via: &str, replay: Option<proposals::Replay>) -> (Outcome, Option<Proposal>) {
+        Self::propose_many_titled(root, edit, before, plan, reason, via, None, replay)
     }
 
     /// `propose_many` with one sentence for the whole change (`learn_file`'s "learned …" line)
     /// instead of the ops' sentences joined.
-    pub fn propose_many_titled(root: &Path, edit: EditConfig, before: &Report, plan: &patch::BatchPlan, reason: &str, via: &str, title: Option<&str>) -> (Outcome, Option<Proposal>) {
+    #[allow(clippy::too_many_arguments)] // one call site per tool; a struct would only rename the arguments
+    pub fn propose_many_titled(root: &Path, edit: EditConfig, before: &Report, plan: &patch::BatchPlan, reason: &str, via: &str, title: Option<&str>, replay: Option<proposals::Replay>) -> (Outcome, Option<Proposal>) {
         let summary = match title {
             Some(t) => t.to_string(),
             None if plan.summaries.len() == 1 => plan.summaries[0].clone(),
@@ -425,17 +456,21 @@ impl<'a> Server<'a> {
             proposals::log(root, via, &format!("{}{}", summary, why), &out.file);
             return (out, None);
         }
-        if out.refused.is_some() {
+        if out.refused.is_some() || !out.ok {
             return (out, None);
         }
+        // each file is headed by the sentences of the ops that wrote it, not by position
         let files: Vec<ProposedFile> = plan
             .files
             .iter()
-            .enumerate()
-            .map(|(i, (f, t))| ProposedFile { file: f.clone(), content: t.clone(), before: std::fs::read_to_string(root.join(f)).unwrap_or_default(), summary: plan.summaries.get(i).cloned().unwrap_or_default() })
+            .map(|(f, t)| ProposedFile { file: f.clone(), content: t.clone(), before: std::fs::read_to_string(root.join(f)).unwrap_or_default(), summary: plan.summary_for(f) })
             .collect();
         match proposals::store_many(root, &files, reason, via, &out, &summary) {
-            Ok(p) => {
+            Ok(mut p) => {
+                if replay.is_some() {
+                    p.replay = replay;
+                    let _ = proposals::save(root, &p);
+                }
                 proposals::log(root, via, &format!("proposed {} (waiting for review){}", summary, why), &out.file);
                 (out, Some(p))
             }
@@ -457,7 +492,7 @@ impl<'a> Server<'a> {
                 proposals::log(&ont.root, via, &format!("reported a check of {} {} against {} (waiting for a person)", claim.kind, claim.name, claim.against), crate::trust::FILE);
                 Self::text(Self::pretty(&json!({
                     "ok": true, "written": false, "queued": p.id, "kind": claim.kind, "name": claim.name, "against": claim.against,
-                    "note": format!("queued as {}: nothing is graded yet. A person confirms the check in the web page (Agents › Waiting for your review); only then is {} marked checked, in their name.", p.id, claim.name),
+                    "note": format!("queued as {}: nothing is graded yet. A person confirms the check in the web page (Agents › To review); only then is {} marked checked, in their name.", p.id, claim.name),
                 })), false)
             }
             Err(e) => Self::text(e, true),
@@ -597,11 +632,12 @@ impl<'a> Server<'a> {
                 let content = Self::arg_str(args, &["content", "text"]).unwrap_or_default();
                 let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
                 let before = validate::validate(ont);
-                let (out, queued) = Self::propose(&ont.root, self.edit, &before, &file, &content, &reason, &self.via, None, "");
+                let (out, queued) = Self::propose(&ont.root, self.edit, &before, &file, &content, &reason, &self.via, None, "", None);
                 if out.written {
                     self.reload_needed.set(true);
                 }
-                Self::propose_change_result(&out, self.edit, queued.as_ref(), "")
+                let review = queued.as_ref().and_then(|p| self.review_link(&p.id));
+                Self::propose_change_result(&out, self.edit, queued.as_ref(), "", review, self.hint_for(&out))
             }
             "propose_patch" if Self::arg_str(args, &["op"]).as_deref() == Some("record_check") => Self::record_check(ont, args, &self.via),
             "propose_patch" => {
@@ -610,29 +646,44 @@ impl<'a> Server<'a> {
                     return match patch::plan_many(ont, ops) {
                         Ok(plan) => {
                             let before = validate::validate(ont);
-                            let (out, queued) = Self::propose_many(&ont.root, self.edit, &before, &plan, &reason, &self.via);
+                            let replay = proposals::Replay::Ops { ops: ops.clone() };
+                            let (out, queued) = Self::propose_many(&ont.root, self.edit, &before, &plan, &reason, &self.via, Some(replay));
                             if out.written {
                                 self.reload_needed.set(true);
                             }
                             let summary = if plan.summaries.len() == 1 { plan.summaries[0].clone() } else { format!("{} changes: {}", plan.summaries.len(), plan.summaries.join("; ")) };
-                            Self::propose_change_result(&out, self.edit, queued.as_ref(), &summary)
+                            let review = queued.as_ref().and_then(|p| self.review_link(&p.id));
+                            Self::propose_change_result(&out, self.edit, queued.as_ref(), &summary, review, self.hint_for(&out))
                         }
-                        Err(e) => Self::text(format!("{} (nothing was written)", e), true),
+                        Err(e) => Self::text(self.refusal(&e), true),
                     };
                 }
                 match patch::plan(ont, args) {
                     Ok(p) => {
                         let before = validate::validate(ont);
-                        let (out, queued) = Self::propose(&ont.root, self.edit, &before, &p.file, &p.text, &reason, &self.via, Some((&p.kind, &p.name)), &p.summary);
+                        let mut op = args.clone();
+                        if let Some(o) = op.as_object_mut() {
+                            o.remove("reason");
+                        }
+                        let (out, queued) = Self::propose(&ont.root, self.edit, &before, &p.file, &p.text, &reason, &self.via, Some((&p.kind, &p.name)), &p.summary, Some(proposals::Replay::Ops { ops: vec![op] }));
                         if out.written {
                             self.reload_needed.set(true);
                         }
-                        Self::propose_change_result(&out, self.edit, queued.as_ref(), &p.summary)
+                        let review = queued.as_ref().and_then(|p| self.review_link(&p.id));
+                        Self::propose_change_result(&out, self.edit, queued.as_ref(), &p.summary, review, self.hint_for(&out))
                     }
-                    Err(e) => Self::text(format!("{} (nothing was written)", e), true),
+                    Err(e) => Self::text(self.refusal(&e), true),
                 }
             }
             other => Self::text(format!("Unknown tool '{}'", other), true),
+        }
+    }
+
+    /// An op that did not plan, with the "waiting in p-…" hint when it names what a waiting proposal adds.
+    fn refusal(&self, e: &str) -> String {
+        match crate::review::waiting_hint(self.ont, e) {
+            Some(h) => format!("{} (nothing was written). {}", e, h),
+            None => format!("{} (nothing was written)", e),
         }
     }
 
@@ -664,8 +715,25 @@ impl<'a> Server<'a> {
         };
         let m = learn::match_shape(self.ont, &self.pending_learned(), &input);
         match self.file_reply(&input, &m) {
-            Ok(j) => Self::text(Self::pretty(&j), false),
+            Ok(mut j) => {
+                if matches!(m, learn::Match::New) {
+                    self.set_aside_note(&input, &mut j);
+                }
+                Self::text(Self::pretty(&j), false)
+            }
             Err(e) => Self::text(e, true),
+        }
+    }
+
+    /// A file of this shape was saved before and a person set it aside: say who, when and why,
+    /// so the agent does not propose the same thing blindly.
+    fn set_aside_note(&self, input: &learn::FileInput, j: &mut Json) {
+        let headers = learn::file_headers(input);
+        let found = proposals::list(&self.ont.root).into_iter().find(|p| p.status == "set_aside" && p.learned.as_ref().map(|l| learn::same_headers(&l.headers, &headers)).unwrap_or(false));
+        if let Some(p) = found {
+            let words = p.state_words();
+            j["set_aside"] = json!({ "id": p.id, "by": p.decided_by.as_deref().map(Proposal::who), "why": p.why, "at": p.resolved_at });
+            j["say"] = json!(format!("A file of this shape was saved before and {}. Tell the user, and ask before saving it again.", words));
         }
     }
 
@@ -683,7 +751,7 @@ impl<'a> Server<'a> {
                 Ok(mut j) => {
                     j["saved"] = json!(false);
                     if matches!(m, learn::Match::New | learn::Match::Changed(_)) {
-                        j["next"] = json!("Nothing was saved. Ask the user these questions in your own words, then call learn_file again with the same columns and `answers` (`answers: {}` saves the shape only).");
+                        j["next"] = json!("Nothing was saved. Ask the user these questions in your own words, then call learn_file again with the same columns and `answers`. To save the shape without a number, the user has to say so: pass their words as `skip_because` with `answers: {}`.");
                     }
                     Self::text(Self::pretty(&j), false)
                 }
@@ -700,10 +768,25 @@ impl<'a> Server<'a> {
             }
             Err(e) => return Self::text(format!("{} (nothing was saved)", e), true),
         };
+        // decision 23: no number without the user saying so. The questions go back, with "ask now".
+        let saves_number = planned.ops.iter().any(|o| o["op"] == "add_metric");
+        let skip = input.skip_because.as_deref().map(str::trim).filter(|s| !s.is_empty()).map(|s| s.chars().take(300).collect::<String>());
+        if !saves_number && !planned.recipe_kept && skip.is_none() {
+            let mut j = self.file_reply(&input, &m).unwrap_or_else(|_| json!({}));
+            j["saved"] = json!(false);
+            j["next"] = json!("Ask the user these questions now. Save without a number only if they say so, and pass their words as skip_because.");
+            return Self::text(Self::pretty(&j), false);
+        }
         let plan = match patch::plan_many(self.ont, &planned.ops) {
             Ok(p) => p,
             Err(e) => return Self::text(format!("{} (nothing was saved)", e), true),
         };
+        // one decision at a time per space: a person accepting the waiting version, and this replacing it, never interleave
+        let _lock = match edit::SpaceLock::take(&self.ont.root, edit::DECIDE_LOCK) {
+            Ok(l) => l,
+            Err(e) => return Self::text(format!("{} (nothing was saved)", e), true),
+        };
+        let pending = self.pending_learned();
         // the same file still waiting: an identical draft is not queued twice; a different one replaces it
         let earlier = pending.iter().find(|p| p.learned.as_ref().map(|l| learn::same_headers(&l.headers, &planned.learned.headers)).unwrap_or(false));
         if let Some(old) = earlier {
@@ -713,13 +796,18 @@ impl<'a> Server<'a> {
                     "saved": false,
                     "queued": old.id,
                     "learned": planned.line,
-                    "say": format!("Already waiting as {}, exactly as described: nothing new to save. A person accepts it in Lorefile (Agents › Waiting for your review){}.", old.id, self.link.as_ref().map(|l| format!(": {}", l)).unwrap_or_default()),
+                    "review_at": self.review_link(&old.id),
+                    "say": format!("Already waiting as {}, exactly as described: nothing new to save. A person accepts it in Lorefile (Agents › To review){}.", old.id, self.review_link(&old.id).map(|l| format!(": {}", l)).unwrap_or_default()),
                 })), false);
             }
         }
-        let reason = input.reason.clone().unwrap_or_else(|| format!("learned {}", if input.file_name.is_empty() { "a file" } else { input.file_name.as_str() }));
+        let mut reason = input.reason.clone().unwrap_or_else(|| format!("learned {}", if input.file_name.is_empty() { "a file" } else { input.file_name.as_str() }));
+        if let (Some(words), false) = (&skip, saves_number) {
+            reason = format!("{} (saved without a number; the user said: \"{}\")", reason, words);
+        }
         let before = validate::validate(self.ont);
-        let (out, queued) = Self::propose_many_titled(&self.ont.root, self.edit, &before, &plan, &reason, &self.via, Some(&planned.line));
+        let replay = proposals::Replay::Learn { input: learn::replay_input(self.ont, &input, args) };
+        let (out, queued) = Self::propose_many_titled(&self.ont.root, self.edit, &before, &plan, &reason, &self.via, Some(&planned.line), Some(replay));
         if let Some(why) = &out.refused {
             return Self::text(format!("{} (nothing was saved)", why), true);
         }
@@ -745,7 +833,8 @@ impl<'a> Server<'a> {
         j["learned"] = json!(planned.line);
         j["entity"] = json!(planned.entity);
         j["note"] = json!(note);
-        if let (Some(_), Some(l)) = (&queued, &self.link) {
+        if let Some(l) = queued.as_ref().and_then(|p| self.review_link(&p.id)) {
+            j["review_at"] = json!(l);
             j["accept_at"] = json!(l);
         }
         if let Some(r) = &replaced {
@@ -763,7 +852,7 @@ impl<'a> Server<'a> {
             format!("Not saved cleanly: the change has {} error(s); see diagnostics.", out.errors())
         } else if let Some(p) = &queued {
             format!(
-                "Saved for review as {}: {}. {} A person accepts it in Lorefile (Agents › Waiting for your review){}; until then, say it has not been accepted yet.",
+                "Saved for review as {}: {}. {} A person accepts it in Lorefile (Agents › To review){}; until then, say it has not been accepted yet.",
                 p.id,
                 what,
                 match planned.line.split_once("; ") {
@@ -771,10 +860,10 @@ impl<'a> Server<'a> {
                     None if planned.recipe_kept => "How the result is read stays as it was saved.".to_string(),
                     None => "No number was saved.".to_string(),
                 },
-                self.link.as_ref().map(|l| format!(": {}", l)).unwrap_or_default()
+                self.review_link(&p.id).map(|l| format!(": {}", l)).unwrap_or_default()
             )
         } else {
-            format!("Saved: {}. Grade: proposed. Tell the user a person still has to accept it (Agents › Written by agents, not reviewed).", what)
+            format!("Saved: {}. Grade: proposed, so it is in use but unverified. Tell the user a person still has to accept it (Agents › In use, not reviewed).", what)
         };
         j["say"] = json!(say);
         Self::text(Self::pretty(&j), false)
@@ -939,7 +1028,7 @@ impl Hub<'_> {
             _ => None,
         };
         let l = self.reg.get(id).map_err(|e| format!("{:#}", e))?;
-        let link = self.link_base.as_ref().map(|b| format!("{}/s/{}/#agents", b.trim_end_matches('/'), id));
+        let link = self.link_base.as_ref().map(|b| format!("{}/s/{}/", b.trim_end_matches('/'), id));
         let srv = Server::with_data(&l.ont, l.data()).with_edit(edit).with_history(history).with_via(&self.via).with_guest(self.guest).with_link(link);
         let out = f(&srv);
         let reload = srv.reload_needed.get();

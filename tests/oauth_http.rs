@@ -1044,8 +1044,9 @@ fn a_file_is_learned_over_a_connector_accepted_on_the_page_and_next_month_is_rea
     let saved = tool_json(port, &agent, "learn_file", learn);
     assert_eq!((saved["saved"].as_bool(), saved["ok"].as_bool(), saved["errors"].as_u64()), (Some(true), Some(true), Some(0)), "{}", saved);
     let id = saved["queued"].as_str().unwrap().to_string();
-    let link = saved["accept_at"].as_str().unwrap_or("");
-    assert!(link.starts_with("https://quiet-otter.example/s/") && link.ends_with("/#agents"), "a link to Agents on the public address: {}", saved);
+    let link = saved["review_at"].as_str().unwrap_or("");
+    assert!(link.starts_with("https://quiet-otter.example/s/") && link.ends_with(&format!("/?review={}", id)), "a link to this proposal's review on the public address: {}", saved);
+    assert_eq!(saved["accept_at"], saved["review_at"], "the old name stays as an alias");
     assert!(saved["say"].as_str().unwrap().contains(link));
     let p: Json = serde_json::from_str(&fs::read_to_string(folder.0.join(format!(".lorefile/proposals/{}.json", id))).unwrap()).unwrap();
     assert!(p["via"].as_str().unwrap().starts_with("agent via MCP (connection \"Test client\""), "{}", p["via"]);
@@ -1072,4 +1073,56 @@ fn a_file_is_learned_over_a_connector_accepted_on_the_page_and_next_month_is_rea
     assert_eq!(read["trust"]["by"], "Vinay via page");
     assert!(dec["say"].as_str().unwrap().contains("(accepted by Vinay on "), "{}", dec);
     drop(srv);
+}
+
+#[test]
+fn a_connection_waits_for_a_person_unless_its_approver_chose_straight_away() {
+    let folder = Blank::new(7165);
+    let port = 7165;
+    let srv = start(&folder.0, port, &["--no-examples", "--allow-edit"], &[]);
+    let resource = "https://quiet-otter.example/mcp";
+    // the approval page offers the choice on a server that takes writes, waiting first
+    let client = register(port, OTTER, "Test client");
+    let (page, _) = authorize(port, OTTER, &client, resource, "lorefile:read lorefile:propose");
+    assert!(page.body.contains("value=\"wait\" checked") && page.body.contains("go in straight away, marked unverified"), "{}", page.body);
+    // the default is wait, even with --allow-edit: ChatGPT's save is queued, and Accept works on this one server
+    let (_, agent, _) = connect(port, OTTER, resource, true);
+    let one = json!({ "op": "add_source", "connection": "shop_warehouse", "kind": "bigquery", "project": "acme", "dataset": "shop", "description": "The warehouse." });
+    let saved = tool_json(port, &agent, "propose_patch", one);
+    assert_eq!(saved["written"], false, "{}", saved);
+    let id = saved["queued"].as_str().unwrap().to_string();
+    assert!(saved["review_at"].as_str().unwrap().ends_with(&format!("?review={}", id)), "{}", saved);
+    assert!(!folder.0.join("sources/shop_warehouse.yaml").exists());
+    let login = format!("Bearer {}", TOKEN);
+    let page_headers = [("Authorization", login.as_str()), ("Content-Type", "application/json"), ("X-Lorefile", "write")];
+    let r = http(port, "POST", "/api/proposals/accept", &page_headers, &json!({ "id": id, "by": "Vinay" }).to_string());
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(folder.0.join("sources/shop_warehouse.yaml").exists(), "one server: the agent waited, the page accepted");
+
+    // Settings › Connections: the owner sets it to straight away, and its next save is written
+    let list = http(port, "GET", "/api/oauth/connections", &[("Authorization", &login)], "");
+    let conns = list.json()["connections"].as_array().unwrap().clone();
+    let conn = conns.iter().find(|c| c["scopes"].as_array().unwrap().iter().any(|s| s == "lorefile:propose")).unwrap();
+    assert_eq!(conn["writes"], "wait");
+    let cid = conn["id"].as_str().unwrap().to_string();
+    let r = http(port, "POST", &format!("/api/oauth/connections/{}/writes", cid), &page_headers, &json!({ "writes": "direct" }).to_string());
+    assert_eq!(r.status, 200, "{}", r.body);
+    let two = json!({ "op": "add_source", "connection": "ads", "kind": "bigquery", "project": "acme", "dataset": "ads", "description": "Ad spend." });
+    let saved = tool_json(port, &agent, "propose_patch", two);
+    assert_eq!(saved["written"], true, "{}", saved);
+    // the page header is needed to change it: an agent's token cannot
+    let r = http(port, "POST", &format!("/api/oauth/connections/{}/writes", cid), &[("Authorization", &format!("Bearer {}", agent)), ("Content-Type", "application/json")], &json!({ "writes": "wait" }).to_string());
+    assert!(r.status == 401 || r.status == 403, "{} {}", r.status, r.body);
+    drop(srv);
+
+    // a connection stored before this setting existed reads as wait
+    let file = folder.0.join(".lorefile/oauth.json");
+    let mut store: Json = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    for c in store["connections"].as_array_mut().unwrap() {
+        c.as_object_mut().unwrap().remove("writes");
+    }
+    fs::write(&file, serde_json::to_string_pretty(&store).unwrap()).unwrap();
+    let _srv = start(&folder.0, port, &["--no-examples", "--allow-edit"], &[]);
+    let list = http(port, "GET", "/api/oauth/connections", &[("Authorization", &login)], "");
+    assert!(list.json()["connections"].as_array().unwrap().iter().all(|c| c["writes"] == "wait"), "{}", list.body);
 }

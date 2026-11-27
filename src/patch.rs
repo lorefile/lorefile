@@ -43,20 +43,41 @@ pub struct BatchPlan {
     pub files: Vec<(String, String)>,
     pub summaries: Vec<String>,
     pub kinds: Vec<(String, String)>,
+    /// The file each op wrote, in op order: `summaries[i]` belongs to `op_files[i]`.
+    pub op_files: Vec<String>,
+}
+
+impl BatchPlan {
+    /// The sentences of the ops that wrote `file`, joined: a file's own heading.
+    pub fn summary_for(&self, file: &str) -> String {
+        self.summaries.iter().zip(self.op_files.iter()).filter(|(_, f)| f.as_str() == file).map(|(s, _)| s.as_str()).collect::<Vec<_>>().join("; ")
+    }
 }
 
 pub fn plan_many(ont: &Ontology, ops: &[Json]) -> Result<BatchPlan, String> {
+    plan_many_over(ont, &[], ops)
+}
+
+/// `plan_many` on top of files not written yet (a proposal being accepted with a person's
+/// fixes): the ops read those texts, and the result holds them plus whatever the ops changed.
+pub fn plan_many_over(ont: &Ontology, start: &[(String, String)], ops: &[Json]) -> Result<BatchPlan, String> {
     if ops.is_empty() {
         return Err("`ops` is empty".into());
     }
     if ops.len() > 40 {
         return Err("at most 40 ops in one batch".into());
     }
-    let mut pending: HashMap<String, String> = HashMap::new();
-    let mut order: Vec<String> = Vec::new();
+    let mut pending: HashMap<String, String> = start.iter().cloned().collect();
+    let mut order: Vec<String> = start.iter().map(|(f, _)| f.clone()).collect();
     let mut summaries = Vec::new();
     let mut kinds = Vec::new();
-    let mut current: Option<Ontology> = None;
+    let mut op_files = Vec::new();
+    let mut current: Option<Ontology> = if start.is_empty() {
+        None
+    } else {
+        let ov: Overrides = pending.iter().map(|(k, v)| (k.clone(), Some(v.clone()))).collect();
+        Some(edit::check_many(&ont.root, &ov).map_err(|e| format!("{:#}", e))?.0)
+    };
     for (i, op) in ops.iter().enumerate() {
         let p = {
             let ws = Workspace { ont: current.as_ref().unwrap_or(ont), pending: &pending };
@@ -68,13 +89,14 @@ pub fn plan_many(ont: &Ontology, ops: &[Json]) -> Result<BatchPlan, String> {
         pending.insert(p.file.clone(), p.text.clone());
         summaries.push(p.summary.clone());
         kinds.push((p.kind.clone(), p.name.clone()));
+        op_files.push(p.file.clone());
         // the next op sees the ontology with everything so far in place
         let ov: Overrides = pending.iter().map(|(k, v)| (k.clone(), Some(v.clone()))).collect();
         let (o, _) = edit::check_many(&ont.root, &ov).map_err(|e| format!("op {}: {:#}", i + 1, e))?;
         current = Some(o);
     }
     let files = order.into_iter().map(|f| { let t = pending.remove(&f).unwrap_or_default(); (f, t) }).collect();
-    Ok(BatchPlan { files, summaries, kinds })
+    Ok(BatchPlan { files, summaries, kinds, op_files })
 }
 
 /// Append one item to the top-level list `list_key` of `rel` as text, matching
@@ -644,6 +666,53 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             let where_ = if !variants.is_empty() { format!("{} variants", variants.len()) } else if !sql.is_empty() { "sql".to_string() } else { let t = field(body, "tool"); if t.is_empty() { format!("{}.{}", field(body, "connection"), field(body, "table")) } else { format!("{} tool {}", field(body, "connection"), t) } };
             Ok(Patch { file: rel, text, kind: "metric".into(), name: name.clone(), summary: format!("added metric {} ({})", name, where_) })
         }
+        "set_metric" => {
+            // words only: who owns it, what it is, its caveats, grain and basis. The recipe is what
+            // the number is, so changing it is a new proposal of the metric, not a word fix.
+            let name = field(body, "metric").to_string();
+            let m = ont.metrics.get(&name).ok_or_else(|| format!("no metric named `{}`", name))?;
+            let obj = body.as_object().cloned().unwrap_or_default();
+            for k in obj.keys() {
+                match k.as_str() {
+                    "op" | "metric" | "reason" | "owner" | "description" | "caveats" | "grain" | "basis" => {}
+                    "source" | "filter" | "measure" | "variants" | "sql" | "connection" | "table" | "tool" | "params" => {
+                        return Err(format!("set_metric changes words only (owner, description, caveats, grain, basis); `{}` changes what the number is, so propose the metric again with propose_change", k))
+                    }
+                    other => return Err(format!("set_metric takes owner, description, caveats, grain and basis, not `{}`", other)),
+                }
+            }
+            let b = basis(body)?;
+            let mut set: Vec<(&str, String)> = Vec::new();
+            for k in ["owner", "description", "caveats", "grain"] {
+                if let Some(v) = body.get(k).and_then(|v| v.as_str()) {
+                    let v = v.trim();
+                    if v.is_empty() {
+                        return Err(format!("`{}` is empty; leave it out to keep it as it is", k));
+                    }
+                    if v.chars().count() > 600 {
+                        return Err(format!("`{}` is longer than 600 characters", k));
+                    }
+                    set.push((k, v.to_string()));
+                }
+            }
+            if let Some(b) = b {
+                set.push(("basis", b));
+            }
+            if set.is_empty() {
+                return Err("set_metric needs at least one of owner, description, caveats, grain or basis".into());
+            }
+            let file = m.file.clone();
+            let text = ws.read(&file)?;
+            let mut doc: Yaml = serde_yaml::from_str(&text).map_err(|e| format!("{} does not parse: {}", file, e))?;
+            let items = doc.get_mut("metrics").and_then(|v| v.as_sequence_mut()).ok_or_else(|| format!("{} has no `metrics:` list", file))?;
+            let item = items.iter_mut().filter_map(|i| i.as_mapping_mut()).find(|i| i.get(key("metric")).and_then(|v| v.as_str()) == Some(name.as_str())).ok_or_else(|| format!("could not find `{}` inside {}", name, file))?;
+            for (k, v) in &set {
+                insert_after(item, "description", k, Yaml::String(v.clone()));
+            }
+            let out = serde_yaml::to_string(&doc).map_err(|e| e.to_string())?;
+            let what: Vec<String> = set.iter().map(|(k, v)| if *k == "owner" { format!("owner {}", v) } else { (*k).to_string() }).collect();
+            Ok(Patch { file, text: out, kind: "metric".into(), name: name.clone(), summary: format!("set the {} of metric {}", what.join(", "), name) })
+        }
         "add_type" => {
             let name = field(body, "name").to_string();
             if name.is_empty() {
@@ -848,7 +917,7 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             Ok(Patch { file: rel, text, kind: "function".into(), name: name.clone(), summary: format!("added function {} ({})", name, how) })
         }
         "record_check" => Err("record_check reports a check, it changes no file; send it on its own, not in `ops`".into()),
-        other => Err(format!("unknown op `{}`; one of add_type, add_property, set_type_description, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
+        other => Err(format!("unknown op `{}`; one of add_type, add_property, set_type_description, set_metric, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
     }
 }
 
@@ -966,6 +1035,20 @@ mod tests {
         let s = plan(&ont, &json!({ "op": "set_source", "type": "Order", "connection": "shop_files", "table": "orders", "key": "order_id", "columns": { "order_id": "Order ID" } })).unwrap();
         assert!(s.text.contains("columns:\n    order_id: Order ID"), "set_source takes columns: {}", s.text);
         assert!(plan(&ont, &json!({ "op": "set_source", "type": "Order", "connection": "shop_files", "table": "orders", "columns": { "nope": "x" } })).is_err());
+    }
+
+    #[test]
+    fn set_metric_changes_words_only() {
+        let ont = ecommerce();
+        let name = ont.metrics.keys().next().unwrap().clone();
+        let p = plan(&ont, &json!({ "op": "set_metric", "metric": name, "owner": "Vinay", "caveats": "Refunds are not counted." })).unwrap();
+        assert!(p.text.contains("owner: Vinay") && p.text.contains("caveats: Refunds are not counted."), "{}", p.text);
+        assert!(p.summary.starts_with("set the owner Vinay, caveats of metric"), "{}", p.summary);
+        let e = plan(&ont, &json!({ "op": "set_metric", "metric": name, "filter": "x = 1" })).err().unwrap();
+        assert!(e.contains("changes what the number is"), "{}", e);
+        assert!(plan(&ont, &json!({ "op": "set_metric", "metric": name })).is_err(), "needs one field");
+        assert!(plan(&ont, &json!({ "op": "set_metric", "metric": "nope", "owner": "x" })).is_err());
+        assert!(plan(&ont, &json!({ "op": "set_metric", "metric": name, "basis": "vibes" })).is_err());
     }
 
     #[test]
