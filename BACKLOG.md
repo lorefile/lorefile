@@ -240,3 +240,19 @@ Status: design only.
 8. **"In use, not reviewed" on the review screen** (small): an agent's write in edit mode (or from a connection set to "straight away") keeps no proposal, so its rows open the thing's own page with Looks right instead of the review screen. Keeping a record of each direct write would let the same screen show it.
 9. **History's Undo on a blank space** (small): Undo refuses to bring back the space's own "no types found" error, so the first entity of a blank space cannot be undone from History. Take it back remembers the errors the space had and works.
 
+
+### Left for later by the page fixes (2026-11-27, `specs/2026-11-27-ui-fixes.md`)
+
+- **Keeping who accepted once a check replaces the record**, so a card can say both "accepted by Vinay" and "checked by Priya": a second `by` in `trust.yaml`, with evidence grades.
+- **The name with the sign-in itself**: a server-side session holding who signed in. Today's cookie is the token.
+- **Owners for guardrails and functions inline**, the way metrics have one now.
+
+### Left for later by the home page (2026-11-27, `specs/2026-11-27-home-plane.md`)
+
+- **Compression for `/api/plane`.** A generated space of 2,000 entities with 8 links each answers in about 1.4 MB (124 KB gzipped). No compression crate is in the build yet; adding one (gzip on `Accept-Encoding`) brings it under the spec's 600 KB.
+- **An `icon:` key** (or `tags: [icon:…]`) once the YAML format can add keys without breaking older binaries.
+- **A shared layout file** for teams who want one arrangement in git; today a dragged layout is kept per browser.
+- **What agents read**: in-memory counts of entities named in tool calls, for a "used by agents" signal. Needs its own privacy decision.
+- **Lights for agents over MCP**: `summary` could carry "needs a look".
+- **A logic tier** for functions, actions and guardrails; an **"all spaces" plane**; **metric values** for readable sources (Decision 21 says no).
+- **The bottom sheet on a phone is not draggable**: it has Close, and opens at 60% height.

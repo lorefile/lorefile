@@ -684,3 +684,11 @@ Built 2026-11-27 from `specs/2026-11-27-review-flow.md`. A proposal is reviewed 
 
 Accept runs in a fixed order under a per-space decision lock (`.lorefile/decide.lock`, outside the save gate's own `trust.lock`): read the proposal again; if its files moved on, plan it again from its stored ops (or `learn_file`'s input without examples) on today's files, or refuse in words when it cannot be; check the fingerprint of what the screen showed; plan the person's fixes on top; then the save gate, one change with the agent as author and the person as committer. History off, it keeps the before and after texts so Take it back can put them back while nothing else has changed them; history on, Take it back is that commit's Undo. A connection approved with "wait for me" gets edit mode off whatever `--allow-edit` says, which is what lets one server take ChatGPT's proposals and the page's Accept.
 
+
+## 22. The home page and the Map
+
+`GET /s/<space>/api/plane` (`src/plane.rs`) answers with one picture of a space: each entity with its traffic light and the reasons for it in words, how important it is and why, a glyph guessed from its name, the metrics that count it (matched on the source's connection and table) and the fields they use, the sources underneath, the agents above (OAuth connections that can reach the space, plus channels seen in its activity), and up to five waiting proposals as ghosts (`review::graph`, cached by proposal and the space's files). Lights roll up: an entity shows the worst of itself, its source, its metrics and its guardrails. `?version=` answers `{same: true}` when nothing changed, so the page can ask every 30 seconds.
+
+Lights come from diagnostics, so every diagnostic that names one item carries it as `subject` (`validate::Diag`), and `review::questions` reads the subject instead of parsing messages.
+
+The page draws Home and Map with the same code (`// ---------- plane ----------` in `index.html`): one SVG, a deterministic layout (best-first walk from the most important entity, on a square spiral per area), two projections (isometric and flat) and one camera transform for pan and zoom. Map's dragged cells and pins live in the browser's `localStorage`, never in the space. The plane carries names, words and grades only, never a row value or a metric's value.

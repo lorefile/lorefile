@@ -537,7 +537,7 @@ fn the_summary_says_metrics_in_words_and_a_blank_space_reads_empty() {
 }
 
 #[test]
-fn naming_an_owner_keeps_the_grade_and_who_gave_it() {
+fn naming_an_owner_keeps_a_check_and_who_gave_it() {
     let sp = Space::new("owner");
     let port = 7231;
     let _srv = serve(&sp.0, port, &["--allow-edit"]);
@@ -554,7 +554,7 @@ fn naming_an_owner_keeps_the_grade_and_who_gave_it() {
     let (_, sum) = get(port, "/api/summary");
     assert!(!sum["diagnostics"].as_array().unwrap().iter().any(|d| d["code"] == "W113" || d["code"] == "W109"), "{}", sum["diagnostics"]);
     assert_eq!(say(port), said, "agents say the same as before");
-    // an accepted binding keeps its record too when only words change around it
+    // the binding is not touched by a metric's owner
     let binding = trust_line(&sp, "PromoSale");
     assert!(binding.contains("grade: accepted") && binding.contains("person via page"), "{}", binding);
 }
@@ -646,4 +646,41 @@ fn review_words_name_entities_metrics_and_sources() {
     }
     let metric = r["changes"].as_array().unwrap().iter().find(|c| c["kind"] == "metric").unwrap();
     assert_eq!(metric["label"], "Promo sale revenue", "the metric's title is its label");
+}
+
+#[test]
+fn naming_an_owner_accepts_what_was_accepted_unverified_or_changed() {
+    let sp = Space::new("ownergrades");
+    let w = |rel: &str, text: &str| { let p = sp.0.join(rel); fs::create_dir_all(p.parent().unwrap()).unwrap(); fs::write(p, text).unwrap(); };
+    w("sources/user_files.yaml", "connection: user_files\nkind: from_user\ndescription: Files people hand to an agent.\n");
+    w("types/promo_sale.yaml", "type: PromoSale\ndescription: One line.\nproperties:\n  line_id: { type: string, key: true, description: One line. }\n  revenue: { type: number, description: Paid. }\nsource: { connection: user_files, table: promo_sales, key: line_id }\n");
+    let metrics = |c_measure: &str| format!("metrics:\n  - metric: kept\n    description: k\n    source: {{ connection: user_files, table: promo_sales, measure: sum(revenue) }}\n  - metric: moved\n    description: m\n    source: {{ connection: user_files, table: promo_sales, measure: {} }}\n", c_measure);
+    w("logic/metrics.yaml", &metrics("sum(revenue)"));
+    let port = 7236;
+    let _srv = serve(&sp.0, port, &["--allow-edit"]);
+    for m in ["kept", "moved"] {
+        assert_eq!(post(port, "/api/trust", json!({ "op": "accept", "kind": "metric", "name": m, "by": "Priya" })).1["written"], true);
+    }
+    // changed since: edited by hand after Priya accepted it
+    w("logic/metrics.yaml", &metrics("count(*)"));
+    // unverified: written by the page's tool runner (an agent, edits on)
+    let (_, r) = post(port, "/api/tool", json!({ "name": "propose_patch", "arguments": { "ops": [{ "op": "add_metric", "metric": "fresh", "description": "f", "connection": "user_files", "table": "promo_sales", "measure": "count(*)" }], "reason": "r" } }));
+    assert!(r["isError"] != true, "{}", r);
+    post(port, "/api/reload", json!({}));
+    assert!(trust_line(&sp, "moved").is_empty() || get(port, "/api/summary").1["diagnostics"].as_array().unwrap().iter().any(|d| d["code"] == "W113"), "moved reads changed since");
+    assert!(trust_line(&sp, "fresh").contains("grade: proposed"), "{}", trust_line(&sp, "fresh"));
+    for m in ["kept", "moved", "fresh"] {
+        let (status, r) = post(port, "/api/patch", json!({ "op": "set_metric", "metric": m, "owner": "Vinay", "by": "Vinay" }));
+        assert_eq!(status, 200, "{}", r);
+        let line = trust_line(&sp, m);
+        assert!(line.contains("grade: accepted") && line.contains("by: \"Vinay via page\""), "{} is accepted by whoever set the owner: {}", m, line);
+    }
+    let (_, sum) = get(port, "/api/summary");
+    assert!(!sum["diagnostics"].as_array().unwrap().iter().any(|d| d["code"] == "W113"), "{}", sum["diagnostics"]);
+    // an owner written into the file by hand is a change behind the grade's back
+    let text = sp.read("logic/metrics.yaml").unwrap().replace("owner: Vinay", "owner: Priya");
+    w("logic/metrics.yaml", &text);
+    post(port, "/api/reload", json!({}));
+    let (_, sum) = get(port, "/api/summary");
+    assert!(sum["diagnostics"].as_array().unwrap().iter().any(|d| d["code"] == "W113"), "{}", sum["diagnostics"]);
 }

@@ -14,6 +14,7 @@ mod oauth;
 mod ontology;
 mod ossie;
 mod patch;
+mod plane;
 mod proposals;
 #[cfg(feature = "rdf")]
 mod rdf;

@@ -20,6 +20,17 @@ pub struct Diag {
     pub code: &'static str,
     pub message: String,
     pub file: String,
+    /// The one item the diagnostic is about, when it names one: what the home page's lights,
+    /// the card and the list attach it to. A field's subject is its entity, a link's its `from`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subject: Option<Subject>,
+}
+
+/// An item of the space: kind is entity, link, metric, function, guardrail, action, source or term.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Subject {
+    pub kind: &'static str,
+    pub name: String,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -29,10 +40,16 @@ pub struct Report {
 
 impl Report {
     fn err(&mut self, code: &'static str, file: &str, msg: impl Into<String>) {
-        self.diags.push(Diag { level: Level::Error, code, message: msg.into(), file: file.to_string() });
+        self.diags.push(Diag { level: Level::Error, code, message: msg.into(), file: file.to_string(), subject: None });
     }
     fn warn(&mut self, code: &'static str, file: &str, msg: impl Into<String>) {
-        self.diags.push(Diag { level: Level::Warning, code, message: msg.into(), file: file.to_string() });
+        self.diags.push(Diag { level: Level::Warning, code, message: msg.into(), file: file.to_string(), subject: None });
+    }
+    fn err_on(&mut self, code: &'static str, file: &str, on: (&'static str, &str), msg: impl Into<String>) {
+        self.diags.push(Diag { level: Level::Error, code, message: msg.into(), file: file.to_string(), subject: Some(Subject { kind: on.0, name: on.1.to_string() }) });
+    }
+    fn warn_on(&mut self, code: &'static str, file: &str, on: (&'static str, &str), msg: impl Into<String>) {
+        self.diags.push(Diag { level: Level::Warning, code, message: msg.into(), file: file.to_string(), subject: Some(Subject { kind: on.0, name: on.1.to_string() }) });
     }
     pub fn errors(&self) -> Vec<&Diag> {
         self.diags.iter().filter(|d| d.level == Level::Error).collect()
@@ -85,31 +102,31 @@ pub fn validate(ont: &Ontology) -> Report {
     // types
     for t in ont.types.values() {
         if t.description.trim().is_empty() {
-            r.warn("W101", &t.file, format!("type `{}` has no description (agents rely on it)", t.name));
+            r.warn_on("W101", &t.file, ("entity", &t.name), format!("type `{}` has no description (agents rely on it)", t.name));
         }
         for (pn, p) in &t.properties {
             let p = p.normalize();
             if p.kind == "enum" && p.values.is_empty() {
-                r.warn("W105", &t.file, format!("`{}.{}` is an enum with no `values`", t.name, pn));
+                r.warn_on("W105", &t.file, ("entity", &t.name), format!("`{}.{}` is an enum with no `values`", t.name, pn));
             }
         }
         if let Some(s) = &t.source {
             match ont.sources.get(&s.connection) {
-                None => r.err("E008", &t.file, format!("type `{}` uses unknown connection `{}`", t.name, s.connection)),
+                None => r.err_on("E008", &t.file, ("entity", &t.name), format!("type `{}` uses unknown connection `{}`", t.name, s.connection)),
                 Some(src) => {
                     if t.key_property().is_none() {
-                        r.warn("W103", &t.file, format!("type `{}` is bound to data but no property has `key: true`", t.name));
+                        r.warn_on("W103", &t.file, ("entity", &t.name), format!("type `{}` is bound to data but no property has `key: true`", t.name));
                     }
                     if src.kind.eq_ignore_ascii_case("mcp") {
                         if s.tool.trim().is_empty() {
-                            r.err("E012", &t.file, format!("type `{}` binds to MCP source `{}` but names no `tool`", t.name, s.connection));
+                            r.err_on("E012", &t.file, ("entity", &t.name), format!("type `{}` binds to MCP source `{}` but names no `tool`", t.name, s.connection));
                         }
                     } else if s.table.trim().is_empty() {
-                        r.err("E012", &t.file, format!("type `{}` binds to `{}` but names no `table`", t.name, s.connection));
+                        r.err_on("E012", &t.file, ("entity", &t.name), format!("type `{}` binds to `{}` but names no `table`", t.name, s.connection));
                     }
                     if let Some(path) = local_file(ont, src, &s.table) {
                         if !path.exists() {
-                            r.warn("W106", &t.file, format!("type `{}`: {} file not found at {}", t.name, src.kind, path.display()));
+                            r.warn_on("W106", &t.file, ("entity", &t.name), format!("type `{}`: {} file not found at {}", t.name, src.kind, path.display()));
                         }
                     }
                 }
@@ -120,25 +137,25 @@ pub fn validate(ont: &Ontology) -> Report {
     // sources
     for s in ont.sources.values() {
         if s.kind.eq_ignore_ascii_case("mcp") && s.server.as_deref().map(str::trim).unwrap_or("").is_empty() {
-            r.err("E011", &s.file, format!("source `{}` is `kind: mcp` but has no `server` (the MCP server name agents call)", s.connection));
+            r.err_on("E011", &s.file, ("source", &s.connection), format!("source `{}` is `kind: mcp` but has no `server` (the MCP server name agents call)", s.connection));
         }
     }
 
     // relationships
     for rel in &ont.relationships {
         if !ont.types.contains_key(&rel.from) {
-            r.err("E003", &rel.file, format!("relationship `{}` has unknown `from` type `{}`", rel.name, rel.from));
+            r.err_on("E003", &rel.file, ("entity", &rel.from), format!("relationship `{}` has unknown `from` type `{}`", rel.name, rel.from));
         }
         if !ont.types.contains_key(&rel.to) {
-            r.err("E003", &rel.file, format!("relationship `{}.{}` points to unknown type `{}`", rel.from, rel.name, rel.to));
+            r.err_on("E003", &rel.file, ("entity", &rel.from), format!("relationship `{}.{}` points to unknown type `{}`", rel.from, rel.name, rel.to));
         }
         if let Some(s) = &rel.source {
             match ont.sources.get(&s.connection) {
-                None => r.err("E008", &rel.file, format!("relationship `{}` uses unknown connection `{}`", rel.name, s.connection)),
+                None => r.err_on("E008", &rel.file, ("entity", &rel.from), format!("relationship `{}` uses unknown connection `{}`", rel.name, s.connection)),
                 Some(src) => {
                     if let Some(path) = local_file(ont, src, &s.table) {
                         if !path.exists() {
-                            r.warn("W106", &rel.file, format!("relationship `{}`: {} file not found at {}", rel.name, src.kind, path.display()));
+                            r.warn_on("W106", &rel.file, ("entity", &rel.from), format!("relationship `{}`: {} file not found at {}", rel.name, src.kind, path.display()));
                         }
                     }
                 }
@@ -150,13 +167,13 @@ pub fn validate(ont: &Ontology) -> Report {
     for c in ont.constraints.values() {
         let kind = ont.kind_of(&c.applies_to);
         if kind.is_none() {
-            r.err("E004", &c.file, format!("rule {} applies_to `{}`, which is not a type, relationship, or action", c.id, c.applies_to));
+            r.err_on("E004", &c.file, ("guardrail", &c.id), format!("rule {} applies_to `{}`, which is not a type, relationship, or action", c.id, c.applies_to));
         }
         if c.severity == Severity::Block && c.rationale.trim().is_empty() {
-            r.warn("W102", &c.file, format!("blocking rule {} has no rationale", c.id));
+            r.warn_on("W102", &c.file, ("guardrail", &c.id), format!("blocking rule {} has no rationale", c.id));
         }
         match rules::compile(&c.rule) {
-            Err(e) => r.err("E009", &c.file, format!("rule {} does not parse: {}", c.id, e)),
+            Err(e) => r.err_on("E009", &c.file, ("guardrail", &c.id), format!("rule {} does not parse: {}", c.id, e)),
             Ok(_) => {
                 // which names may the rule use?
                 let allowed: Vec<String> = match kind {
@@ -186,9 +203,10 @@ pub fn validate(ont: &Ontology) -> Report {
                 if !allowed.is_empty() {
                     for var in rules::variables(&c.rule) {
                         if !allowed.iter().any(|a| a == &var) {
-                            r.warn(
+                            r.warn_on(
                                 "W104",
                                 &c.file,
+                                ("guardrail", &c.id),
                                 format!("rule {} references `{}`, which is not available on `{}` (available: {})", c.id, var, c.applies_to, allowed.join(", ")),
                             );
                         }
@@ -201,16 +219,16 @@ pub fn validate(ont: &Ontology) -> Report {
     // actions
     for a in ont.actions.values() {
         if a.description.trim().is_empty() {
-            r.warn("W101", &a.file, format!("action `{}` has no description", a.name));
+            r.warn_on("W101", &a.file, ("action", &a.name), format!("action `{}` has no description", a.name));
         }
         for (input, ty) in &a.inputs {
             if !ont.types.contains_key(ty) {
-                r.err("E005", &a.file, format!("action `{}` input `{}` has unknown type `{}`", a.name, input, ty));
+                r.err_on("E005", &a.file, ("action", &a.name), format!("action `{}` input `{}` has unknown type `{}`", a.name, input, ty));
             }
         }
         for id in &a.checks {
             if ont.constraint(id).is_none() {
-                r.err("E006", &a.file, format!("action `{}` checks unknown rule `{}`", a.name, id));
+                r.err_on("E006", &a.file, ("action", &a.name), format!("action `{}` checks unknown rule `{}`", a.name, id));
             }
         }
         for e in &a.effects {
@@ -218,16 +236,16 @@ pub fn validate(ont: &Ontology) -> Report {
                 if let Some(edge) = edge {
                     let rels = ont.relationship(&edge.relationship);
                     if rels.is_empty() {
-                        r.err("E007", &a.file, format!("action `{}` {}s unknown relationship `{}`", a.name, what, edge.relationship));
+                        r.err_on("E007", &a.file, ("action", &a.name), format!("action `{}` {}s unknown relationship `{}`", a.name, what, edge.relationship));
                     }
                     for side in [&edge.from, &edge.to] {
                         if !a.inputs.contains_key(side) {
-                            r.err("E007", &a.file, format!("action `{}` effect refers to `{}`, which is not an input", a.name, side));
+                            r.err_on("E007", &a.file, ("action", &a.name), format!("action `{}` effect refers to `{}`, which is not an input", a.name, side));
                         }
                     }
                     if let (Some(rel), Some(ft), Some(tt)) = (rels.first(), a.inputs.get(&edge.from), a.inputs.get(&edge.to)) {
                         if &rel.from != ft || &rel.to != tt {
-                            r.warn("W107", &a.file, format!("action `{}`: `{}` goes {} → {}, but inputs `{}`/`{}` are {} → {}", a.name, edge.relationship, rel.from, rel.to, edge.from, edge.to, ft, tt));
+                            r.warn_on("W107", &a.file, ("action", &a.name), format!("action `{}`: `{}` goes {} → {}, but inputs `{}`/`{}` are {} → {}", a.name, edge.relationship, rel.from, rel.to, edge.from, edge.to, ft, tt));
                         }
                     }
                 }
@@ -238,37 +256,37 @@ pub fn validate(ont: &Ontology) -> Report {
     // one name, one kind: `describe` and `validate` must agree on what a name is
     for m in ont.metrics.values() {
         if ont.types.contains_key(&m.name) || ont.actions.contains_key(&m.name) || ont.functions.contains_key(&m.name) {
-            r.err("E015", &m.file, format!("`{}` is a metric and also an entity, action or function; one name, one kind", m.name));
+            r.err_on("E015", &m.file, ("metric", &m.name), format!("`{}` is a metric and also an entity, action or function; one name, one kind", m.name));
         }
     }
     for f in ont.functions.values() {
         if ont.types.contains_key(&f.name) || ont.actions.contains_key(&f.name) {
-            r.err("E015", &f.file, format!("`{}` is a function and also an entity or action; one name, one kind", f.name));
+            r.err_on("E015", &f.file, ("function", &f.name), format!("`{}` is a function and also an entity or action; one name, one kind", f.name));
         }
     }
 
     // metrics
     for m in ont.metrics.values() {
         if m.description.trim().is_empty() {
-            r.warn("W101", &m.file, format!("metric `{}` has no description", m.name));
+            r.warn_on("W101", &m.file, ("metric", &m.name), format!("metric `{}` has no description", m.name));
         }
         if m.owner.trim().is_empty() {
-            r.warn("W109", &m.file, format!("metric `{}` has no owner (who decides what it means)", m.name));
+            r.warn_on("W109", &m.file, ("metric", &m.name), format!("metric `{}` has no owner (who decides what it means)", m.name));
         }
         let sources: Vec<&crate::schema::MetricSource> = m.source.iter().chain(m.variants.iter().map(|v| &v.source)).collect();
         if sources.is_empty() && m.sql.is_none() {
-            r.err("E013", &m.file, format!("metric `{}` says nothing about where it comes from: add source, variants or sql", m.name));
+            r.err_on("E013", &m.file, ("metric", &m.name), format!("metric `{}` says nothing about where it comes from: add source, variants or sql", m.name));
         }
         for s in sources {
             match ont.sources.get(&s.connection) {
-                None => r.err("E008", &m.file, format!("metric `{}` uses unknown connection `{}`", m.name, s.connection)),
+                None => r.err_on("E008", &m.file, ("metric", &m.name), format!("metric `{}` uses unknown connection `{}`", m.name, s.connection)),
                 Some(src) => {
                     if src.kind.eq_ignore_ascii_case("mcp") {
                         if s.tool.is_empty() {
-                            r.err("E012", &m.file, format!("metric `{}` uses MCP source `{}` but names no `tool`", m.name, s.connection));
+                            r.err_on("E012", &m.file, ("metric", &m.name), format!("metric `{}` uses MCP source `{}` but names no `tool`", m.name, s.connection));
                         }
                     } else if s.table.is_empty() {
-                        r.err("E012", &m.file, format!("metric `{}` uses `{}` but names no `table`", m.name, s.connection));
+                        r.err_on("E012", &m.file, ("metric", &m.name), format!("metric `{}` uses `{}` but names no `table`", m.name, s.connection));
                     }
                 }
             }
@@ -279,38 +297,38 @@ pub fn validate(ont: &Ontology) -> Report {
     let primitive = |t: &str| matches!(t, "string" | "integer" | "number" | "boolean" | "date" | "datetime" | "json");
     for f in ont.functions.values() {
         if f.description.trim().is_empty() {
-            r.warn("W101", &f.file, format!("function `{}` has no description", f.name));
+            r.warn_on("W101", &f.file, ("function", &f.name), format!("function `{}` has no description", f.name));
         }
         for (n, t) in f.inputs.iter().chain(f.outputs.iter()) {
             if !primitive(t) && !ont.types.contains_key(t) {
-                r.err("E005", &f.file, format!("function `{}`: `{}` has unknown type `{}` (an entity, or string/integer/number/boolean/date/json)", f.name, n, t));
+                r.err_on("E005", &f.file, ("function", &f.name), format!("function `{}`: `{}` has unknown type `{}` (an entity, or string/integer/number/boolean/date/json)", f.name, n, t));
             }
         }
         match &f.runs {
-            None => r.warn("W111", &f.file, format!("function `{}` does not say where it runs (`runs: {{kind: mcp|http|manual}}`)", f.name)),
+            None => r.warn_on("W111", &f.file, ("function", &f.name), format!("function `{}` does not say where it runs (`runs: {{kind: mcp|http|manual}}`)", f.name)),
             Some(x) => match x.kind.as_str() {
                 "mcp" => {
                     if x.server.is_empty() || x.tool.is_empty() {
-                        r.err("E014", &f.file, format!("function `{}` runs on MCP but names no `server` and `tool`", f.name));
+                        r.err_on("E014", &f.file, ("function", &f.name), format!("function `{}` runs on MCP but names no `server` and `tool`", f.name));
                     } else if !ont.sources.values().any(|s| s.kind.eq_ignore_ascii_case("mcp") && (s.connection == x.server || s.server.as_deref() == Some(x.server.as_str()))) {
-                        r.err("E014", &f.file, format!("function `{}` runs on MCP server `{}`, which no `kind: mcp` source under sources/ declares", f.name, x.server));
+                        r.err_on("E014", &f.file, ("function", &f.name), format!("function `{}` runs on MCP server `{}`, which no `kind: mcp` source under sources/ declares", f.name, x.server));
                     }
                 }
                 "http" => {
                     if x.url.is_empty() {
-                        r.err("E014", &f.file, format!("function `{}` runs over http but has no `url`", f.name));
+                        r.err_on("E014", &f.file, ("function", &f.name), format!("function `{}` runs over http but has no `url`", f.name));
                     }
                 }
                 "manual" => {}
-                other => r.err("E014", &f.file, format!("function `{}`: runs.kind `{}` is not mcp, http or manual", f.name, other)),
+                other => r.err_on("E014", &f.file, ("function", &f.name), format!("function `{}`: runs.kind `{}` is not mcp, http or manual", f.name, other)),
             },
         }
         if let Some(w) = &f.writes_back {
             if !ont.types.contains_key(&w.entity) {
-                r.err("E005", &f.file, format!("function `{}` writes back `{}`, which is not an entity", f.name, w.entity));
+                r.err_on("E005", &f.file, ("function", &f.name), format!("function `{}` writes back `{}`, which is not an entity", f.name, w.entity));
             }
             if !w.connection.is_empty() && !ont.sources.contains_key(&w.connection) {
-                r.err("E008", &f.file, format!("function `{}` writes back to unknown connection `{}`", f.name, w.connection));
+                r.err_on("E008", &f.file, ("function", &f.name), format!("function `{}` writes back to unknown connection `{}`", f.name, w.connection));
             }
         }
     }
@@ -318,7 +336,7 @@ pub fn validate(ont: &Ontology) -> Report {
     // glossary
     for g in &ont.glossary {
         if ont.kind_of(&g.means).is_none() {
-            r.warn("W108", "glossary.yaml", format!("glossary term `{}` means `{}`, which does not exist", g.term, g.means));
+            r.warn_on("W108", "glossary.yaml", ("term", &g.term), format!("glossary term `{}` means `{}`, which does not exist", g.term, g.means));
         }
     }
 
@@ -329,20 +347,20 @@ pub fn validate(ont: &Ontology) -> Report {
             for (name, rec) in crate::trust::entries(book, k) {
                 let what = k.name_words(name);
                 if rec.of.trim().is_empty() {
-                    r.err("E018", f, format!("{} has a grade with no fingerprint (`of`), so nobody can tell what was graded", what));
+                    r.err_on("E018", f, subject_of(k, name), format!("{} has a grade with no fingerprint (`of`), so nobody can tell what was graded", what));
                 }
                 if rec.grade == crate::schema::Grade::Checked {
                     if !k.can_be_checked() {
-                        r.err("E018", f, format!("{} is marked checked, but a word has no rows to check against; a word tops out at accepted", what));
+                        r.err_on("E018", f, subject_of(k, name), format!("{} is marked checked, but a word has no rows to check against; a word tops out at accepted", what));
                     }
                     let missing: Vec<&str> = [("against", rec.against.as_deref().unwrap_or("")), ("by", rec.by.as_str()), ("at", rec.at.as_str())].iter().filter(|(_, v)| v.trim().is_empty()).map(|(k, _)| *k).collect();
                     if !missing.is_empty() {
-                        r.err("E018", f, format!("{} is marked checked without {}: a check says who, when and against which source", what, missing.join(", ")));
+                        r.err_on("E018", f, subject_of(k, name), format!("{} is marked checked without {}: a check says who, when and against which source", what, missing.join(", ")));
                     }
                 }
                 if let Some(a) = rec.against.as_deref().filter(|a| !a.trim().is_empty()) {
                     if !ont.sources.contains_key(a) {
-                        r.err("E018", f, format!("{} names `{}` as what it was checked against, which is no source under sources/", what, a));
+                        r.err_on("E018", f, subject_of(k, name), format!("{} names `{}` as what it was checked against, which is no source under sources/", what, a));
                     }
                 }
             }
@@ -350,11 +368,11 @@ pub fn validate(ont: &Ontology) -> Report {
         for (k, name) in &ont.graded.all {
             let st = ont.graded.get(*k, name);
             if let (true, Some(rec)) = (st.changed, &st.record) {
-                r.warn("W113", f, format!("{} changed since it was {} ({}, {}); a person has to accept it again", k.name_words(name), rec.grade.word(), crate::trust::who_said(&rec.by), rec.at));
+                r.warn_on("W113", f, subject_of(*k, name), format!("{} changed since it was {} ({}, {}); a person has to accept it again", k.name_words(name), rec.grade.word(), crate::trust::who_said(&rec.by), rec.at));
             }
         }
         for (k, name, rec) in &ont.graded.orphans {
-            r.warn("W114", f, format!("{} is {} in trust.yaml but no longer exists; the line can go", k.name_words(name), rec.grade.word()));
+            r.warn_on("W114", f, subject_of(*k, name), format!("{} is {} in trust.yaml but no longer exists; the line can go", k.name_words(name), rec.grade.word()));
         }
     }
 
@@ -368,13 +386,48 @@ pub fn validate(ont: &Ontology) -> Report {
         let what = what.join(" and ");
         if c.declared {
             let first = c.keys.iter().find(|k| ont.iris.declared.contains_key(*k)).unwrap_or(&c.keys[0]);
-            r.err("E016", &file_of(ont, first), format!("IRI <{}> names {}; each thing needs its own IRI", c.iri, what));
+            match subject_of_key(ont, first) {
+                Some(on) => r.err_on("E016", &file_of(ont, first), on, format!("IRI <{}> names {}; each thing needs its own IRI", c.iri, what)),
+                None => r.err("E016", &file_of(ont, first), format!("IRI <{}> names {}; each thing needs its own IRI", c.iri, what)),
+            }
         } else {
             r.warn("W112", &file_of(ont, &c.keys[0]), format!("{} get the same derived IRI <{}>; set `iri:` on one of them so other tools can tell them apart", what, c.iri));
         }
     }
 
+    // what only names a types/*.yaml file is about its entity, when the file defines exactly one
+    // (a `types:` list file holds several, and then it is about none of them in particular)
+    for d in r.diags.iter_mut().filter(|d| d.subject.is_none() && d.file.starts_with("types/")) {
+        let mut in_file = ont.types.values().filter(|t| t.file == d.file);
+        if let (Some(t), None) = (in_file.next(), in_file.next()) {
+            d.subject = Some(Subject { kind: "entity", name: t.name.clone() });
+        }
+    }
     r
+}
+
+/// What a trust.yaml line is about: a binding's subject is its entity.
+fn subject_of(k: crate::trust::Kind, name: &str) -> (&'static str, &str) {
+    match k {
+        crate::trust::Kind::Metric => ("metric", name),
+        crate::trust::Kind::Binding => ("entity", name),
+        crate::trust::Kind::Term => ("term", name),
+        crate::trust::Kind::Guardrail => ("guardrail", name),
+    }
+}
+
+/// The item an IRI belongs to; the space itself and a domain have none.
+fn subject_of_key<'a>(ont: &'a Ontology, key: &'a Key) -> Option<(&'static str, &'a str)> {
+    Some(match key {
+        Key::Space | Key::Domain(_) => return None,
+        Key::Entity(t) | Key::Field(t, _) | Key::Link(t, _) => ("entity", t.as_str()),
+        Key::Term(i) => ("term", ont.glossary.get(*i).map(|g| g.term.as_str())?),
+        Key::Guardrail(id) => ("guardrail", id.as_str()),
+        Key::Action(n) => ("action", n.as_str()),
+        Key::Metric(n) => ("metric", n.as_str()),
+        Key::Function(n) => ("function", n.as_str()),
+        Key::Source(n) => ("source", n.as_str()),
+    })
 }
 
 /// The file an IRI's owner was written in.
@@ -420,6 +473,20 @@ mod tests {
         assert!(!report.ok(), "{:?}", report.diags);
         assert!(report.errors().iter().any(|e| e.message.contains("severty")), "the message names the key: {:?}", report.diags);
         assert!(ont.constraints.is_empty(), "the rule was not loaded with a guessed severity");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_file_only_error_names_the_entity_only_when_its_file_holds_one() {
+        let d = space(&[
+            ("ontology.yaml", "name: subj\n"),
+            ("types/one.yaml", "type: One\ndescription: o\niri: \"nope:One\"\nproperties: { id: { type: string, key: true, description: id } }\n"),
+            ("types/two.yaml", "types:\n  - type: Two\n    description: t\n    iri: \"nope:Two\"\n    properties: { id: { type: string, key: true, description: id } }\n  - type: Three\n    description: t\n    properties: { id: { type: string, key: true, description: id } }\n"),
+        ]);
+        let report = super::validate(&Ontology::from_raw(loader::load(&d).unwrap()));
+        let e17 = |file: &str| report.diags.iter().find(|x| x.code == "E017" && x.file == file).unwrap_or_else(|| panic!("{:?}", report.diags)).subject.clone();
+        assert_eq!(e17("types/one.yaml").map(|s| s.name), Some("One".to_string()));
+        assert_eq!(e17("types/two.yaml"), None, "a list file holds two entities: the error is about the file, so the space");
         let _ = std::fs::remove_dir_all(&d);
     }
 

@@ -888,14 +888,19 @@ pub fn questions(before_report: &Report, after: &Ontology, after_report: &Report
             errors.push(json!({ "code": d.code, "text": d.message, "file": d.file }));
             continue;
         }
-        let n = first_name(&d.message);
+        // what the warning is about comes from its subject; a field's name is still in the message
+        let n = match (&d.subject, d.code) {
+            (Some(s), "W109" | "W101" | "W102" | "W103" | "W107" | "W111") => s.name.clone(),
+            _ => first_name(&d.message),
+        };
+        let about = d.subject.as_ref().map(|s| s.kind).unwrap_or("");
         let q = match d.code {
             "W109" => json!({ "code": d.code, "ask": format!("Who decides what {} means?", label(&n)), "name": n, "fix": { "op": "set_metric", "metric": n, "field": "owner" } }),
-            "W101" if d.message.starts_with("type ") => json!({ "code": d.code, "ask": format!("What is one {}?", label(&n)), "name": n, "fix": { "op": "set_type_description", "type": n, "field": "description" } }),
-            "W101" if d.message.starts_with("metric ") => json!({ "code": d.code, "ask": format!("What does {} measure?", label(&n)), "name": n, "fix": { "op": "set_metric", "metric": n, "field": "description" } }),
+            "W101" if about == "entity" => json!({ "code": d.code, "ask": format!("What is one {}?", label(&n)), "name": n, "fix": { "op": "set_type_description", "type": n, "field": "description" } }),
+            "W101" if about == "metric" => json!({ "code": d.code, "ask": format!("What does {} measure?", label(&n)), "name": n, "fix": { "op": "set_metric", "metric": n, "field": "description" } }),
             "W101" => json!({ "code": d.code, "text": format!("{} has no description, so agents have only its name to go on.", n) }),
             "W103" => json!({ "code": d.code, "text": format!("No field of {} says which row is which, so agents cannot look one up.", label(&n)) }),
-            "W102" => json!({ "code": d.code, "text": format!("The guardrail {} stops actions but doesn't say why.", d.message.split_whitespace().nth(2).unwrap_or("")) }),
+            "W102" => json!({ "code": d.code, "text": format!("The guardrail {} stops actions but doesn't say why.", n) }),
             "W105" => json!({ "code": d.code, "text": format!("{} is \"one of\" but lists none.", n) }),
             "W106" => json!({ "code": d.code, "text": format!("Lorefile can't find {}, so rows can't be read here.", d.message.rsplit(" at ").next().unwrap_or("the file")) }),
             "W107" => json!({ "code": d.code, "text": format!("{} links the wrong way round for its inputs.", n) }),
@@ -1363,7 +1368,7 @@ const CODES: [&str; 33] = [
 /// An error remembered at Accept, as the diagnostic it was.
 pub fn known_diag(k: &crate::proposals::KnownError) -> Option<Diag> {
     let code = CODES.iter().find(|c| **c == k.code)?;
-    Some(Diag { level: Level::Error, code, message: k.message.clone(), file: k.file.clone() })
+    Some(Diag { level: Level::Error, code, message: k.message.clone(), file: k.file.clone(), subject: None })
 }
 
 /// Who last changed these files, from the activity log: "Vinay".

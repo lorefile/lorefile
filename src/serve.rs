@@ -1008,7 +1008,7 @@ pub fn run(reg: Registry, host: &str, port: u16, edit: EditConfig, login: Login,
     let root_s = std::fs::canonicalize(&reg.root).unwrap_or_else(|_| reg.root.clone()).display().to_string();
     let single = reg.single;
 
-    let ctx = Arc::new(Ctx { edit, root_s, single, token: login.token, cookie: format!("lorefile-{}", port), oauth: oauth_srv, oauth_off });
+    let ctx = Arc::new(Ctx { edit, root_s, single, token: login.token, cookie: format!("lorefile-{}", port), oauth: oauth_srv, oauth_off, ghosts: Mutex::new(HashMap::new()) });
     let reg = Arc::new(Mutex::new(reg));
     for req in server.incoming_requests() {
         let (reg, ctx) = (Arc::clone(&reg), Arc::clone(&ctx));
@@ -1031,6 +1031,9 @@ struct Ctx {
     oauth: Option<Arc<oauth::Server>>,
     /// Why it is off: a word for the page and the start-up line's words.
     oauth_off: Option<(&'static str, String)>,
+    /// The home page's ghosts of waiting proposals, by space, proposal and the space's files,
+    /// so a refresh does not compile them again.
+    ghosts: Mutex<HashMap<String, Json>>,
 }
 
 /// Who is calling `/mcp`: the owner (the login token, Claude Code's header), or a
@@ -1556,6 +1559,36 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
                     json_response(200, &review::review(ont, &st.report, &prop, &ctx))
                 }
                 None => json_response(404, &json!({ "error": format!("There is no proposal {} in {}.", id, space_id), "missing": true, "id": id })),
+            }
+        }
+        (Method::Get, "/api/plane") => {
+            let conns: Vec<Json> = ctx.oauth.as_ref().map(|o| o.connections_json()["connections"].as_array().cloned().unwrap_or_default()).unwrap_or_default();
+            let version = crate::plane::version(&st.dir, &st.fp, &conns);
+            if params.get("version").map(|v| *v == version).unwrap_or(false) {
+                json_response(200, &json!({ "same": true, "version": version }))
+            } else {
+                let history_on = !space.builtin && space_edit().commit;
+                let git = if history_on { Some(crate::plane::git_changed(&st.dir)) } else { None };
+                let props = proposals::list(&st.dir);
+                let activity = proposals::activity(&st.dir, 500);
+                let fp = format!("{:?}", st.fp);
+                let pending: Vec<String> = props.iter().filter(|p| p.status == "pending").map(|p| format!("{}|{}|", space_id, p.id)).collect();
+                let mut cache = ctx.ghosts.lock().unwrap_or_else(|e| e.into_inner());
+                // a proposal that left pending, or another version of the files: dropped
+                cache.retain(|k, _| !k.starts_with(&format!("{}|", space_id)) || pending.iter().any(|p| k.starts_with(p) && k.ends_with(&fp)));
+                let inp = crate::plane::Input {
+                    ont,
+                    report: &st.report,
+                    space: crate::plane::SpaceInfo { id: &space_id, name: &space.name, builtin: space.builtin, editable: space_edit().allow && !space.builtin },
+                    proposals: &props,
+                    activity: &activity,
+                    connections: &conns,
+                    git_changed: git.as_ref(),
+                    today: chrono::Local::now().date_naive(),
+                    version,
+                };
+                let mut ghost = |p: &proposals::Proposal| cache.entry(format!("{}|{}|{}", space_id, p.id, fp)).or_insert_with(|| crate::plane::ghost(ont, &st.report, p)).clone();
+                json_response(200, &crate::plane::plane(&inp, &mut ghost))
             }
         }
         (Method::Get, "/api/graph") => match params.get("proposal").and_then(|id| proposals::get(&st.dir, id)) {

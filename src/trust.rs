@@ -530,16 +530,10 @@ pub fn restamp(before: &Ontology, after: &Ontology, who: Who, by: &str) -> Vec<E
                 Some(old) if fingerprint(old) == of => {}
                 Some(old) => {
                     let st = before.graded.get(k, name);
-                    // only words changed (an owner, a description, caveats, tags), not what it is
-                    let words_only = fingerprint(&recipe(k, old)) == fingerprint(&recipe(k, v));
                     let rec = match who {
                         Who::Agent => fresh(Grade::Proposed),
                         Who::Person => match (&st.grade, &st.record) {
-                            // the grade, and who gave it and when, stay: naming an owner re-grades nothing
-                            // (a proposed thing a person edits is accepted, as any person's edit is)
-                            (Some(Grade::Checked) | Some(Grade::Accepted), Some(r)) if words_only => TrustRecord { of: of.clone(), ..r.clone() },
-                            // changed since a person graded it: words alone never accept the change
-                            (None, Some(_)) if st.changed && words_only => continue,
+                            (Some(Grade::Checked), Some(r)) if fingerprint(&recipe(k, old)) == fingerprint(&recipe(k, v)) => TrustRecord { of: of.clone(), ..r.clone() },
                             _ => fresh(Grade::Accepted),
                         },
                     };

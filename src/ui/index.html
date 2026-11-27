@@ -123,13 +123,96 @@ button.lnk{background:none;border:none;color:var(--accent);padding:0;min-height:
   .rv-fields tr{display:flex;flex-wrap:wrap;gap:2px 8px;border-bottom:1px solid var(--line);padding:4px 0}.rv-fields td{border:none;padding:0}
   .rv-actions{bottom:0}
 }
+/* ---------- plane: Home and Map ---------- */
+.pl-wrap{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:8px;padding:12px 16px;overflow:auto;position:relative}
+.pl-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pl-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px}.pl-tools:empty{display:none}
+.chk{display:inline-flex;gap:4px;align-items:center;font-size:12.5px}
+.pl-views{display:flex;gap:2px;border-bottom:1px solid var(--line)}.pl-views button{border:none;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);font-weight:600;padding:6px 12px;min-height:34px}.pl-views button.on{color:var(--ink);border-color:var(--accent)}
+.pl-stage{flex:1 1 auto;min-height:440px;border:1px solid var(--line);border-radius:12px;background:#fbfbf9;overflow:hidden;position:relative}
+.pl-svg{width:100%;height:100%;display:block;touch-action:pan-y;user-select:none;-webkit-user-select:none}.pl-svg:focus{outline:none}
+.pl-plane{fill:#f3f3f0;stroke:#e3e3dd}
+.pl-area{font-size:13px;font-weight:700;letter-spacing:.04em}
+.pl-item{cursor:pointer;outline:none}
+.pl-item .top{fill:#fff;stroke:#d6d6d0;stroke-width:1}
+.pl-item .side-l{fill:#ececE8}.pl-item .side-r{fill:#e0e0db}
+.pl-item .lift{transition:transform .15s ease,filter .15s ease}
+.pl-item.tile:hover .lift,.pl-item.tile:focus-visible .lift{transform:translateY(-3px);filter:drop-shadow(0 4px 6px rgba(0,0,0,.12))}
+.pl-item.sel .top,.pl-item:focus-visible .top{stroke:var(--accent);stroke-width:2.5}
+.pl-item:focus-visible .mn{outline:2px solid var(--accent);outline-offset:2px}
+.pl-item.chip:focus-visible circle,.pl-item.chip.sel circle{stroke:var(--accent);stroke-width:2.5}
+.pl-item.dim,.pl-link.dim{opacity:.35}
+.pl-svg text{font-family:var(--sans)}
+.pl-item text.lbl,.pl-svg text.lbl{font-size:12.5px;font-weight:600;fill:var(--ink)}
+.pl-svg .sub{font-size:11px;fill:var(--muted)}.pl-svg .sub.mono{font-family:var(--mono)}
+.pl-svg .tok{font-size:11px;fill:#55555e;font-weight:600;letter-spacing:.02em}
+.chipbg{fill:var(--chip)}
+.pl-badge circle{stroke:#fff;stroke-width:1.5}.pl-badge text{font-size:11px;font-weight:800;fill:#fff}
+.pl-badge.red circle{fill:var(--block)}.pl-badge.amber circle,.pl-badge.mono circle{fill:var(--warn)}.pl-badge.green circle{fill:var(--ok)}
+.pl-ring{fill:none;stroke-width:2;stroke-dasharray:6 4}.pl-ring.amber{stroke:var(--warn)}.pl-ring.red{stroke:var(--block)}
+.struck text.lbl{text-decoration:line-through}
+.ghost .top{fill:rgba(255,255,255,.4);stroke:#8e8e96;stroke-dasharray:6 4;stroke-width:1.5}
+.pl-next line,.pl-next polygon{fill:none;stroke:#c4c4bd;stroke-dasharray:5 5;stroke-width:1.5}
+.pl-link line,.pl-link path{stroke:#b4b4ad;stroke-width:1.6}.pl-link.on line,.pl-link.on path{stroke:var(--accent);stroke-width:2.2}
+.pl-link.missing line,.pl-link.missing path{stroke:var(--block);stroke-dasharray:4 3}
+.ghostlink line{stroke-dasharray:6 4;stroke-width:2}.ghostlink.new line{stroke:var(--ok)}.ghostlink.removed line{stroke:var(--block)}
+.pl-svg .warnc,.warnc{fill:var(--warn);color:var(--warn)}
+.pl-between line{stroke:#bcbcb5;stroke-width:1.2;stroke-dasharray:3 4}.pl-between.on line{stroke:var(--accent);stroke-width:1.8}
+.pl-tier rect{fill:#fafaf8;stroke:#e3e3dd}
+.pl-svg .pl-tierlbl{font-size:10.5px;font-weight:700;letter-spacing:.1em;fill:var(--muted)}
+.chip circle.mono{fill:var(--accent)}.pl-svg .monot{fill:#fff;font-weight:700;font-size:13px}
+.chip circle.srcc{fill:#fff;stroke:#d6d6d0}
+.pl-open rect{fill:var(--accent)}.pl-open text{fill:#fff;font-size:11.5px;font-weight:600}
+.fold .top{fill:#f1f1ee;stroke:#bdbdb6;stroke-dasharray:4 3}
+.pl-areatile .top{fill:#fff;stroke:#d6d6d0}.pl-svg .lbl.big{font-size:15px}
+.pl-arrow path{stroke:#a4a4ac;stroke-width:1.4}.pl-arrow.on path{stroke:var(--accent);stroke-width:2}
+.mn{box-sizing:border-box;background:#fff;border:1px solid #d6d6d0;border-top:3px solid #6e6e78;border-radius:10px;padding:7px 10px;font-size:12.5px;overflow:auto;height:100%;color:var(--ink);font-family:var(--sans);line-height:1.4}
+.mn.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.mn.open{box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.mn-h{display:flex;gap:6px;align-items:center}.mn-h b{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mn-x{border:none;background:transparent;min-height:0;padding:0 4px;font-size:13px;color:var(--muted)}
+.mn-s{color:var(--muted);font-size:11.5px;margin-top:4px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}.mn-s .grade{font-size:10.5px;padding:1px 7px}
+.mn-desc{margin:6px 0 4px;font-size:12px;height:34px;overflow:hidden;color:#3a3a42}
+.mn-f{display:grid;grid-template-columns:14px minmax(0,1fr) auto 14px;gap:6px;align-items:center;height:23px;font-size:12px}
+.mn-f .k{color:var(--warn)}.mn-f .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.mn-f .t{color:var(--muted);font-size:11px;white-space:nowrap}.mn-f .u{color:var(--accent);font-weight:800}
+.mn-in{width:112px;padding:1px 6px;font-size:11px;min-height:0;height:20px;border-radius:6px;background:var(--need);border-color:var(--need-line)}
+.mn-more{font-size:11.5px;margin-top:2px}
+.mn.ghost{border-style:dashed;background:rgba(255,255,255,.55);border-top-width:1px}
+.mn.src,.mn.met{border-top-width:1px}.mn-d{font-size:12px;margin-top:4px;max-height:34px;overflow:hidden}
+.sig{font-weight:800;color:var(--accent);font-size:15px}
+.lb{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;border-radius:999px;font-size:10.5px;font-weight:800;color:#fff;padding:0 4px;line-height:1}.lb.red{background:var(--block)}.lb.amber{background:var(--warn)}.lb.green{background:var(--ok)}.lb.none{background:transparent;border:1px dashed var(--line2)}
+.lbw{font-size:12.5px;font-weight:600;color:var(--muted);display:inline-flex;gap:4px;align-items:center}
+.pl-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted)}.pl-legend span{display:inline-flex;gap:5px;align-items:center}
+.pl-legendbox summary{display:none}.ghostk{width:16px;height:10px;border:1.5px dashed #8e8e96;border-radius:3px;display:inline-block}
+.pl-find{position:relative}.pl-find input{width:200px;padding:5px 9px;min-height:32px}
+.pl-hits{position:absolute;right:0;top:calc(100% + 4px);z-index:5;background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:280px;box-shadow:0 10px 30px rgba(0,0,0,.08);padding:4px}.pl-hits:empty{display:none}
+.pl-hits .result{display:flex;gap:8px;align-items:center;text-align:left;background:transparent;border:none;border-radius:8px;padding:6px 8px;width:100%;font-size:13px;min-height:36px}.pl-hits .result:hover{background:var(--chip)}
+.pl-hits .result small{width:52px;flex:0 0 auto;font-size:10.5px;font-weight:700;text-transform:uppercase;color:var(--muted)}
+.pl-lb{min-height:30px;padding:3px 10px;font-weight:700}.pl-lb.red{color:var(--block)}.pl-lb.amber{color:var(--warn)}.pl-lb.green{color:var(--ok)}.pl-lb.on{background:var(--accent-soft);border-color:var(--accent)}
+.pl-lights,.pl-zoom{display:inline-flex;gap:4px;align-items:center}
+.pl-table td,.pl-table th{font-size:12.5px}
+.pl-skip{position:absolute;left:-9999px}.pl-skip:focus{left:16px;top:8px;z-index:9;background:var(--panel);padding:6px 10px;border-radius:8px;border:1px solid var(--accent)}
+.sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.pl-card{display:flex;flex-direction:column;gap:8px}.pl-card .drow{grid-template-columns:84px 1fr}
+.monob{width:28px;height:28px;flex:0 0 auto;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.gl-i.bad{color:var(--block)}
+.banner.bad{background:var(--block-bg);color:var(--block)}
+nav .step.home .dot{background:var(--accent-soft);color:var(--accent);font-size:13px}
+@media (prefers-reduced-motion: reduce){.pl-item .lift{transition:none!important}.pl-item.tile:hover .lift,.pl-item.tile:focus-visible .lift{transform:none;filter:none}}
+@media (max-width:760px){
+  .pl-wrap{padding:10px 12px;overflow:visible}.pl-stage{flex:none;aspect-ratio:4/3;min-height:0;height:auto}
+  .pl-find input{width:150px}.pl-hits{right:auto;left:0;min-width:240px}
+  .pl-legendbox summary{display:list-item;cursor:pointer;font-size:12.5px;color:var(--muted)}
+  .pl-aside.up{position:fixed;left:0;right:0;bottom:0;height:60vh;z-index:30;box-shadow:0 -10px 30px rgba(0,0,0,.18);border-radius:14px 14px 0 0;border-top:1px solid var(--line)}
+  .pl-item .top{stroke-width:1.2}
+}
 .sheet{position:fixed;inset:0;background:rgba(26,26,31,.28);display:flex;align-items:center;justify-content:center;z-index:40}.sheet .card{width:min(620px,92vw);box-shadow:0 18px 50px rgba(0,0,0,.18)}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <div class="logo"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="20" r="2"/><path d="M7 7l3 3M17 7l-3 3M12 15v3"/></svg></div>
+    <div class="logo" role="link" tabindex="0" title="Home" aria-label="Home" onclick="go('home')" onkeydown="if(event.key==='Enter')go('home')" style="cursor:pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="20" r="2"/><path d="M7 7l3 3M17 7l-3 3M12 15v3"/></svg></div>
     <select id="h-space" title="Which space (ontology) to show" onchange="switchSpace(this.value)"></select>
     <span class="name" id="h-name">…</span><span class="counts" id="h-counts"></span>
     <div class="row" style="gap:8px"><div class="meter"><div id="h-meter" style="width:0"></div></div><span style="font-size:12.5px;color:var(--muted)" id="h-ready"></span></div>
@@ -149,8 +232,8 @@ let O = null, PR = { proposals: [], activity: [] }, DC = {}, TOOLS = null, TEMPL
 const SP = (location.pathname.match(/^\/s\/([^/]+)/) || [])[1] || null;
 const SPACE = SP ? decodeURIComponent(SP) : null;
 const B = SP ? '/s/' + SP : '';
-const spaceUrl = (id, hash) => '/s/' + encodeURIComponent(id) + '/' + (hash || '#map');
-let route = { screen: 'map', arg: '' };
+const spaceUrl = (id, hash) => '/s/' + encodeURIComponent(id) + '/' + (hash || '#home');
+let route = { screen: 'home', arg: '' };
 const ui = { mapSel: null, typeTab: 'fields', ruleFilter: 'all', ruleQuery: '', search: '', lf: { from: '', name: '', to: '', card: 'many-to-one', desc: '' }, rf: { name: '', applies: '', field: '', op: '==', value: '', rule: '', sev: 'block', why: '', who: '' }, tryInputs: {}, tryResult: null, sql: "select n.name, n.source_kind, count(c.id) as rules\nfrom nodes n left join constraints c on c.applies_to = n.name\ngroup by all order by rules desc", sqlOut: null, editor: null, newType: null, showProposal: null };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -349,7 +432,7 @@ document.addEventListener('visibilitychange', async () => {
   await loadSummary(); if (O && !O.error) render();
 });
 function go(screen, arg){ const h = screen + (arg ? '/' + encodeURIComponent(arg) : ''); if (location.hash.slice(1) === h) { onHash(); } else { location.hash = h; } }
-function onHash(){ const h = decodeURIComponent(location.hash.slice(1)); const [screen, ...rest] = h.split('/'); route = { screen: screen || 'map', arg: rest.join('/') }; ui.editor = null; renderNav(); render(); }
+function onHash(){ const h = decodeURIComponent(location.hash.slice(1)); const [screen, ...rest] = h.split('/'); route = { screen: screen || 'home', arg: rest.join('/') }; ui.editor = null; renderNav(); render(); }
 window.addEventListener('hashchange', onHash);
 async function afterWrite(r){
   toast(r);
@@ -391,8 +474,9 @@ function renderNav(){
     ['rules', 'Guardrails', f.rules.length ? `${f.rules.length} · ${f.noOwner.length ? f.noOwner.length + ' with no sign-off' : 'every one signed off'}` : 'none yet', f.noOwner.length > 0],
     ['actions', 'Actions', (O.actions||[]).length ? `${plural((O.actions||[]).length, 'thing')} agents may do` : 'none yet', false]
   ];
+  h += `<button class="step home ${route.screen==='home'?'active':''}" onclick="go('home')"><span class="dot ok" aria-hidden="true">⌂</span><span><div class="t">Home</div><div class="s">how things are</div></span></button>`;
   h += '<h4>Build</h4>' + build.map(([k, t, s, warn], i) => `<button class="step ${route.screen===k?'active':''}" onclick="go('${k}')"><span class="dot ${warn?'warn':'ok'}">${warn ? i+1 : '✓'}</span><span><div class="t">${t}</div><div class="s ${warn?'warn':''}">${esc(s)}</div></span></button>`).join('');
-  const use = [['usage', 'How to use it', 'what agents can answer now', 0], ['map', 'Map', 'the whole shape', 0], ['agents', 'Agents', 'MCP, proposals, activity', f.pending], ['history', 'History', 'what changed, who, when', 0], ['data', 'Data & SQL', 'one door across sources', 0], ['files', 'Files', 'every YAML, explained', 0], ['settings', 'Settings', 'sharing, server, MCP', 0]];
+  const use = [['usage', 'How to use it', 'what agents can answer now', 0], ['map', 'Map', 'the whole shape, opened up', 0], ['agents', 'Agents', 'MCP, proposals, activity', f.pending], ['history', 'History', 'what changed, who, when', 0], ['data', 'Data & SQL', 'one door across sources', 0], ['files', 'Files', 'every YAML, explained', 0], ['settings', 'Settings', 'sharing, server, MCP', 0]];
   h += '<h4>Use</h4>' + use.map(([k, t, s, b]) => `<button class="step ${route.screen===k || (k==='agents' && route.screen==='review')?'active':''}" onclick="go('${k}')"><span><div class="t">${t}</div><div class="s">${s}</div></span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('');
   h += `<div style="margin-top:auto;font-size:12px;color:var(--faint);padding:8px;line-height:1.5">Everything here is YAML files. Agents read the same files over MCP.</div>`;
   n.innerHTML = h;
@@ -423,43 +507,12 @@ function renderFooter(){
 // ---------- screens ----------
 function render(){
   const v = $('view'); v.innerHTML = '';
-  const fn = { map: renderMap, sources: renderSources, entities: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, review: renderReview, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace, logic: renderLogic, usage: renderUsage, files: renderFiles, settings: renderSettings, history: renderHistory }[route.screen] || renderMap;
+  const fn = { home: renderHome, map: renderMap, sources: renderSources, entities: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, review: renderReview, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace, logic: renderLogic, usage: renderUsage, files: renderFiles, settings: renderSettings, history: renderHistory }[route.screen] || renderHome;
   fn(v);
 }
 const main = (inner, extra) => `<div class="main">${inner}</div>${extra || ''}`;
 const stepHead = (n, title, desc) => `<div><div class="step-label">Step ${n}</div><h1>${title}</h1><div class="desc">${desc}</div></div>`;
 
-// --- map ---
-function layout(){
-  const W = 220, H = 70, gx = 40, gy = 80, per = 4; const pos = {}; let y = 30, maxW = 0;
-  for (const d of O.domains) {
-    d.types.forEach((t, i) => { const col = i % per, row = Math.floor(i / per); pos[t.name] = [30 + col * (W + gx), y + row * (H + gy)]; maxW = Math.max(maxW, 30 + (col + 1) * (W + gx)); });
-    y += Math.ceil(d.types.length / per) * (H + gy) + 30;
-  }
-  return { pos, W, H, width: Math.max(maxW + 30, 600), height: y + 20 };
-}
-function renderMap(v){
-  const f = facts(); const L = layout();
-  const byName = Object.fromEntries(f.types.map(t => [t.name, t]));
-  let nodes = '', edges = '';
-  for (const r of f.rels) {
-    const p = L.pos[r.from], q = L.pos[r.to]; if (!p || !q) continue;
-    const a = { x: p[0] + L.W/2, y: p[1] + L.H/2 }, b = { x: q[0] + L.W/2, y: q[1] + L.H/2 };
-    const dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx*dx + dy*dy), ang = Math.atan2(dy, dx) * 180 / Math.PI;
-    const on = ui.mapSel === r.from || ui.mapSel === r.to;
-    edges += `<div class="edge ${on?'on':''}" style="left:${a.x}px;top:${a.y}px;width:${len}px;transform:rotate(${ang}deg)"></div><div class="elabel ${on?'on':''}" style="left:${(a.x+b.x)/2-44}px;top:${(a.y+b.y)/2-10}px;opacity:${on || !ui.mapSel ? 1 : .35}">${esc(r.name)}</div>`;
-  }
-  for (const t of f.types) {
-    const [x, y] = L.pos[t.name] || [30, 30]; const rs = rulesFor(t.name); const blocks = rs.filter(c => c.severity === 'block').length; const gaps = t.fields - t.described;
-    nodes += `<button class="node ${ui.mapSel===t.name?'sel':''}" style="left:${x}px;top:${y}px" onclick="mapPick(${jq(t.name)})"><div class="row" style="gap:8px"><i style="width:10px;height:10px;border-radius:50%;background:${domainColor(t.domain)}"></i><b>${esc(t.name)}</b></div><div class="tags">${blocks?`<span style="background:var(--block-bg);color:var(--block)">${blocks} stop</span>`:''}${gaps?`<span style="background:var(--warn-bg);color:var(--warn)">${gaps} need words</span>`:''}${!t.has_source?`<span style="background:var(--chip);color:var(--muted)">no data yet</span>`:''}</div></button>`;
-  }
-  const legend = O.domains.map(d => `<span><i style="background:${domainColor(d.name)}"></i>${esc(d.name)}</span>`).join('');
-  const t = byName[ui.mapSel];
-  let side = '';
-  if (t) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><i style="width:10px;height:10px;border-radius:50%;background:${domainColor(t.domain)}"></i><h2>${esc(t.name)}</h2></div><div style="font-size:13.5px">${esc(t.description)}</div><div style="font-size:12.5px;color:var(--muted)">${plural(t.fields, 'field')} · ${countOr(f.rels.filter(r => r.from===t.name||r.to===t.name).length, 'link')} · ${countOr(rulesFor(t.name).length, 'guardrail')} · ${t.has_source ? esc((t.source_kind||'inline') + ' ' + (t.source_table||'')) : 'no data bound'}</div><div class="row"><button class="primary small" onclick="go('entities',${jq(t.name)})">Open</button><button class="small" onclick="ui.ruleQuery=${jq(t.name)};go('rules')">Its guardrails</button></div></div>`;
-  side += nextSteps();
-  v.innerHTML = `<div class="map"><div style="position:relative;width:${L.width}px;height:${L.height}px;margin:0 auto">${edges}${nodes}</div><div class="legend">${legend}</div></div><div class="aside">${side}</div>`;
-}
 // "What to do next": the nudges both Home and Map show, in the page's words
 function nextSteps(){
   const f = facts(), nudges = [];
@@ -474,12 +527,687 @@ function nextSteps(){
   if (f.metricsNoOwner.length) nudges.push([`${plural(f.metricsNoOwner.length, 'metric')} ${f.metricsNoOwner.length === 1 ? 'has' : 'have'} no owner`, f.metricsNoOwner.slice(0, 4).map(m => labelOf(m.name)).join(', ') + (f.metricsNoOwner.length > 4 ? '…' : '') + ': nobody is named to decide what ' + (f.metricsNoOwner.length === 1 ? 'it means' : 'they mean') + '.', ro() ? '' : 'Name an owner', `ui.focusOwner=true;go('logic')`]);
   if (f.gapTypes.length) nudges.push([`${plural(f.gapTypes.length, 'entity', 'entities')} ${f.gapTypes.length === 1 ? 'has' : 'have'} fields without plain words`, f.gapTypes.slice(0, 4).map(t => `${t.name} (${t.fields - t.described})`).join(', ') + (f.gapTypes.length > 4 ? '…' : ''), 'Add words', `ui.typeTab='fields';go('entities',${jq(f.gapTypes[0].name)})`]);
   if (f.relsNoDesc.length) nudges.push([`${plural(f.relsNoDesc.length, 'link')} ${f.relsNoDesc.length === 1 ? 'has' : 'have'} no sentence`, 'One line each, like "The carrier currently booked for the parcel".', 'Describe links', "go('links')"]);
-  if (f.unbound.length) nudges.push([`${f.unbound.map(t => t.name).join(' and ')} ${f.unbound.length === 1 ? 'has' : 'have'} no data behind ${f.unbound.length === 1 ? 'it' : 'them'}`, 'Agents can read their rules but cannot check a real row.', 'Bind a table', `ui.typeTab='data';go('entities',${jq(f.unbound[0].name)})`]);
+  if (f.unbound.length) nudges.push([`${f.unbound.length > 4 ? plural(f.unbound.length, 'entity', 'entities') : f.unbound.map(t => t.name).join(' and ')} ${f.unbound.length === 1 ? 'has' : 'have'} no data behind ${f.unbound.length === 1 ? 'it' : 'them'}`, 'Agents can read their rules but cannot check a real row.', 'Bind a table', `ui.typeTab='data';go('entities',${jq(f.unbound[0].name)})`]);
   if (f.noOwner.length) nudges.push([`${plural(f.noOwner.length, 'guardrail')} ${f.noOwner.length === 1 ? 'has' : 'have'} no sign-off`, f.noOwner.map(r => r.id).join(', '), 'Name an owner', `go('rules',${jq(f.noOwner[0].id)})`]);
   if (!nudges.length) nudges.push(['Nothing waiting', 'Every field has words, every link a sentence, every entity a table, every metric an owner. Agents have what they need.', 'See agents', "go('agents')"]);
   return `<h4 title="Beyond what the meter counts (fields described, links explained, entities with data): owners, grades and what agents proposed">What to do next</h4>` + nudges.map(([t, d, cta, js]) => `<div class="card"><b style="font-size:13.5px">${esc(t)}</b><div style="font-size:12.5px;color:var(--muted)">${esc(d)}</div>${cta ? `<button class="small" style="align-self:flex-start" onclick="${js}">${cta}</button>` : ''}</div>`).join('');
 }
-function mapPick(name){ ui.mapSel = ui.mapSel === name ? null : name; render(); }
+// ---------- plane ----------
+// Home (isometric) and Map (flat, opened up) are one drawing, fed by GET /api/plane: the same
+// layout, lights, cards and ghosts, seen two ways. Never a row value or a metric's value.
+let PL = null, PL_AT = 0, LAY = null, PL_TIMER = null;
+const pl = { sel: null, focus: null, cam: null, moved: false, filter: null, list: false, find: '', hits: [], open: {}, all: {}, show: { entities: true, metrics: true, sources: true, links: true }, onlyLook: false, area: 'all', waiting: 'all', overlay: null, moving: null, failed: false, pins: null, layout: null, flat: false, drawnKeys: [] };
+const GLYPHS = {
+  receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
+  people: '<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20c.8-3.5 3.5-5.5 7-5.5s6.2 2 7 5.5M16 14.5c3 0 5 1.8 6 4.5"/>',
+  building: '<path d="M4 21V5l8-2v18M12 21V9l8 2v10M2 21h20M7 8h2M7 12h2M7 16h2M15 13h2M15 17h2"/>',
+  box: '<path d="M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+  megaphone: '<path d="M3 10v4h4l8 5V5l-8 5zM18 9a4 4 0 0 1 0 6M7 14l1 5h3"/>',
+  truck: '<path d="M2 6h12v10H2zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/>',
+  pin: '<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  repeat: '<path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3M18 3v4h-4M6 21v-4h4"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  chart: '<path d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3"/>',
+  document: '<path d="M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 16h6"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  cube: '<path d="M12 2l9 5v10l-9 5-9-5V7zM3 7l9 5 9-5M12 12v10"/>',
+  sheet: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/>',
+  cylinder: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>',
+  bucket: '<path d="M4 6h16l-2 15H6zM4 6c0-1.7 3.6-3 8-3s8 1.3 8 3"/>',
+  plug: '<path d="M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4"/>',
+  paperclip: '<path d="M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 3.5 6 3.5 9s-1 6-3.5 9c-2.5-3-3.5-6-3.5-9s1-6 3.5-9"/>',
+  shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>'
+};
+const SRC_KIND = { from_user: 'files people give agents', mcp: 'agents fetch rows with tools', csv: 'readable here', parquet: 'readable here', duckdb: 'readable here', s3: 'files in a bucket', http: 'an HTTP API' };
+const srcWords = (kind) => SRC_KIND[String(kind || '').toLowerCase()] || 'agents fetch rows';
+const LIGHTS = { red: ['✗', 'wrong', 'agents may get wrong answers'], amber: ['!', 'look at it', 'a person should check'], green: ['✓', 'a person stands behind it', ''], none: ['', 'no badge', 'nothing to fix, nobody has graded it'] };
+const lightWords = (l) => l === 'red' ? 'wrong: agents may get wrong answers' : l === 'amber' ? 'look at it' : l === 'green' ? 'a person stands behind it' : 'nothing to fix';
+const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+const phone = () => window.innerWidth < 760;
+const cutTo = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+const store = (k, fallback) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; } };
+const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+function ensureGlyphs(){
+  if ($('pl-defs')) return;
+  const d = document.createElement('div');
+  d.innerHTML = `<svg id="pl-defs" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>${Object.entries(GLYPHS).map(([k, p]) => `<symbol id="g-${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</symbol>`).join('')}<pattern id="pl-dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="1.1" fill="#d9d9d2"/></pattern><marker id="pl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a9aa3"/></marker><marker id="pl-arrow-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2b5cff"/></marker></defs></svg>`;
+  document.body.appendChild(d.firstChild);
+}
+// --- data: /api/plane, asked again every 30 s while Home or Map is visible ---
+async function loadPlane(force){
+  try {
+    const r = await api(B + '/api/plane' + (!force && PL ? '?version=' + encodeURIComponent(PL.version) : ''));
+    pl.failed = false; PL_AT = Date.now();
+    if (r.same) return false;
+    if (r.error) { pl.failed = true; return false; }
+    PL = normPlane(r); LAY = null; return true;
+  } catch (e) { pl.failed = true; return false; }
+}
+// the answer leaves out what is empty, and sends links as rows [from, to, name, cardinality, has a sentence]
+function normPlane(r){
+  r.entities.forEach(e => { e.metrics = e.metrics || []; e.units = e.units || []; e.also_called = e.also_called || []; e.guardrail_names = e.guardrail_names || []; e.guardrails = e.guardrails || 0; e.actions = e.actions || 0; e.links = e.links || 0; e.reasons = e.reasons || []; e.importance_why = e.importance_why || []; e.has_data = !!e.has_data; e.same_label = !!e.same_label; e.description = e.description || ''; });
+  r.links = (r.links || []).map(l => Array.isArray(l) ? { from: r.entities[l[0]].name, to: typeof l[1] === 'number' ? r.entities[l[1]].name : l[1], missing: typeof l[1] !== 'number', name: l[2], cardinality: l[3], described: !!l[4] } : l);
+  return r;
+}
+function planePoll(){
+  clearInterval(PL_TIMER);
+  PL_TIMER = setInterval(async () => {
+    if (document.visibilityState !== 'visible' || !['home', 'map'].includes(route.screen) || pl.moving) return;
+    if (await loadPlane()) drawPlane();
+    else if (pl.failed) planeBar();
+  }, 30000);
+}
+const planeKey = () => (O && O.space ? O.space.id : 'space');
+function prefs(){ if (pl.pins === null || pl.pinsFor !== planeKey()) { pl.pinsFor = planeKey(); pl.pins = store('lorefile-pins:' + planeKey(), {}); pl.layout = store('lorefile-layout:' + planeKey(), {}); } }
+// --- layout: automatic and deterministic; dragged cells (Map) win, kept in this browser ---
+function spiral(n){ const out = [[0, 0]]; let x = 0, y = 0, dx = 1, dy = 0, seg = 1, steps = 0, turns = 0; while (out.length < n) { x += dx; y += dy; out.push([x, y]); if (++steps === seg) { steps = 0; [dx, dy] = [-dy, dx]; if (++turns % 2 === 0) seg++; } } return out; }
+function planeLayout(){
+  prefs();
+  const key = PL.version + '|' + JSON.stringify(pl.layout);
+  if (LAY && LAY.key === key) return LAY;
+  const ents = PL.entities, byArea = {}, adj = {};
+  ents.forEach(e => (byArea[e.area] = byArea[e.area] || []).push(e));
+  PL.links.forEach(l => { (adj[l.from] = adj[l.from] || []).push(l.to); (adj[l.to] = adj[l.to] || []).push(l.from); });
+  const names = PL.areas.map(a => a.name).filter(n => (byArea[n] || []).length);
+  const frames = names.map(name => {
+    const list = byArea[name], inArea = new Set(list.map(e => e.name)), seen = new Set(), order = [];
+    // the highest-scoring entity first, then always the best-scoring neighbour of what is placed
+    // (ties by name), then the next by score: linked entities sit together and the important
+    // ones in the middle, so the first ones placed are the ones the fit view shows
+    const rank = {}; list.forEach((e, i) => { rank[e.name] = i; });
+    for (const start of list) {
+      if (seen.has(start.name)) continue;
+      const frontier = [start.name]; seen.add(start.name);
+      while (frontier.length) {
+        frontier.sort((a, b) => rank[a] - rank[b]); const n = frontier.shift(); order.push(n);
+        for (const m of (adj[n] || [])) if (inArea.has(m) && !seen.has(m)) { seen.add(m); frontier.push(m); }
+      }
+    }
+    const sp = spiral(order.length), pos = {};
+    order.forEach((n, i) => { pos[n] = sp[i]; });
+    const us = sp.slice(0, order.length).map(c => c[0]), vs = sp.slice(0, order.length).map(c => c[1]);
+    return { name, pos, order, minU: Math.min(...us), maxU: Math.max(...us), minV: Math.min(...vs), maxV: Math.max(...vs) };
+  });
+  // areas on a grid as square as it can be, two empty cells apart
+  const cells = {}, cols = Math.max(1, Math.ceil(Math.sqrt(frames.length)));
+  let v0 = 0;
+  for (let r = 0; r * cols < frames.length; r++) {
+    const row = frames.slice(r * cols, r * cols + cols); let u0 = 0;
+    const h = Math.max(...row.map(f => f.maxV - f.minV + 1));
+    row.forEach(f => { const du = u0 - f.minU, dv = v0 - f.minV; for (const [n, [u, v]] of Object.entries(f.pos)) cells[n] = [u + du, v + dv]; f.box = [u0, v0, u0 + f.maxU - f.minU, v0 + f.maxV - f.minV]; f.center = [u0 - f.minU, v0 - f.minV]; u0 += f.maxU - f.minU + 3; });
+    v0 += h + 2;
+  }
+  for (const n of Object.keys(pl.layout)) { if (!cells[n]) delete pl.layout[n]; else cells[n] = pl.layout[n]; }
+  // over 60 entities, the fit view draws each area's first-placed entities close together (the
+  // full layout spreads an area of hundreds wide), each area with its "+N more" tile after them
+  const compact = {}, cfold = {}, total = ents.length;
+  if (total > 60) {
+    const cf = frames.map(f => { const k = Math.max(3, Math.min(Math.round(120 * f.order.length / total), 72)); const names = f.order.slice(0, k); return { f, names, sp: spiral(names.length + 1) }; });
+    let v0c = 0;
+    for (let r = 0; r * cols < cf.length; r++) {
+      const row = cf.slice(r * cols, r * cols + cols); let u0 = 0, h = 0;
+      row.forEach(c => { const us = c.sp.map(q => q[0]), vs = c.sp.map(q => q[1]); const mnU = Math.min(...us), mxU = Math.max(...us), mnV = Math.min(...vs), mxV = Math.max(...vs); c.names.forEach((n, i) => { compact[n] = [c.sp[i][0] - mnU + u0, c.sp[i][1] - mnV + v0c]; }); const last = c.sp[c.names.length]; cfold[c.f.name] = [last[0] - mnU + u0, last[1] - mnV + v0c]; c.f.cbox = [u0, v0c, u0 + mxU - mnU, v0c + mxV - mnV]; u0 += mxU - mnU + 3; h = Math.max(h, mxV - mnV + 1); });
+      v0c += h + 2;
+    }
+  }
+  LAY = { key, cells, frames, compact, cfold };
+  return LAY;
+}
+const proj = (u, v) => pl.flat ? [u * 260, v * 132] : [(u - v) * 84, (u + v) * 42];
+// --- levels: under 60 entities everything shows at every zoom ---
+function planeLevel(){ if (!PL || PL.entities.length <= 60) return 'all'; const k = pl.cam ? pl.cam.k : 1; return k < 0.6 ? 'areas' : k < 1.6 ? 'top' : 'view'; }
+function shownEntities(){
+  const L = planeLayout(), lvl = planeLevel(), ents = PL.entities.filter(e => pl.area === 'all' || e.area === pl.area);
+  const keepIt = (e) => pl.pins[e.name] || pl.sel === 'e:' + e.name;
+  let list = ents, folds = [];
+  if (pl.flat && pl.onlyLook) list = list.filter(e => e.light === 'red' || e.light === 'amber' || keepIt(e));
+  if (lvl === 'areas') return { list: [], folds: [], lvl, cells: L.compact };
+  if (lvl === 'top') {
+    const out = [], extra = {}, taken = new Set(Object.values(L.compact).map(c => c.join(',')));
+    for (const f of L.frames) {
+      const mine = list.filter(e => e.area === f.name);
+      const top = mine.filter(e => L.compact[e.name]); const rest = mine.length - top.length;
+      out.push(...top);
+      // a pinned or selected entity stays drawn: beside its area's group
+      for (const e of mine.filter(e => !L.compact[e.name] && keepIt(e))) { const b = f.cbox || [0, 0, 0, 0]; for (const [du, dv] of spiral(200)) { const c = [b[2] + 1 + du, b[1] + dv]; if (!taken.has(c.join(','))) { taken.add(c.join(',')); extra[e.name] = c; break; } } out.push(e); }
+      if (rest > 0 && L.cfold[f.name]) folds.push({ area: f.name, n: rest - Object.keys(extra).filter(n => mine.some(e => e.name === n)).length, cell: L.cfold[f.name] });
+    }
+    return { list: out, folds, lvl, cells: { ...L.compact, ...extra } };
+  }
+  if (lvl === 'view') {
+    const r = viewRect(), inView = list.filter(e => { const c = L.cells[e.name]; if (!c) return false; const [x, y] = proj(c[0], c[1]); return x > r.x0 - 200 && x < r.x1 + 200 && y > r.y0 - 200 && y < r.y1 + 200; });
+    const top = inView.slice(0, 400); const rest = inView.length - top.length;
+    if (rest > 0) folds.push({ area: '', n: rest, here: true });
+    return { list: top.concat(list.filter(e => keepIt(e) && !top.includes(e))), folds, lvl };
+  }
+  return { list, folds, lvl };
+}
+// --- the camera: pan and zoom move one transform; the drawing changes only when the level does ---
+function viewRect(){ const svg = $('pl-svg'); const w = svg ? svg.clientWidth : 800, h = svg ? svg.clientHeight : 600; const c = pl.cam || { x: 0, y: 0, k: 1 }; return { x0: -c.x / c.k, y0: -c.y / c.k, x1: (w - c.x) / c.k, y1: (h - c.y) / c.k, w, h }; }
+function applyCam(){ const g = $('pl-cam'); if (g && pl.cam) g.setAttribute('transform', `translate(${pl.cam.x.toFixed(1)},${pl.cam.y.toFixed(1)}) scale(${pl.cam.k.toFixed(4)})`); const z = $('pl-zoom'); if (z) z.textContent = Math.round((pl.cam ? pl.cam.k : 1) * 100) + '%'; }
+function fitCam(bounds){
+  const svg = $('pl-svg'); if (!svg || !bounds) return;
+  const w = svg.clientWidth || 800, h = svg.clientHeight || 500, pad = phone() ? 10 : 40;
+  const bw = Math.max(1, bounds.x1 - bounds.x0), bh = Math.max(1, bounds.y1 - bounds.y0);
+  let k = Math.min((w - pad * 2) / bw, (h - pad * 2) / bh); k = Math.max(0.15, Math.min(k, PL.entities.length <= 2 ? 1.25 : 1.1));
+  if (PL.entities.length > 60) k = Math.max(0.6, Math.min(k, 1.5));
+  pl.cam = { x: w / 2 - (bounds.x0 + bw / 2) * k, y: h / 2 - (bounds.y0 + bh / 2) * k, k };
+  pl.moved = false; applyCam();
+}
+let camTimer = null, lastLevel = null, lastViewKey = '';
+function camChanged(){
+  applyCam(); pl.moved = true;
+  clearTimeout(camTimer);
+  camTimer = setTimeout(() => {
+    const lvl = planeLevel(), r = viewRect(), vk = lvl === 'view' ? [r.x0, r.y0].map(n => Math.round(n / 300)).join(',') : '';
+    if (lvl !== lastLevel && ((lvl === 'view' && lastLevel === 'top') || (lvl === 'top' && lastLevel === 'view'))) anchorSwitch(lastLevel, lvl);
+    if (lvl !== lastLevel || vk !== lastViewKey) { drawPlane(true); }
+  }, 120);
+}
+function anchorSwitch(from, to){
+  const L = planeLayout(), r = viewRect(), cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2;
+  const a = from === 'top' ? L.compact : L.cells, b = to === 'top' ? L.compact : L.cells;
+  let best = null, bd = Infinity;
+  for (const [n, c] of Object.entries(a)) { if (!b[n]) continue; const [x, y] = proj(c[0], c[1]); const d = (x - cx) ** 2 + (y - cy) ** 2; if (d < bd) { bd = d; best = n; } }
+  if (!best) return;
+  const [x0, y0] = proj(a[best][0], a[best][1]), [x1, y1] = proj(b[best][0], b[best][1]);
+  pl.cam.x -= (x1 - x0) * pl.cam.k; pl.cam.y -= (y1 - y0) * pl.cam.k; applyCam();
+}
+function zoomBy(f, cx, cy){
+  if (!pl.cam) return; const r = viewRect(); cx = cx ?? r.w / 2; cy = cy ?? r.h / 2;
+  const k = Math.max(0.15, Math.min(6, pl.cam.k * f)); const s = k / pl.cam.k;
+  pl.cam = { x: cx - (cx - pl.cam.x) * s, y: cy - (cy - pl.cam.y) * s, k }; camChanged();
+}
+function flyTo(x, y, k){
+  const r = viewRect(), to = { k: k || Math.max(pl.cam.k, 1.2) }; to.x = r.w / 2 - x * to.k; to.y = r.h / 2 - y * to.k;
+  if (reduced()) { pl.cam = to; camChanged(); return; }
+  const from = { ...pl.cam }, t0 = performance.now();
+  const step = (t) => { const p = Math.min(1, (t - t0) / 300), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; pl.cam = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, k: from.k + (to.k - from.k) * e }; applyCam(); if (p < 1) requestAnimationFrame(step); else camChanged(); };
+  requestAnimationFrame(step);
+}
+// --- words for an item ---
+const entOf = (n) => PL.entities.find(e => e.name === n);
+const metOf = (n) => PL.metrics.find(m => m.name === n);
+const srcOf2 = (n) => PL.sources.find(s => s.name === n);
+const agOf = (id) => PL.agents.find(a => String(a.id) === String(id));
+function ariaFor(e){
+  const parts = [e.label, `entity in ${e.area}`, plural(e.fields, 'field')];
+  if (e.metrics.length) parts.push(`counted by ${plural(e.metrics.length, 'metric')}`);
+  const why = (e.reasons || []).map(r => r.text).slice(0, 2).join('; ');
+  return parts.join(', ') + '. ' + (e.light === 'none' ? 'Nothing to fix.' : `${cap(LIGHTS[e.light][1])}${why ? ': ' + why : ''}.`);
+}
+const cap = (s) => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
+const badgeSvg = (light, x, y, mono) => light === 'none' && !mono ? '' : `<g class="pl-badge ${mono ? 'mono' : light}" transform="translate(${x},${y})" aria-hidden="true"><circle r="9"/><text y="3.6" text-anchor="middle">${esc(mono || LIGHTS[light][0])}</text></g>`;
+function usedAgo(at){ if (!at) return ''; const d = (Date.now() - new Date(at).getTime()) / 60000; if (isNaN(d)) return ''; if (d < 2) return 'used just now'; if (d < 60) return `used ${Math.round(d)} min ago`; if (d < 48 * 60) return `used ${Math.round(d / 60)} h ago`; return `used ${Math.round(d / 1440)} days ago`; }
+// --- drawing ---
+function planeBounds(cells){
+  const pts = Object.values(cells).map(c => proj(c[0], c[1]));
+  if (!pts.length) pts.push([0, 0]);
+  return { x0: Math.min(...pts.map(p => p[0])) - 140, x1: Math.max(...pts.map(p => p[0])) + 140, y0: Math.min(...pts.map(p => p[1])) - 120, y1: Math.max(...pts.map(p => p[1])) + 140 };
+}
+const drawnProposals = () => pl.overlay ? [pl.overlay] : (PL.waiting || []).filter(w => w.drawn && (pl.waiting === 'all' || pl.waiting === w.id));
+// the links a waiting proposal adds (dashed green) or removes (dashed red), between real or ghost places
+function ghostLinks(pos, ghosts, flat){
+  const at = (n) => { const p = pos(n); if (p) return p; const g = ghosts.find(x => x.n.name === n); return g ? proj(g.cell[0], g.cell[1]) : null; };
+  let out = '';
+  for (const w of drawnProposals()) for (const e of (w.edges || []).filter(e => e.status === 'new' || e.status === 'removed')) {
+    const a = at(e.from), b = at(e.to); if (!a || !b) continue;
+    const dx = flat ? NODE_W / 2 : 0, dy = flat ? 35 : 0;
+    out += `<g class="pl-link ghostlink ${e.status}"><line x1="${a[0] + dx}" y1="${a[1] + dy}" x2="${b[0] + dx}" y2="${b[1] + dy}"/><text x="${(a[0] + b[0]) / 2 + dx}" y="${(a[1] + b[1]) / 2 + dy - 6}" text-anchor="middle" class="sub">${esc(e.name)} · ${e.status === 'new' ? 'new, waiting' : 'removed, waiting'}</text></g>`;
+  }
+  return out;
+}
+function ghostCells(L){
+  // a waiting proposal's new entities land where Accept would put them: free cells near their area
+  const taken = new Set(Object.values(L.cells).map(c => c.join(','))), out = [];
+  const proposals = drawnProposals();
+  for (const w of proposals) {
+    for (const n of (w.nodes || []).filter(n => n.status === 'new' && !L.cells[n.name])) {
+      const f = L.frames.find(x => x.name === n.domain) || L.frames[0];
+      const c0 = f ? [f.box[0] - f.minU + 0, f.box[1] - f.minV] : [0, 0];
+      const center = f ? [f.center[0], f.center[1]] : c0;
+      let cell = null; for (const [du, dv] of spiral(400)) { const c = [center[0] + du, center[1] + dv]; if (!taken.has(c.join(','))) { cell = c; break; } }
+      taken.add(cell.join(',')); out.push({ w, n, cell });
+    }
+  }
+  return out;
+}
+function drawPlane(keepCam){
+  const host = $('pl-stage'); if (!host || !PL) return;
+  ensureGlyphs(); prefs();
+  const L0 = planeLayout(), S = shownEntities(); lastLevel = S.lvl;
+  const L = S.cells ? { ...L0, cells: S.cells } : L0;
+  const r0 = viewRect(); lastViewKey = S.lvl === 'view' ? [r0.x0, r0.y0].map(n => Math.round(n / 300)).join(',') : '';
+  const ghosts = ghostCells(L);
+  const cells = { ...L.cells }; ghosts.forEach(g => { cells['ghost:' + g.n.name] = g.cell; });
+  const empty = !PL.entities.length;
+  if (empty) cells['__first'] = [0, 0];
+  if (PL.entities.length === 1 && !pl.flat) cells['__next'] = [1, 0];
+  const shown = new Set(S.list.map(e => e.name));
+  const fitCells = PL.entities.length > 60 && S.lvl !== 'areas' ? Object.fromEntries(Object.entries(cells).filter(([n]) => shown.has(n) || n.startsWith('ghost:')).concat(S.folds.filter(f => f.cell).map(f => ['fold:' + f.area, f.cell]))) : cells;
+  const B0 = planeBounds(Object.keys(fitCells).length ? fitCells : cells);
+  const sel = pl.sel, selEnt = sel && sel.startsWith('e:') ? sel.slice(2) : null;
+  const linked = new Set(); if (selEnt) { linked.add(selEnt); PL.links.forEach(l => { if (l.from === selEnt) linked.add(l.to); if (l.to === selEnt) linked.add(l.from); }); }
+  const dim = (n) => selEnt && !linked.has(n) ? ' dim' : '';
+  const filt = (e) => pl.filter && e.light !== pl.filter ? ' dim' : '';
+  let svg = '';
+  const keys = [];
+  if (pl.flat) svg = drawFlat(L, S, ghosts, B0, shown, dim, filt, keys);
+  else svg = drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty);
+  pl.drawnKeys = keys;
+  host.innerHTML = `<svg id="pl-svg" class="pl-svg${pl.flat ? ' flat' : ''}" role="group" aria-label="${esc(planeAria())}" tabindex="-1"><rect class="pl-bg" x="-100000" y="-100000" width="200000" height="200000" fill="transparent"/><g id="pl-cam">${svg}</g></svg>`;
+  if (!keepCam || !pl.cam || !pl.moved) fitCam(pl.flat ? flatBounds(L, B0) : { x0: B0.x0, x1: B0.x1, y0: B0.y0 - 190, y1: B0.y1 + 170 }); else applyCam();
+  wirePlane();
+  if (!pl.focus || !keys.includes(pl.focus)) pl.focus = keys.includes(pl.sel) ? pl.sel : keys[0] || null;
+  rovingFocus(false);
+  planeBar(); planeAside();
+  if (pl.list || phone()) planeList();
+}
+function planeAria(){ const c = PL.counts; const look = (c.lights.red || 0) + (c.lights.amber || 0); return `${PL.space.name}: ${plural(c.entities, 'entity', 'entities')}, ${plural(c.metrics, 'metric')}, ${plural(c.sources, 'source')}, ${plural(c.agents, 'agent')}; ${look ? plural(look, 'needs', 'need') + ' a look' : 'nothing needs a look'}`.replace(/(\d+) needs?/, (m, n) => n + (n === '1' ? ' needs' : ' need')); }
+function drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty){
+  let back = '', linksSvg = '', tiles = '', between = '', tiers = '';
+  // the plane, a rhombus around every cell, with the page's dot grid
+  const cs = Object.values({ ...L.cells, ...Object.fromEntries(ghosts.map(g => ['g' + g.n.name, g.cell])) });
+  if (empty) cs.push([0, 0]); if (PL.entities.length === 1) cs.push([1, 0]);
+  const us = cs.map(c => c[0]), vs = cs.map(c => c[1]);
+  const [u0, u1, v0, v1] = [Math.min(...us) - 1, Math.max(...us) + 1, Math.min(...vs) - 1, Math.max(...vs) + 1];
+  const P = (u, v) => proj(u, v).map(n => n.toFixed(1)).join(',');
+  back += `<polygon class="pl-plane" points="${P(u0 - .5, v0 - .5)} ${P(u1 + .5, v0 - .5)} ${P(u1 + .5, v1 + .5)} ${P(u0 - .5, v1 + .5)}"/><polygon points="${P(u0 - .5, v0 - .5)} ${P(u1 + .5, v0 - .5)} ${P(u1 + .5, v1 + .5)} ${P(u0 - .5, v1 + .5)}" fill="url(#pl-dots)" opacity=".8"/>`;
+  // area names on the plane, in their colour
+  if (L.frames.length > 1 || (L.frames[0] && L.frames[0].name !== 'Other')) for (const f of L.frames) { const bx = S.cells && f.cbox ? f.cbox : f.box; const [x, y] = proj(bx[0] - .6, bx[1] - .6); back += `<text class="pl-area" x="${x}" y="${y}" fill="${domainColor(f.name)}">${esc(f.name)}</text>`; }
+  if (S.lvl === 'areas') {
+    for (const f of L.frames) {
+      const bx = f.cbox || f.box; const a = PL.areas.find(x => x.name === f.name) || { entities: 0, lights: {} }; const [x, y] = proj((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2); const key = 'area:' + f.name; keys.push(key);
+      const top = PL.entities.filter(e => e.area === f.name).slice(0, 3).map(e => e.icon);
+      tiles += `<g class="pl-item pl-areatile" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${f.name}: ${plural(a.entities, 'entity', 'entities')}, ${a.lights.red || 0} wrong, ${a.lights.amber || 0} to look at`)}" transform="translate(${x},${y})"><polygon points="0,-60 120,0 0,60 -120,0" class="top"/><polyline points="-120,0 0,-60 120,0" fill="none" stroke="${domainColor(f.name)}" stroke-width="4"/>${top.map((ic, i) => `<use href="#g-${ic}" x="${-46 + i * 32}" y="-30" width="28" height="28" style="color:${domainColor(f.name)}"/>`).join('')}<text y="18" text-anchor="middle" class="lbl big">${esc(f.name)}</text><text y="36" text-anchor="middle" class="sub">${esc(plural(a.entities, 'entity', 'entities'))}${a.lights.red ? ' · ✗ ' + a.lights.red : ''}${a.lights.amber ? ' · ! ' + a.lights.amber : ''}</text></g>`;
+    }
+  }
+  const pos = (n) => { const c = L.cells[n]; return c ? proj(c[0], c[1]) : null; };
+  // links on the plane
+  if (S.lvl !== 'areas') for (const l of PL.links) {
+    const a = pos(l.from); if (!a || !shown.has(l.from)) continue;
+    if (l.missing) { linksSvg += `<g class="pl-link missing"><line x1="${a[0]}" y1="${a[1]}" x2="${a[0] + 70}" y2="${a[1] + 40}"/><text x="${a[0] + 74}" y="${a[1] + 50}" class="sub warnc">missing: ${esc(l.to)}</text></g>`; continue; }
+    const b = pos(l.to); if (!b || !shown.has(l.to)) continue;
+    const on = pl.sel === 'e:' + l.from || pl.sel === 'e:' + l.to;
+    linksSvg += `<g class="pl-link${on ? ' on' : ''}${pl.sel && !on && pl.sel.startsWith('e:') ? ' dim' : ''}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><title>${esc(`${l.from} ${l.name} ${l.to} · ${l.cardinality || ''}`)}</title>${on ? `<text x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 6}" text-anchor="middle" class="sub ${l.described ? '' : 'warnc'}">${esc(l.name)}${l.described ? '' : ' · no sentence'}</text>` : ''}</g>`;
+  }
+  linksSvg += ghostLinks(pos, ghosts, false);
+  // tiles
+  const tile = (e) => {
+    const p = pos(e.name); if (!p) return '';
+    const key = 'e:' + e.name; keys.push(key);
+    const col = domainColor(e.area), tok = [e.metrics.length ? `Σ${e.metrics.length}` : '', e.guardrails ? `⛉${e.guardrails}` : '', e.actions ? `ϟ${e.actions}` : ''].filter(Boolean).join('  ');
+    const w = (PL.waiting || []).find(x => x.drawn && (x.nodes || []).some(n => n.name === e.name && n.status !== 'same' && n.status !== 'new') && (pl.waiting === 'all' || pl.waiting === x.id));
+    const ov = pl.overlay && (pl.overlay.nodes || []).find(n => n.name === e.name && n.status !== 'same');
+    const st = ov ? ov.status : w ? (w.nodes.find(n => n.name === e.name) || {}).status : '';
+    const ring = st === 'changed' ? '<polygon points="0,-44 88,0 0,44 -88,0" class="pl-ring amber"/>' : st === 'removed' ? '<polygon points="0,-44 88,0 0,44 -88,0" class="pl-ring red"/>' : '';
+    const close = pl.cam && pl.cam.k >= 3 && pl.sel === key;
+    return `<g class="pl-item tile${pl.sel === key ? ' sel' : ''}${dim(e.name)}${filt(e)}${st === 'removed' ? ' struck' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(ariaFor(e) + (st ? ` A waiting proposal would ${st === 'removed' ? 'remove' : 'change'} it.` : ''))}" transform="translate(${p[0]},${p[1]})">${ring}<g class="lift"><polygon points="-70,0 0,35 0,44 -70,9" class="side-l"/><polygon points="70,0 0,35 0,44 70,9" class="side-r"/><polygon points="0,-35 70,0 0,35 -70,0" class="top"/><polyline points="-70,0 0,-35 70,0" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round"/><use href="#g-${esc(e.icon)}" x="-15" y="-24" width="30" height="30" style="color:${col}"/>${badgeSvg(e.light, 44, -26)}${st === 'removed' ? badgeSvg('red', 44, -26) : ''}${close ? `<text y="14" text-anchor="middle" class="sub">${esc(plural(e.fields, 'field'))} · key ${esc(e.key || '—')}</text>` : ''}</g><text y="62" text-anchor="middle" class="lbl">${esc(cutTo(e.label, 22))}</text>${e.same_label ? `<text y="76" text-anchor="middle" class="sub mono">${esc(e.name)}</text>` : ''}${tok ? `<text y="${e.same_label ? 90 : 77}" text-anchor="middle" class="tok">${esc(tok)}</text>` : ''}${!e.has_data ? `<g transform="translate(0,${tok ? 94 : 80})"><rect x="-36" y="-10" width="72" height="16" rx="8" class="chipbg"/><text y="2" text-anchor="middle" class="sub">no data yet</text></g>` : ''}${close ? `<g class="pl-open" transform="translate(0,${tok ? 112 : 98})"><rect x="-62" y="-12" width="124" height="22" rx="11"/><text y="3" text-anchor="middle">Open ${esc(cutTo(e.label, 12))} ›</text></g>` : ''}</g>`;
+  };
+  for (const e of S.list.slice().sort((a, b) => { const pa = pos(a.name) || [0, 0], pb = pos(b.name) || [0, 0]; return pa[1] - pb[1]; })) tiles += tile(e);
+  for (const f of S.folds) {
+    const p = f.here ? [viewRect().x0 + viewRect().w / pl.cam.k / 2, viewRect().y1 - 60 / pl.cam.k] : proj(f.cell[0], f.cell[1]); const key = 'fold:' + f.area; keys.push(key);
+    tiles += `<g class="pl-item fold" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${f.n} more entities${f.area ? ' in ' + f.area : ' here'}: zoom in to see them`)}" transform="translate(${p[0]},${p[1]})"><polygon points="0,-30 60,0 0,30 -60,0" class="top"/><text y="5" text-anchor="middle" class="lbl">+${f.n} more${f.here ? ' here' : ''}</text></g>`;
+  }
+  // ghosts: what waiting proposals would add
+  for (const g of ghosts) {
+    const p = proj(g.cell[0], g.cell[1]), key = 'g:' + g.w.id + ':' + g.n.name; keys.push(key);
+    tiles += `<g class="pl-item ghost${pl.sel === key ? ' sel' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${labelOf(g.n.name)}: new, waiting for review from ${g.w.agent || 'an agent'}`)}" transform="translate(${p[0]},${p[1]})"><polygon points="0,-35 70,0 0,35 -70,0" class="top"/>${badgeSvg('amber', 44, -26, g.w.monogram || 'A')}<text y="62" text-anchor="middle" class="lbl">${esc(cutTo(labelOf(g.n.name), 22))}</text><text y="77" text-anchor="middle" class="sub">waiting</text></g>`;
+  }
+  if (empty) { keys.push('first'); tiles += `<g class="pl-item ghost first" data-key="first" role="button" tabindex="-1" aria-label="Your first entity: add one" transform="translate(0,0)"><polygon points="0,-35 70,0 0,35 -70,0" class="top"/><use href="#g-plus" x="-12" y="-14" width="24" height="24" style="color:#8e8e96"/><text y="62" text-anchor="middle" class="lbl">Your first entity</text></g>`; }
+  if (PL.entities.length === 1 && S.lvl === 'all') { const a = pos(PL.entities[0].name), b = proj(1, 0); tiles = `<g class="pl-next" aria-hidden="true"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><polygon points="${b[0]},${b[1] - 35} ${b[0] + 70},${b[1]} ${b[0]},${b[1] + 35} ${b[0] - 70},${b[1]}"/><text x="${b[0]}" y="${b[1] + 62}" text-anchor="middle" class="sub">your next entity</text><text x="${b[0]}" y="${b[1] - 44}" text-anchor="middle" class="sub">links show here</text></g>` + tiles; }
+  // the tiers: agents above, sources below, chips spaced so none overlap
+  const top = B0.y0 - 120, bottom = B0.y1 + 90;
+  const spread = (items, y, w) => { items.sort((a, b) => a.x - b.x); let last = -Infinity; items.forEach(it => { it.x = Math.max(it.x, last + w); last = it.x; it.y = y; }); const mid = (B0.x0 + B0.x1) / 2; const span = items.length ? items[items.length - 1].x - items[0].x : 0; const shift = items.length && items.every(it => it.fixed === false) ? mid - (items[0].x + span / 2) : 0; items.forEach(it => { it.x += shift; }); return items; };
+  const width = B0.x1 - B0.x0;
+  const ags = spread(PL.agents.slice(0, 12).map((a, i, all) => ({ a, x: B0.x0 + (i + .5) * width / Math.max(1, all.length), fixed: false })), top, 190);
+  const srcs = spread(PL.sources.slice(0, 12).map(s => { const xs = s.entities.map(n => pos(n)).filter(Boolean).map(p => p[0]); return { s, x: xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : (B0.x0 + B0.x1) / 2, fixed: true }; }), bottom, 200);
+  tiers += `<g class="pl-tier"><rect x="${Math.min(B0.x0, ...ags.map(a => a.x - 100)) - 40}" y="${top - 34}" width="${Math.max(width, ...ags.map(a => a.x + 100 - B0.x0)) + 80}" height="68" rx="14"/><text x="${Math.min(B0.x0, ...ags.map(a => a.x - 100)) - 24}" y="${top - 16}" class="pl-tierlbl">AGENTS</text></g>`;
+  tiers += `<g class="pl-tier"><rect x="${Math.min(B0.x0, ...srcs.map(a => a.x - 100)) - 40}" y="${bottom - 34}" width="${Math.max(width, ...srcs.map(a => a.x + 100 - B0.x0)) + 80}" height="68" rx="14"/><text x="${Math.min(B0.x0, ...srcs.map(a => a.x - 100)) - 24}" y="${bottom - 16}" class="pl-tierlbl">SOURCES</text></g>`;
+  if (!PL.agents.length) tiers += `<text x="${(B0.x0 + B0.x1) / 2}" y="${top + 5}" text-anchor="middle" class="sub">No agent has connected yet · Connect under Agents</text>`;
+  if (!PL.sources.length) tiers += `<text x="${(B0.x0 + B0.x1) / 2}" y="${bottom + 5}" text-anchor="middle" class="sub">No source yet</text>`;
+  for (const it of ags) {
+    const a = it.a, key = 'a:' + a.id; keys.push(key);
+    const sub = [a.seen === 'connection' ? usedAgo(a.last_used) || 'not used yet' : 'seen in activity', a.writes === 'direct' ? 'goes straight in' : a.seen === 'connection' ? 'waits for you' : ''].filter(Boolean).join(' · ');
+    tiers += `<g class="pl-item chip${pl.sel === key ? ' sel' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${a.name} (${a.seen === 'connection' ? 'connection' : 'seen in activity'}), ${sub}${a.waiting ? `, ${a.waiting} waiting for review` : ''}`)}" transform="translate(${it.x},${it.y})"><circle r="15" class="mono"/><text y="5" text-anchor="middle" class="monot">${esc(a.monogram)}</text>${a.waiting ? badgeSvg('amber', 12, -12) : ''}<text x="22" y="-2" class="lbl">${esc(cutTo(a.name, 22))}</text><text x="22" y="13" class="sub">${esc(sub)}</text></g>`;
+    for (const rr of (a.recent || [])) { const p = pos(rr.entity); if (!p || !shown.has(rr.entity)) continue; between += `<g class="pl-between${pl.sel === key || pl.sel === 'e:' + rr.entity ? ' on' : ''}"><line x1="${it.x}" y1="${it.y + 16}" x2="${p[0]}" y2="${p[1] - 36}"/><title>${esc(`${a.name} ${rr.how} ${rr.entity}`)}</title></g>`; }
+  }
+  if (PL.agents.length > 12) tiers += `<text x="${ags[ags.length - 1].x + 120}" y="${top + 4}" class="sub">+${PL.agents.length - 12} more</text>`;
+  for (const it of srcs) {
+    const s = it.s, key = 's:' + s.name; keys.push(key);
+    tiers += `<g class="pl-item chip${pl.sel === key ? ' sel' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${s.name}, source: ${s.words}. ${s.entities.length ? 'Rows of ' + s.entities.join(', ') : 'Not used yet'}.${s.light !== 'none' ? ' ' + cap(LIGHTS[s.light][1]) + '.' : ''}`)}" transform="translate(${it.x},${it.y})"><circle r="15" class="srcc"/><use href="#g-${esc(s.icon)}" x="-10" y="-10" width="20" height="20" style="color:#55555e"/>${badgeSvg(s.light, 12, -12)}<text x="22" y="-2" class="lbl">${esc(cutTo(s.name, 22))}</text><text x="22" y="13" class="sub">${esc(s.entities.length ? s.words : 'not used yet')}</text></g>`;
+    for (const n of s.entities) { const p = pos(n); if (!p || !shown.has(n)) continue; between += `<g class="pl-between${pl.sel === key || pl.sel === 'e:' + n ? ' on' : ''}"><line x1="${it.x}" y1="${it.y - 16}" x2="${p[0]}" y2="${p[1] + 44}"/><title>rows come from ${esc(s.name)}</title></g>`; }
+  }
+  const loose = PL.metrics.filter(m => !m.entities.length);
+  if (loose.length) { const key = 'loose'; keys.push(key); const x = (srcs.length ? srcs[srcs.length - 1].x + 230 : (B0.x0 + B0.x1) / 2); tiers += `<g class="pl-item chip" data-key="loose" role="button" tabindex="-1" aria-label="${esc(plural(loose.length, 'metric') + ' not tied to an entity')}" transform="translate(${x},${bottom})"><text x="0" y="5" class="lbl">Σ ${esc(plural(loose.length, 'metric') + ' not tied to an entity')}</text></g>`; }
+  return back + between + linksSvg + tiers + tiles;
+}
+// --- the Map: flat, opened up, three lanes: sources → entities ← metrics ---
+const NODE_W = 230;
+function usedFields(name){ const out = new Set(); PL.metrics.forEach(m => { if (m.entities.includes(name)) (m.uses || []).forEach(f => out.add(f)); }); return out; }
+// an open node lists the first 12 fields, and every field a metric uses wherever it sits
+function shownFields(e){ const d = DC[e.name]; if (!d || !d.properties) return null; if (pl.all[e.name]) return d.properties; const used = usedFields(e.name); return d.properties.filter((f, i) => i < 12 || used.has(f.name)); }
+function nodeH(e){ if (!pl.open[e.name]) return 70; const d = DC[e.name], sf = shownFields(e); const rows = sf ? sf.length : 3; return Math.min(70 + 42 + rows * 23 + (d && d.properties && d.properties.length > rows ? 24 : 0) + (pl.all[e.name] && d && d.properties.length > 12 ? 24 : 0), 460); }
+function flatBounds(L, B0){ return { x0: B0.x0 - 360, x1: B0.x1 + 420, y0: B0.y0 - 20, y1: B0.y1 + 60 }; }
+const typeWordJs = (p) => { const u = (p.unit || '').trim(); const t = p.type || p.kind || ''; if (t === 'string') return 'text'; if (t === 'integer') return u ? `whole number (${u})` : 'whole number'; if (t === 'number') return /^[A-Z]{3}$|^[$€£¥₹]$/.test(u) ? `money (${u})` : u ? `number (${u})` : 'number'; if (t === 'boolean') return 'yes / no'; if (t === 'enum') return 'one of ' + (p.values || []).slice(0, 4).join(', '); return t; };
+function drawFlat(L, S, ghosts, B0, shown, dim, filt, keys){
+  const pos = (n) => { const c = L.cells[n]; return c ? proj(c[0], c[1]) : null; };
+  let nodes = '', top = '', arrows = '', lanes = '';
+  const xs = S.list.map(e => pos(e.name)).filter(Boolean).map(p => p[0]); const minX = Math.min(0, ...xs), maxX = Math.max(0, ...xs);
+  const fieldY = (e, f) => { const p = pos(e.name); if (!p) return null; if (!pl.open[e.name]) return p[1] + 30; const sf = shownFields(e) || []; const i = sf.findIndex(x => x.name === f); if (i < 0) return p[1] + 30; return p[1] + 70 + 42 + i * 23 + 11; };
+  // links between entities
+  if (pl.show.links) for (const l of PL.links) {
+    const a = pos(l.from); if (!a || !shown.has(l.from)) continue;
+    const b = l.missing ? [a[0] + NODE_W + 60, a[1] + 60] : pos(l.to); if (!b || (!l.missing && !shown.has(l.to))) continue;
+    const on = pl.sel === 'e:' + l.from || pl.sel === 'e:' + l.to;
+    const ax = a[0] + NODE_W / 2, ay = a[1] + 35, bx = b[0] + NODE_W / 2, by = b[1] + 35;
+    const self = l.from === l.to;
+    const d = self ? `M${a[0] + NODE_W} ${ay - 10} c 60 -40 60 60 0 20` : `M${ax} ${ay} L${bx} ${by}`;
+    arrows += `<g class="pl-link${on ? ' on' : ''}${pl.sel && pl.sel.startsWith('e:') && !on ? ' dim' : ''}${l.missing ? ' missing' : ''}"><path d="${d}" fill="none" marker-end="url(#${on ? 'pl-arrow-on' : 'pl-arrow'})"/><text x="${self ? a[0] + NODE_W + 50 : (ax + bx) / 2}" y="${self ? ay : (ay + by) / 2 - 6}" text-anchor="middle" class="sub ${l.described ? '' : 'warnc'}">${esc(l.missing ? 'missing: ' + l.to : l.name)}${l.cardinality ? ' · ' + esc(l.cardinality) : ''}${l.described ? '' : ' · no sentence'}</text></g>`;
+  }
+  arrows += ghostLinks(pos, ghosts, true);
+  // entity nodes, as HTML inside the drawing so field lists wrap and inputs work
+  const node = (e) => {
+    const p = pos(e.name); if (!p) return;
+    const key = 'e:' + e.name; keys.push(key);
+    const open = !!pl.open[e.name], h = nodeH(e), d = DC[e.name];
+    const usedBy = {}; PL.metrics.forEach(m => (m.uses_how || []).forEach(u => { if (m.entities.includes(e.name)) usedBy[u.field] = (usedBy[u.field] || []).concat(m.label); }));
+    let body = '';
+    if (open) {
+      const props = d && d.properties ? d.properties : null;
+      const list = shownFields(e) || [];
+      body = `<div class="mn-desc">${esc(e.description || 'No description yet.')}</div><div class="mn-fields">${props ? list.map(f => `<div class="mn-f"><span class="k">${f.key ? '★' : ''}</span><span class="mono n">${esc(f.name)}</span><span class="t">${f.description ? esc(typeWordJs(f)) : (PL.space.editable && !pl.overlay ? `<input class="mn-in" aria-label="${esc('Plain words for ' + f.name)}" placeholder="Not described" onkeydown="if(event.key==='Enter'){mapDescribe(${jq(e.name)},${jq(f.name)},this.value)}" onclick="event.stopPropagation()">` : '<span class="warnc">Not described</span>')}</span><span class="u" title="${esc(usedBy[f.name] ? 'used by ' + usedBy[f.name].join(', ') : '')}">${usedBy[f.name] ? 'Σ' : ''}</span></div>`).join('') : '<div class="hint">Loading fields…</div>'}${props && props.length > list.length ? `<button type="button" class="lnk mn-more" onclick="event.stopPropagation();pl.all[${jq(e.name)}]=true;drawPlane(true)">+ ${props.length - list.length} more fields</button>` : (pl.all[e.name] && props && props.length > 12 ? `<button type="button" class="lnk mn-more" onclick="event.stopPropagation();pl.all[${jq(e.name)}]=false;drawPlane(true)">Show fewer</button>` : '')}</div>`;
+    }
+    const srcChip = e.source ? `<span class="grade ${e.source.grade === 'checked' ? 'checked' : e.source.grade === 'accepted' ? 'accepted' : e.source.grade === 'proposed' ? 'proposed' : e.source.grade === 'changed' ? 'changed' : ''}">${esc(e.source.grade === 'ungraded' ? 'source ungraded' : 'source ' + e.source.grade)}</span>` : '<span class="grade">no data yet</span>';
+    const html = `<div class="mn${pl.sel === key ? ' sel' : ''}${open ? ' open' : ''}" style="height:${h}px;border-top-color:${domainColor(e.area)}"><div class="mn-h"><svg width="20" height="20" style="color:${domainColor(e.area)}" aria-hidden="true"><use href="#g-${esc(e.icon)}"/></svg><b>${esc(cutTo(e.label, 24))}</b>${e.light !== 'none' ? `<span class="lb ${e.light}" aria-hidden="true">${LIGHTS[e.light][0]}</span>` : ''}<button type="button" class="mn-x" tabindex="-1" aria-label="${open ? 'Fold' : 'Open'} ${esc(e.label)}" onclick="event.stopPropagation();toggleNode(${jq(e.name)})">${open ? '▴' : '▾'}</button></div><div class="mn-s">${esc(plural(e.fields, 'field'))}${e.same_label ? ' · <span class="mono">' + esc(e.name) + '</span>' : ''} ${srcChip}</div>${body}</div>`;
+    const svgNode = `<g class="pl-item node${dim(e.name)}${filt(e)}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(ariaFor(e))}" transform="translate(${p[0]},${p[1]})"><foreignObject width="${NODE_W}" height="${h}">${html}</foreignObject></g>`;
+    if (open) top += svgNode; else nodes += svgNode;
+  };
+  if (pl.show.entities) S.list.forEach(node);
+  for (const g of ghosts) { const p = proj(g.cell[0], g.cell[1]), key = 'g:' + g.w.id + ':' + g.n.name; keys.push(key); nodes += `<g class="pl-item node ghostn" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${labelOf(g.n.name)}: new, waiting for review`)}" transform="translate(${p[0]},${p[1]})"><foreignObject width="${NODE_W}" height="70"><div class="mn ghost"><div class="mn-h"><span class="lb amber">${esc(g.w.monogram || 'A')}</span><b>${esc(cutTo(labelOf(g.n.name), 24))}</b></div><div class="mn-s">new · ${esc(plural(g.n.fields || 0, 'field'))} · waiting</div></div></foreignObject></g>`; }
+  // the sources lane on the left, each beside the first entity it serves
+  const stack = (items, h) => { items.sort((a, b) => a.y - b.y); let last = -Infinity; items.forEach(it => { it.y = Math.max(it.y, last + h + 14); last = it.y; }); return items; };
+  if (pl.show.sources) {
+    const sx = minX - 330;
+    const items = stack(PL.sources.map(s => { const ys = s.entities.map(n => pos(n)).filter(Boolean).map(p => p[1]); return { s, y: ys.length ? Math.min(...ys) : B0.y1 }; }), 76);
+    lanes += items.length ? `<text x="${sx}" y="${Math.min(...items.map(i => i.y)) - 12}" class="pl-tierlbl">SOURCES</text>` : '';
+    for (const it of items) {
+      const s = it.s, key = 's:' + s.name; keys.push(key);
+      lanes += `<g class="pl-item node" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${s.name}, source: ${s.words}`)}" transform="translate(${sx},${it.y})"><foreignObject width="200" height="76"><div class="mn src${pl.sel === key ? ' sel' : ''}"><div class="mn-h"><svg width="18" height="18" aria-hidden="true" style="color:#55555e"><use href="#g-${esc(s.icon)}"/></svg><b>${esc(cutTo(s.name, 20))}</b>${s.light !== 'none' ? `<span class="lb ${s.light}">${LIGHTS[s.light][0]}</span>` : ''}</div><div class="mn-s">${esc(s.words)}${s.entities.length ? '' : ' · not used yet'}</div></div></foreignObject></g>`;
+      for (const n of s.entities) { const p = pos(n); if (!p || !shown.has(n) || !pl.show.entities) continue; const on = pl.sel === key || pl.sel === 'e:' + n; arrows += `<g class="pl-arrow${on ? ' on' : ''}"><path d="M${sx + 200} ${it.y + 38} C ${sx + 260} ${it.y + 38}, ${p[0] - 60} ${p[1] + 28}, ${p[0]} ${p[1] + 28}" fill="none" marker-end="url(#${on ? 'pl-arrow-on' : 'pl-arrow'})"/>${on ? `<text x="${(sx + 200 + p[0]) / 2}" y="${(it.y + 38 + p[1] + 28) / 2 - 6}" text-anchor="middle" class="sub">rows come from</text>` : ''}</g>`; }
+    }
+  }
+  // the metrics lane on the right, each beside the entity it counts, arrows to the fields it uses
+  if (pl.show.metrics) {
+    const mx = maxX + NODE_W + 140;
+    const tied = PL.metrics.filter(m => m.entities.length), loose = PL.metrics.filter(m => !m.entities.length);
+    const items = stack(tied.map(m => { const ys = m.entities.map(n => pos(n)).filter(Boolean).map(p => p[1]); return { m, y: ys.length ? Math.min(...ys) : B0.y1 }; }), 104);
+    const shelfY = Math.max(B0.y1, ...items.map(i => i.y + 120));
+    loose.forEach((m, i) => items.push({ m, y: shelfY + 30 + i * 118, loose: true }));
+    lanes += `${items.length ? `<text x="${mx}" y="${Math.min(...items.map(i => i.y)) - 12}" class="pl-tierlbl">METRICS</text>` : ''}${loose.length ? `<text x="${mx}" y="${shelfY + 18}" class="sub">Metrics not tied to one entity</text>` : ''}`;
+    for (const it of items) {
+      const m = it.m, key = 'm:' + m.name; keys.push(key);
+      lanes += `<g class="pl-item node" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${m.label}, metric: ${m.sentence || 'counted by its own recipe'}. ${m.light !== 'none' ? cap(LIGHTS[m.light][1]) + '.' : ''}`)}" transform="translate(${mx},${it.y})"><foreignObject width="270" height="104"><div class="mn met${pl.sel === key ? ' sel' : ''}"><div class="mn-h"><span class="sig" aria-hidden="true">Σ</span><b>${esc(cutTo(m.label, 26))}</b>${m.light !== 'none' ? `<span class="lb ${m.light}">${LIGHTS[m.light][0]}</span>` : ''}</div><div class="mn-d">${esc(m.sentence ? m.sentence + '.' : 'Counted by its own recipe.')}</div><div class="mn-s">Owner: ${esc(m.owner ? owner(m.owner) : 'no one yet')}</div></div></foreignObject></g>`;
+      if (!pl.show.entities) continue;
+      for (const n of m.entities) {
+        const e = entOf(n), p = pos(n); if (!e || !p || !shown.has(n)) continue;
+        const on = pl.sel === key || pl.sel === 'e:' + n;
+        const targets = pl.open[n] ? (m.uses_how || []) : [{ field: '', how: (m.uses_how || []).map(u => u.how).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'counts' }];
+        for (const [ti, u] of targets.entries()) { const y = u.field ? fieldY(e, u.field) : p[1] + 30; arrows += `<g class="pl-arrow met${on ? ' on' : ''}"><path d="M${mx} ${it.y + 40} C ${mx - 50} ${it.y + 40}, ${p[0] + NODE_W + 50} ${y}, ${p[0] + NODE_W} ${y}" fill="none" marker-end="url(#${on ? 'pl-arrow-on' : 'pl-arrow'})"/>${on || pl.open[n] ? `<text x="${p[0] + NODE_W + 14}" y="${y - 5}" class="sub">${esc(u.how)}${u.field ? ' ' + esc(u.field) : ''}</text>` : ''}</g>`; }
+      }
+    }
+  }
+  return arrows + lanes + nodes + top;
+}
+async function toggleNode(name){ pl.open[name] = !pl.open[name]; if (pl.open[name] && !DC[name]) { drawPlane(true); await describe(name); } drawPlane(true); }
+async function mapDescribe(type, property, text){ if (!text.trim()) return; const r = await patch({ op: 'set_property_description', type, property, text }); if (r && r.written) { delete DC[type]; await loadPlane(true); await describe(type); drawPlane(true); } }
+// --- hit, focus, keys, drag ---
+function itemAt(key){ return document.querySelector(`#pl-svg [data-key="${CSS.escape(key)}"]`); }
+function rovingFocus(move){
+  document.querySelectorAll('#pl-svg .pl-item').forEach(el => el.setAttribute('tabindex', '-1'));
+  const el = pl.focus && itemAt(pl.focus); const svg = $('pl-svg');
+  if (el) { el.setAttribute('tabindex', '0'); if (move) el.focus({ preventScroll: true }); }
+  else if (svg) svg.setAttribute('tabindex', '0');
+}
+function centerOf(el){ const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }
+function nearest(dir){
+  const cur = pl.focus && itemAt(pl.focus); if (!cur) return null; const [cx, cy] = centerOf(cur); let best = null, bd = Infinity;
+  document.querySelectorAll('#pl-svg .pl-item').forEach(el => { if (el === cur) return; const [x, y] = centerOf(el), dx = x - cx, dy = y - cy; const ok = dir === 'ArrowRight' ? dx > 4 : dir === 'ArrowLeft' ? dx < -4 : dir === 'ArrowDown' ? dy > 4 : dy < -4; if (!ok) return; const along = dir === 'ArrowRight' || dir === 'ArrowLeft' ? Math.abs(dx) : Math.abs(dy), across = dir === 'ArrowRight' || dir === 'ArrowLeft' ? Math.abs(dy) : Math.abs(dx); const d = along + across * 2; if (d < bd) { bd = d; best = el; } });
+  return best ? best.getAttribute('data-key') : null;
+}
+function announce(t){ const el = $('pl-live'); if (el) el.textContent = t; }
+function selectItem(key, opts){
+  if (!key) return;
+  if (key.startsWith('area:')) { const f = planeLayout().frames.find(x => 'area:' + x.name === key); if (f) { const bx = f.cbox || f.box; const [x, y] = proj((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2); flyTo(x, y, 0.9); } return; }
+  if (key.startsWith('fold:')) { zoomBy(1.8); return; }
+  if (key === 'first') { go('entities'); return; }
+  pl.sel = key; pl.focus = key;
+  const label = key.startsWith('e:') ? (entOf(key.slice(2)) || {}).label : key.startsWith('m:') ? (metOf(key.slice(2)) || {}).label : key.startsWith('s:') ? key.slice(2) : key.startsWith('a:') ? (agOf(key.slice(2)) || {}).name : key.startsWith('g:') ? labelOf(key.split(':').slice(2).join(':')) : key;
+  announce(`${label || ''} selected`);
+  drawPlane(true);
+  if (opts && opts.fly) { const el = itemAt(key); if (el) { const t = el.getAttribute('transform') || ''; const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(t); if (m) flyTo(Number(m[1]) + (pl.flat ? NODE_W / 2 : 0), Number(m[2]), Math.max(pl.cam.k, 1.2)); } }
+  if (phone()) { const sh = $('pl-aside'); if (sh) sh.classList.add('up'); }
+  rovingFocus(true);
+}
+function openItem(key){
+  if (!key) return;
+  if (key.startsWith('e:')) go('entities', key.slice(2)); else if (key.startsWith('m:') || key === 'loose') go('logic'); else if (key.startsWith('s:')) go('sources'); else if (key.startsWith('a:')) go(agOf(key.slice(2)) && agOf(key.slice(2)).seen === 'connection' ? 'settings' : 'agents'); else if (key.startsWith('g:')) go('review', key.split(':')[1]);
+}
+function wirePlane(){
+  const svg = $('pl-svg'); if (!svg || svg.dataset.wired) return; svg.dataset.wired = '1';
+  svg.addEventListener('click', (ev) => { if (pl.dragged) { pl.dragged = false; return; } const it = ev.target.closest('.pl-item'); if (!it) { if (pl.sel) { pl.sel = null; drawPlane(true); } return; } if (ev.target.closest('.pl-open')) { openItem(it.dataset.key); return; } selectItem(it.dataset.key); });
+  svg.addEventListener('dblclick', (ev) => { const it = ev.target.closest('.pl-item'); if (!it) return; if (pl.flat && it.dataset.key.startsWith('e:')) toggleNode(it.dataset.key.slice(2)); else openItem(it.dataset.key); });
+  svg.addEventListener('focusin', (ev) => { const it = ev.target.closest('.pl-item'); if (it) pl.focus = it.dataset.key; });
+  svg.addEventListener('keydown', planeKeys);
+  svg.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = svg.getBoundingClientRect(); zoomBy(Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0022)), ev.clientX - r.left, ev.clientY - r.top); }, { passive: false });
+  // pan: drag the background with a mouse; on touch, two fingers, or press and hold first, so page scroll is never stolen
+  const pts = new Map(); let start = null, hold = null, pinch = null;
+  svg.addEventListener('pointerdown', (ev) => {
+    pts.set(ev.pointerId, [ev.clientX, ev.clientY]);
+    const it = ev.target.closest('.pl-item');
+    if (pl.flat && it && it.dataset.key.startsWith('e:') && ev.pointerType === 'mouse' && !ev.target.closest('input,button')) { pl.drag = { key: it.dataset.key, x: ev.clientX, y: ev.clientY, el: it, t0: it.getAttribute('transform') }; svg.setPointerCapture(ev.pointerId); return; }
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k: pl.cam.k }; start = null; return; }
+    if (it && ev.pointerType !== 'mouse') return;
+    start = { x: ev.clientX, y: ev.clientY, cx: pl.cam.x, cy: pl.cam.y, ok: ev.pointerType === 'mouse' && !it };
+    if (ev.pointerType !== 'mouse') hold = setTimeout(() => { if (start) { start.ok = true; svg.style.touchAction = 'none'; } }, 350);
+  });
+  svg.addEventListener('pointermove', (ev) => {
+    if (!pts.has(ev.pointerId)) return; pts.set(ev.pointerId, [ev.clientX, ev.clientY]);
+    if (pl.drag) { const dx = (ev.clientX - pl.drag.x) / pl.cam.k, dy = (ev.clientY - pl.drag.y) / pl.cam.k; if (Math.abs(dx) + Math.abs(dy) > 3) { pl.drag.moved = true; const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(pl.drag.t0); pl.drag.el.setAttribute('transform', `translate(${Number(m[1]) + dx},${Number(m[2]) + dy})`); pl.drag.at = [Number(m[1]) + dx, Number(m[2]) + dy]; } return; }
+    if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); const r = svg.getBoundingClientRect(); zoomBy((pinch.k * d / pinch.d) / pl.cam.k, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top); return; }
+    if (!start) return; const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
+    if (!start.ok) { if (Math.abs(dx) + Math.abs(dy) > 8) { clearTimeout(hold); start = null; } return; }
+    pl.cam.x = start.cx + dx; pl.cam.y = start.cy + dy; if (Math.abs(dx) + Math.abs(dy) > 3) pl.dragged = true; camChanged();
+  });
+  const end = (ev) => {
+    pts.delete(ev.pointerId); clearTimeout(hold); svg.style.touchAction = '';
+    if (pl.drag) { const d = pl.drag; pl.drag = null; if (d.moved && d.at) { dropNode(d.key.slice(2), d.at); pl.dragged = true; } return; }
+    if (pts.size < 2) pinch = null; if (!pts.size) start = null;
+  };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
+}
+function dropNode(name, at){
+  // a drop snaps to the nearest cell; a taken cell swaps the two
+  const L = planeLayout(); const u = Math.round(at[0] / 260), v = Math.round(at[1] / 132);
+  const from = L.cells[name]; const other = Object.keys(L.cells).find(n => n !== name && L.cells[n][0] === u && L.cells[n][1] === v);
+  pl.layout[name] = [u, v]; if (other && from) pl.layout[other] = from;
+  keep('lorefile-layout:' + planeKey(), pl.layout); LAY = null; drawPlane(true);
+  announce(`${labelOf(name)} moved${other ? ', swapped with ' + labelOf(other) : ''}`);
+}
+function planeKeys(ev){
+  if (ev.target.closest('input,textarea,select,button.lnk')) return;
+  const k = ev.key;
+  if (pl.moving) {
+    const L = planeLayout(), c = (pl.layout[pl.moving] || L.cells[pl.moving]).slice();
+    if (k === 'ArrowRight') c[0]++; else if (k === 'ArrowLeft') c[0]--; else if (k === 'ArrowDown') c[1]++; else if (k === 'ArrowUp') c[1]--;
+    else if (k === 'Enter' || k === 'Escape') { const n = pl.moving; pl.moving = null; announce(k === 'Enter' ? `${labelOf(n)} placed` : 'Move cancelled'); ev.preventDefault(); return; } else return;
+    ev.preventDefault(); dropNode(pl.moving, proj(c[0], c[1])); return;
+  }
+  if (k.startsWith('Arrow')) { const n = nearest(k); if (n) { pl.focus = n; rovingFocus(true); const el = itemAt(n); announce(el ? el.getAttribute('aria-label') : ''); } ev.preventDefault(); return; }
+  if (k === 'Enter' && ev.shiftKey) { openItem(pl.focus); ev.preventDefault(); return; }
+  if (k === 'Enter' || k === ' ') { selectItem(pl.focus); ev.preventDefault(); return; }
+  if (k === 'Escape') { pl.sel = null; drawPlane(true); rovingFocus(true); return; }
+  if (k === '+' || k === '=') { zoomBy(1.25); return; }
+  if (k === '-' || k === '_') { zoomBy(0.8); return; }
+  if (k === '0') { drawPlane(false); return; }
+  if (k === 'p' || k === 'P') { if (pl.focus && pl.focus.startsWith('e:')) togglePin(pl.focus.slice(2)); return; }
+  if ((k === 'm' || k === 'M') && pl.flat && pl.focus && pl.focus.startsWith('e:')) { pl.moving = pl.focus.slice(2); announce(`Moving ${labelOf(pl.moving)}: arrow keys, then Enter`); return; }
+}
+document.addEventListener('keydown', (ev) => {
+  if (!['home', 'map'].includes(route.screen) || ev.target.closest('input,textarea,select')) return;
+  if (ev.key === '/') { const f = $('pl-find'); if (f) { ev.preventDefault(); f.focus(); } }
+  else if (ev.key === 'l' || ev.key === 'L') { if (!ev.metaKey && !ev.ctrlKey) { pl.list = !pl.list; renderPlaneScreen(); } }
+  else if (ev.key === 'Escape' && pl.sel && !ev.target.closest('#pl-svg')) { pl.sel = null; drawPlane(true); }
+});
+function togglePin(name){ prefs(); if (pl.pins[name]) delete pl.pins[name]; else pl.pins[name] = 1; keep('lorefile-pins:' + planeKey(), pl.pins); announce(pl.pins[name] ? `${labelOf(name)} pinned in this browser` : `${labelOf(name)} unpinned`); drawPlane(true); }
+// --- search: names, labels and also-called words, without accents or case ---
+const fold = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+function planeFind(q){
+  pl.find = q; const f = fold(q.trim()); const out = [];
+  if (f) {
+    for (const e of PL.entities) { const words = [e.name, e.label, ...(e.also_called || [])]; const hit = words.find(w => fold(w).includes(f)); if (hit) out.push({ key: 'e:' + e.name, label: e.label, kind: 'entity', why: hit !== e.label && hit !== e.name ? `also called “${hit}”` : '' }); }
+    for (const m of PL.metrics) if (fold(m.name).includes(f) || fold(m.label).includes(f)) out.push({ key: m.entities[0] ? 'e:' + m.entities[0] : 'm:' + m.name, label: m.label, kind: 'metric', why: m.entities[0] ? 'on ' + labelOf(m.entities[0]) : '' });
+    for (const s of PL.sources) if (fold(s.name).includes(f)) out.push({ key: s.entities[0] ? 'e:' + s.entities[0] : 's:' + s.name, label: s.name, kind: 'source', why: s.entities[0] ? 'rows of ' + labelOf(s.entities[0]) : '' });
+  }
+  pl.hits = out.slice(0, 12);
+  const el = $('pl-hits'); if (el) el.innerHTML = pl.hits.length ? pl.hits.map((h, i) => `<button class="result" onclick="planeGo(${i})"><small>${esc(h.kind)}</small><span>${esc(h.label)}${h.why ? ` <span class="hint">${esc(h.why)}</span>` : ''}</span></button>`).join('') : (f ? '<div class="hint" style="padding:6px">No matches</div>' : '');
+}
+function planeGo(i){ const h = pl.hits[i || 0]; if (!h) return; pl.find = ''; const f = $('pl-find'); if (f) f.value = ''; const el = $('pl-hits'); if (el) el.innerHTML = ''; const n = h.key.startsWith('e:') ? h.key.slice(2) : null; if (n) { prefs(); pl.forceShow = n; } if (pl.flat && pl.area !== 'all' && n && entOf(n) && entOf(n).area !== pl.area) pl.area = 'all'; selectItem(h.key, { fly: true }); }
+// --- the bar, the legend, the card, the list ---
+function planeBar(){
+  const el = $('pl-bar'); if (!el || !PL) return;
+  const c = PL.counts, L = c.lights;
+  const btn = (l) => { const n = L[l] || 0; return `<button class="pl-lb ${l}${pl.filter === l ? ' on' : ''}" ${n ? '' : 'disabled'} aria-pressed="${pl.filter === l}" onclick="pl.filter=pl.filter===${jq(l)}?null:${jq(l)};drawPlane(true)" title="${esc(n ? 'Show only: ' + lightWords(l) : 'none')}"><span aria-hidden="true">${LIGHTS[l][0]}</span> ${n}<span class="sr"> ${esc(LIGHTS[l][1])}</span></button>`; };
+  const ws = (PL.waiting || []);
+  const byAgent = {}; ws.forEach(w => { byAgent[w.agent] = (byAgent[w.agent] || 0) + 1; });
+  const wctl = ws.length && !pl.overlay ? `<label class="hint">Waiting <select onchange="pl.waiting=this.value;drawPlane(true)"><option value="all" ${pl.waiting === 'all' ? 'selected' : ''}>${esc(Object.entries(byAgent).map(([a, n]) => `${a} (${n})`).join(' · '))}</option>${ws.map(w => `<option value="${esc(w.id)}" ${pl.waiting === w.id ? 'selected' : ''}>${esc((w.headline || w.id).slice(0, 60))}</option>`).join('')}<option value="none" ${pl.waiting === 'none' ? 'selected' : ''}>none</option></select></label>` : '';
+  const undrawn = ws.filter(w => !w.drawn).length;
+  const spaceBadge = PL.space.light !== 'none' ? ` <span class="lb ${PL.space.light}" title="${esc((PL.space.reasons || []).map(r => r.text).join('; '))}">${LIGHTS[PL.space.light][0]}</span>` : '';
+  el.innerHTML = `${pl.overlay ? `<div class="rv-bar" style="flex:1 1 100%">What this proposal would change: ${esc(pl.overlay.headline || '')} · read-only · <button type="button" class="lnk" onclick="go('review',${jq(pl.overlay.id)})">Back to the review</button></div>` : ''}<b>${esc(PL.space.name)}</b>${spaceBadge}<span class="hint">${esc(plural(c.entities, 'entity', 'entities'))} · ${esc(plural(c.metrics, 'metric'))} · ${esc(plural(c.sources, 'source'))} · ${esc(plural(c.agents, 'agent'))}</span><span class="pl-lights">${btn('red')}${btn('amber')}${btn('green')}</span>${wctl}${undrawn ? `<span class="hint">${plural(undrawn, 'waiting proposal')} can't be drawn: <button type="button" class="lnk" onclick="go('agents')">Review it</button></span>` : ''}${PL.waiting_more ? `<span class="hint">+${PL.waiting_more} more waiting</span>` : ''}${pl.failed ? `<span class="hint">couldn't refresh · <button type="button" class="lnk" onclick="loadPlane(true).then(drawPlane)">Try again</button></span>` : ''}<span style="flex:1"></span><span class="pl-find"><input id="pl-find" placeholder="Find… (/)" value="${esc(pl.find)}" aria-label="Find an entity, metric or source" oninput="planeFind(this.value)" onkeydown="if(event.key==='Enter'){planeGo(0)}else if(event.key==='Escape'){this.value='';planeFind('')}"><div id="pl-hits" class="pl-hits"></div></span><span class="pl-zoom"><button class="small" onclick="zoomBy(0.8)" aria-label="Zoom out">−</button><span id="pl-zoom" class="hint">${Math.round((pl.cam ? pl.cam.k : 1) * 100)}%</span><button class="small" onclick="zoomBy(1.25)" aria-label="Zoom in">+</button><button class="small" onclick="drawPlane(false)" title="Fit (0)">Fit</button></span>`;
+  if (pl.find) planeFind(pl.find);
+  const tools = $('pl-tools'); if (tools) tools.innerHTML = pl.flat && !pl.overlay ? `<span class="hint">Show</span>${['entities', 'metrics', 'sources', 'links'].map(k => `<label class="chk"><input type="checkbox" ${pl.show[k] ? 'checked' : ''} onchange="pl.show[${jq(k)}]=this.checked;drawPlane(true)"> ${cap(k)}</label>`).join('')}<label class="chk"><input type="checkbox" ${pl.onlyLook ? 'checked' : ''} onchange="pl.onlyLook=this.checked;drawPlane(true)"> Only what needs a look</label>${pl.onlyLook ? `<span class="hint">${PL.entities.filter(e => e.light !== 'red' && e.light !== 'amber').length} hidden</span>` : ''}<label class="hint">Area <select onchange="pl.area=this.value;LAY=null;drawPlane(false)"><option value="all">all</option>${PL.areas.map(a => `<option ${pl.area === a.name ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label><button class="small" onclick="pl.layout={};keep('lorefile-layout:'+planeKey(),{});LAY=null;drawPlane(false)">Reset layout</button><span class="hint">Drag a box to move it (or select it and press M).</span>` : '';
+}
+const legendHtml = () => `<details class="pl-legendbox" ${phone() ? '' : 'open'}><summary>What the colours mean</summary><div class="pl-legend"><span><span class="lb red">✗</span> wrong: agents may get wrong answers</span><span><span class="lb amber">!</span> look at it: a person should check</span><span><span class="lb green">✓</span> a person stands behind it</span><span><span class="lb none"></span> no badge: nothing to fix, nobody has graded it</span>${pl.flat || pl.overlay ? '<span><span class="ghostk"></span> dashed: waiting for review</span>' : ''}</div></details>`;
+function reasonLines(rs, editable){
+  return (rs || []).map(r => {
+    const fx = r.fix && editable ? inlineFix(r.fix) : '';
+    return `<div class="gline"><span class="gl-i ${r.light === 'red' ? 'bad' : r.light === 'amber' ? 'warn' : 'ok'}" aria-hidden="true">${LIGHTS[r.light] ? LIGHTS[r.light][0] : '·'}</span><span>${esc(cap(r.text))}${r.review ? ` <button class="small" onclick="go('review',${jq(r.review)})">Review</button>` : ''}${fx}</span></div>`;
+  }).join('');
+}
+function inlineFix(f){
+  const id = 'pf-' + (f.metric || f.type || '').replace(/[^\w-]/g, '_') + '-' + f.field;
+  const tm = f.op === 'set_metric' ? TR('metric', f.metric) : null, accepts = tm && (tm.grade === 'proposed' || !!tm.changed_since);
+  const label = f.field === 'owner' ? 'Who decides what it means?' : f.op === 'set_type_description' ? `What is one ${labelOf(f.type)}?` : 'What does it measure?';
+  return `<div class="row" style="margin-top:4px;gap:6px"><label class="sr" for="${id}">${esc(label)}</label><input id="${id}" placeholder="${esc(label)}" value="${esc(f.field === 'owner' ? ME() : '')}" style="flex:1 1 160px;min-width:0"><button class="small" onclick="planeFix(${jq(JSON.stringify(f))}, ${jq(id)})">Save</button>${accepts ? '<span class="hint">saving also accepts this metric as it is now</span>' : ''}</div>`;
+}
+async function planeFix(fj, id){
+  const f = JSON.parse(fj), v = ($(id) || {}).value || ''; if (!v.trim()) { note('Type it first.', true); return; }
+  const body = f.op === 'set_metric' ? { op: 'set_metric', metric: f.metric, [f.field]: v.trim() } : { op: 'set_type_description', type: f.type, description: v.trim() };
+  const r = await patch(body); if (r && r.written) { await loadPlane(true); drawPlane(true); }
+}
+function planeAside(){
+  const el = $('pl-aside'); if (!el || !PL) return;
+  const key = pl.sel; const editable = PL.space.editable && !pl.overlay;
+  let h = '';
+  const close = `<button class="small pl-close" onclick="pl.sel=null;drawPlane(true)" aria-label="Close the card">Close</button>`;
+  if (key && key.startsWith('e:')) {
+    const e = entOf(key.slice(2));
+    if (!e) h = `<div class="card"><b>${esc(labelOf(key.slice(2)))} is no longer in this space</b>${close}</div>`;
+    else {
+      const ms = e.metrics.map(metOf).filter(Boolean);
+      const fromWhere = {}; (e.reasons || []).forEach(r => { const k = r.from || 'itself'; (fromWhere[k] = fromWhere[k] || []).push(r); });
+      const waiting = (PL.waiting || []).filter(w => (w.nodes || []).some(n => n.name === e.name && n.status !== 'same'));
+      h = `<div class="pl-card"><div class="row" style="gap:8px"><svg width="22" height="22" style="color:${domainColor(e.area)}" aria-hidden="true"><use href="#g-${esc(e.icon)}"/></svg><h2 style="font-size:17px">${esc(e.label)}</h2>${e.same_label ? `<span class="mono hint">${esc(e.name)}</span>` : ''}<span style="margin-left:auto" class="lbw ${e.light}">${e.light !== 'none' ? `<span class="lb ${e.light}">${LIGHTS[e.light][0]}</span> ` : ''}${esc(e.light === 'none' ? 'nothing to fix' : LIGHTS[e.light][1])}</span></div>
+        <div class="hint">${esc(e.area)} · entity · ${esc(e.icon_why.startsWith('name: ') ? 'icon from the word ' + e.icon_why.slice(6) : e.icon_why.startsWith('source: ') ? 'icon from its source' : 'no word in its name gave an icon')}</div>
+        ${e.description ? `<div style="font-size:13.5px">${esc(e.description)}</div>` : `<div class="gline"><span class="gl-i warn">!</span><span>No description yet.${editable ? inlineFix({ op: 'set_type_description', type: e.name, field: 'description' }) : ''}</span></div>`}
+        <div class="hint">${esc(plural(e.fields, 'field'))}${e.key ? ' · key ' + esc(e.key) : ' · no key'}${e.units.length ? ' · ' + esc(e.units.map(u => /^[A-Z]{3}$/.test(u) ? 'money in ' + u : u).join(', ')) : ''}</div>
+        <div class="drow"><span class="hint">Source</span><span>${e.source ? `${esc(e.source.name)}: ${esc(srcWords(e.source.kind))}${O && TR('binding', e.name) ? gradeLine('binding', e.name) : ''}` : `No data yet ${PL.space.editable ? `<button class="small" onclick="ui.typeTab='data';go('entities',${jq(e.name)})">Bind a table</button>` : ''}`}</span></div>
+        <div class="drow"><span class="hint">Metrics</span><span>${ms.length ? ms.map(m => `<div><b>${esc(m.label)}</b>: ${esc(m.sentence ? m.sentence.charAt(0).toLowerCase() + m.sentence.slice(1) : 'counted by its own recipe')}${gradeLine('metric', m.name)}</div>`).join('') : 'none counts it yet'}</span></div>
+        <div class="drow"><span class="hint">Guardrails</span><span>${e.guardrails ? `${e.guardrails}: ${esc(e.guardrail_names.join(', '))}${e.guardrails > 3 ? '…' : ''}` : 'none yet'}</span></div>
+        ${e.actions ? `<div class="drow"><span class="hint">Actions</span><span>${e.actions}</span></div>` : ''}
+        ${e.also_called.length ? `<div class="drow"><span class="hint">Also called</span><span>${e.also_called.map(w => `<span class="chip">“${esc(w)}”</span>`).join('')}</span></div>` : ''}
+        ${(e.reasons || []).length ? `<h4 style="padding:0">Look at</h4>${Object.entries(fromWhere).map(([k, rs]) => `${k !== 'itself' ? `<div class="hint">From ${esc(k.startsWith('metric ') ? labelOf(k.slice(7)) : k)}</div>` : ''}${reasonLines(k !== 'itself' ? rs.map(r => ({ ...r, text: r.text.replace(/^[^:]+: /, '') })) : rs, editable)}`).join('')}` : ''}
+        ${waiting.length ? `<h4 style="padding:0">Waiting</h4>${waiting.map(w => `<div class="row"><span>${esc(w.headline || w.id)}</span><button class="small" onclick="go('review',${jq(w.id)})">Review</button></div>`).join('')}` : ''}
+        ${PL.entities.length > 60 ? `<div class="hint">Why it's shown: ${esc((e.importance_why || []).join(', ') || 'nothing in particular')}</div>` : ''}
+        <div class="row"><button class="primary small" onclick="go('entities',${jq(e.name)})">Open ${esc(cutTo(e.label, 24))}</button>${pl.flat ? `<button class="small" onclick="toggleNode(${jq(e.name)})">${pl.open[e.name] ? 'Fold' : 'Show fields'}</button>` : `<button class="small" onclick="pl.open[${jq(e.name)}]=true;describe(${jq(e.name)});go('map')">Show on the map</button>`}<button class="small" onclick="togglePin(${jq(e.name)})">${pl.pins[e.name] ? 'Unpin' : 'Pin'}</button>${close}</div></div>`;
+    }
+  } else if (key && key.startsWith('m:')) {
+    const m = metOf(key.slice(2));
+    h = m ? `<div class="pl-card"><div class="row"><span class="sig">Σ</span><h2 style="font-size:17px">${esc(m.label)}</h2><span style="margin-left:auto" class="lbw">${m.light !== 'none' ? `<span class="lb ${m.light}">${LIGHTS[m.light][0]}</span> ` : ''}${esc(m.light === 'none' ? 'nothing to fix' : LIGHTS[m.light][1])}</span></div><div style="font-size:14px">${esc(m.sentence ? m.sentence + '.' : 'Counted by its own recipe; see Logic.')}</div><div class="hint">${m.entities.length ? 'Counts ' + esc(m.entities.map(labelOf).join(', ')) : 'Not tied to one entity'}${m.uses.length ? ' · uses ' + esc(m.uses.join(', ')) : ''}</div>${gradeLine('metric', m.name)}<div class="gline"><span class="gl-i ${m.owner ? '' : 'warn'}">${m.owner ? '·' : '!'}</span><span>Owner: ${m.owner ? `<b>${esc(owner(m.owner))}</b>` : 'no one named yet'}</span></div>${m.caveats ? `<div class="hint">Caveat: ${esc(m.caveats)}</div>` : ''}${reasonLines(m.reasons, editable)}<div class="row"><button class="primary small" onclick="go('logic')">Open in Logic</button>${close}</div></div>` : '';
+  } else if (key && key.startsWith('s:')) {
+    const s = srcOf2(key.slice(2));
+    h = s ? `<div class="pl-card"><div class="row"><svg width="20" height="20" aria-hidden="true"><use href="#g-${esc(s.icon)}"/></svg><h2 style="font-size:17px">${esc(s.name)}</h2></div><div class="hint">source · ${esc(s.words)}</div>${s.description ? `<div style="font-size:13px">${esc(s.description)}</div>` : ''}<div class="drow"><span class="hint">Rows of</span><span>${s.entities.length ? esc(s.entities.map(labelOf).join(', ')) : 'not used yet'}</span></div><div class="drow"><span class="hint">Metrics</span><span>${s.metrics.length ? esc(s.metrics.map(labelOf).join(', ')) : 'none'}</span></div>${reasonLines(s.reasons, false)}<div class="hint">Lorefile keeps what the rows mean, never the rows.</div><div class="row"><button class="primary small" onclick="go('sources')">Open in Sources</button>${close}</div></div>` : '';
+  } else if (key && key.startsWith('a:')) {
+    const a = agOf(key.slice(2));
+    if (a) {
+      const lines = ((PR && PR.activity) || []).filter(x => a.seen === 'connection' ? (x.who || '').includes(`connection "${a.name}"`) : (x.who || '').trim() === String(a.id).replace(/^activity:/, '')).slice(0, 5);
+      const ws = ((PR && PR.proposals) || []).filter(p => p.status === 'pending' && (a.seen === 'connection' ? agentOf(p.via) === a.name : (p.via || '').trim() === String(a.id).replace(/^activity:/, '')));
+      h = `<div class="pl-card"><div class="row"><span class="monob" aria-hidden="true">${esc(a.monogram)}</span><h2 style="font-size:17px">${esc(a.name)}</h2><span class="hint">(${a.seen === 'connection' ? 'connection' : 'seen in activity'})</span></div>${a.seen === 'connection' ? `<div class="hint">A connection's name is chosen by the app that connected.</div><div class="drow"><span class="hint">Approved</span><span>${esc(localWhen(a.approved) || '')}</span></div><div class="drow"><span class="hint">Last used</span><span>${esc(a.last_used ? localWhen(a.last_used) : 'not yet')}</span></div><div class="drow"><span class="hint">Suggestions</span><span>${a.writes === 'direct' ? 'go in straight away, marked unverified' : 'wait for you to accept'}</span></div>` : '<div class="hint">An agent that wrote here over MCP or the page’s tool runner, without a connection of its own.</div>'}${ws.length ? `<h4 style="padding:0">Waiting</h4>${ws.slice(0, 5).map(p => `<div class="row"><span>${esc((PR.cards && PR.cards[p.id] && PR.cards[p.id].headline) || p.summary || p.id)}</span><button class="small" onclick="go('review',${jq(p.id)})">Review</button></div>`).join('')}${ws.length > 5 ? `<div class="hint">+${ws.length - 5} more waiting · <button type="button" class="lnk" onclick="go('agents')">Agents</button></div>` : ''}` : ''}${lines.length ? `<h4 style="padding:0">Lately</h4>${lines.map(x => `<div class="hint">${esc(x.text)} · ${esc(localWhen(x.at))}</div>`).join('')}` : ''}<div class="row">${a.seen === 'connection' ? `<button class="primary small" onclick="go('settings')">Open in Settings › Connections</button>` : `<button class="primary small" onclick="go('agents')">Open Agents</button>`}${close}</div></div>`;
+    }
+  } else if (key && key.startsWith('g:')) {
+    const [, id, ...rest] = key.split(':'); const n = rest.join(':'); const w = (pl.overlay && pl.overlay.id === id) ? pl.overlay : (PL.waiting || []).find(x => x.id === id) || {};
+    const adds = (w.nodes || []).filter(x => x.status === 'new').map(x => labelOf(x.name)); const changes = (w.nodes || []).filter(x => x.status === 'changed').map(x => labelOf(x.name));
+    h = `<div class="pl-card"><div class="row"><span class="monob">${esc(w.monogram || 'A')}</span><h2 style="font-size:17px">${esc(labelOf(n))}</h2><span class="hint">waiting</span></div><div style="font-size:13.5px">${esc(w.headline || '')}</div><div class="hint">From ${esc(w.agent || 'an agent')}${adds.length ? ' · adds ' + esc(adds.join(', ')) : ''}${changes.length ? ' · changes ' + esc(changes.join(', ')) : ''}</div><div class="row"><button class="primary small" onclick="go('review',${jq(id)})">Review</button>${close}</div></div>`;
+  } else if (key === 'loose') {
+    const loose = PL.metrics.filter(m => !m.entities.length);
+    h = `<div class="pl-card"><h2 style="font-size:17px">Metrics not tied to one entity</h2>${loose.map(m => `<div><b>${esc(m.label)}</b>: ${esc(m.sentence || 'counted by its own recipe')}</div>`).join('')}<div class="row"><button class="primary small" onclick="go('logic')">Open in Logic</button>${close}</div></div>`;
+  }
+  if (!h) {
+    // nothing selected: what to do next; a blank space asks for its first entity
+    const first = !PL.entities.length ? `<div class="card"><b>Start this space</b><div class="hint">An entity is a kind of thing in your business: Customer, Order, Campaign.</div><div class="row"><button class="primary small" ${PL.space.editable ? '' : 'disabled'} onclick="go('entities')">Add an entity</button><button class="small" onclick="ui.learnHint=!ui.learnHint;planeAside()">Let an agent learn a file</button>${canCopySpace() ? `<button class="small" onclick="go('new-space')">Copy an example</button>` : ''}</div>${ui.learnHint ? `<div class="hint">In ChatGPT or Claude, connected to this space, attach a file and say:</div><div class="row"><code class="block" style="flex:1 1 auto">Save this file to Lorefile</code><button class="small" onclick="copyText('Save this file to Lorefile')">Copy</button></div><button type="button" class="lnk" onclick="go('agents')">How to connect an agent</button>` : ''}</div>` : '';
+    h = first + nextSteps();
+  }
+  el.innerHTML = (editable && pl.sel ? nameBar() : '') + h;
+  el.classList.toggle('up', !!pl.sel && phone());
+}
+function planeList(){
+  const el = $('pl-list'); if (!el || !PL) return;
+  const rows = [];
+  for (const e of PL.entities) rows.push({ key: 'e:' + e.name, name: e.label + (e.same_label ? ` (${e.name})` : ''), kind: 'entity', area: e.area, light: e.light, reasons: e.reasons, waiting: e.waiting });
+  for (const m of PL.metrics) rows.push({ key: 'm:' + m.name, name: m.label, kind: 'metric', area: m.entities.map(n => (entOf(n) || {}).area).filter(Boolean)[0] || '', light: m.light, reasons: m.reasons });
+  for (const s of PL.sources) rows.push({ key: 's:' + s.name, name: s.name, kind: 'source', area: '', light: s.light, reasons: s.reasons });
+  for (const a of PL.agents) rows.push({ key: 'a:' + a.id, name: a.name + (a.seen === 'connection' ? ' (connection)' : ''), kind: 'agent', area: '', light: a.light, reasons: a.waiting ? [{ text: plural(a.waiting, 'proposal') + ' waiting' }] : [] });
+  (PL.space.reasons || []).forEach((r, i) => rows.unshift({ key: '', name: PL.space.name + ' (the space)', kind: 'space', area: '', light: r.light, reasons: [r] }));
+  const rank = { red: 0, amber: 1, green: 2, none: 3 };
+  const sort = pl.sort || 'light';
+  let list = rows.filter(r => !pl.filter || r.light === pl.filter);
+  list.sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : sort === 'kind' ? a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name) : sort === 'area' ? a.area.localeCompare(b.area) || a.name.localeCompare(b.name) : (rank[a.light] - rank[b.light]) || a.name.localeCompare(b.name));
+  const th = (k, t) => `<th><button type="button" class="lnk" onclick="pl.sort=${jq(k)};planeList()" aria-sort="${sort === k ? 'ascending' : 'none'}">${t}${sort === k ? ' ▴' : ''}</button></th>`;
+  el.innerHTML = `<table class="pl-table"><thead><tr>${th('name', 'Name')}${th('kind', 'Kind')}${th('area', 'Area')}${th('light', 'Light')}<th>Why</th><th></th></tr></thead><tbody>${list.map(r => `<tr><td>${r.key ? `<button type="button" class="lnk" onclick="selectItem(${jq(r.key)},{fly:true})">${esc(r.name)}</button>` : esc(r.name)}</td><td class="hint">${esc(r.kind)}</td><td class="hint">${esc(r.area)}</td><td>${r.light !== 'none' ? `<span class="lb ${r.light}" aria-hidden="true">${LIGHTS[r.light][0]}</span> ` : ''}${esc(r.light === 'none' ? 'nothing to fix' : LIGHTS[r.light][1])}</td><td class="hint">${esc((r.reasons || []).map(x => x.text).join('; '))}${r.waiting ? ` <button class="small" onclick="go('review',${jq(r.waiting)})">Review</button>` : ''}</td><td>${r.key ? `<button class="small" onclick="openItem(${jq(r.key)})">Open</button>` : ''}</td></tr>`).join('')}</tbody></table>${list.length ? '' : '<div class="hint">Nothing with that light.</div>'}`;
+}
+// --- the screens ---
+async function renderHome(v){ pl.flat = false; pl.overlay = null; await renderPlaneShell(v); }
+async function renderMap(v){ pl.flat = true; pl.overlay = null; await renderPlaneShell(v); }
+async function renderReviewMap(v, id){
+  pl.flat = true; v.innerHTML = main('<div class="empty">Drawing what this proposal would change…</div>');
+  const g = await api(B + '/api/graph?proposal=' + encodeURIComponent(id));
+  if (g.error) { v.innerHTML = main(`<div class="card"><b>${esc(g.error)}</b><button class="small" onclick="go('review',${jq(id)})">Back to the review</button></div>`); return; }
+  pl.overlay = { ...g, id, agent: (RV && RV.context && RV.context.agent) || 'an agent', monogram: ((RV && RV.context && RV.context.agent) || 'A').charAt(0).toUpperCase() };
+  await renderPlaneShell(v);
+}
+async function renderPlaneShell(v){
+  const fresh = !PL || PL.space.id !== (O.space && O.space.id);
+  if (fresh) { PL = null; pl.sel = null; pl.cam = null; pl.pins = null; v.innerHTML = main('<div class="empty">Drawing the space…</div>'); }
+  await loadPlane(fresh);
+  if (!PL) { v.innerHTML = main(`<div class="card"><b>Couldn't draw this space</b><button class="small" style="align-self:flex-start" onclick="render()">Try again</button></div>`); return; }
+  renderPlaneScreen();
+  planePoll();
+}
+function renderPlaneScreen(){
+  const v = $('view'); if (!v || !PL) return;
+  const showList = pl.list || phone();
+  const banner = (PL.space.reasons || []).filter(r => r.light === 'red').length ? `<div class="banner bad">${esc(plural(PL.space.reasons.filter(r => r.light === 'red').length, 'error'))}: agents may get wrong answers · <button type="button" class="lnk" onclick="go('diagnostics')">Problems</button></div>`  : (!O.ok && !PL.space.empty ? `<div class="banner bad">${esc(plural(O.diagnostics.filter(d => d.level === 'error').length, 'error'))}: agents may get wrong answers · <button type="button" class="lnk" onclick="go('diagnostics')">Problems</button></div>` : '');
+  v.innerHTML = `<div class="pl-wrap"><a href="#" class="pl-skip" onclick="event.preventDefault();pl.list=true;renderPlaneScreen();const t=document.querySelector('#pl-list button');if(t)t.focus()">Skip to list</a>${roBanner()}${banner}<div id="pl-bar" class="pl-bar"></div><div id="pl-tools" class="pl-tools"></div><div class="pl-views" role="tablist"><button role="tab" aria-selected="${route.screen === 'home'}" class="${route.screen === 'home' && !pl.overlay ? 'on' : ''}" onclick="go('home')">Home</button><button role="tab" aria-selected="${route.screen === 'map' || !!pl.overlay}" class="${route.screen === 'map' || pl.overlay ? 'on' : ''}" onclick="go('map')">Map</button><button role="tab" aria-selected="${showList}" class="${showList ? 'on' : ''}" onclick="pl.list=!pl.list;renderPlaneScreen()">List (L)</button></div><div id="pl-stage" class="pl-stage${pl.flat ? ' flat' : ''}"></div>${legendHtml()}<div id="pl-list" class="pl-list" ${showList ? '' : 'hidden'}></div><div id="pl-live" class="sr" aria-live="polite"></div></div><div id="pl-aside" class="aside pl-aside"></div>`;
+  drawPlane(true);
+}
+window.addEventListener('resize', () => { if (['home', 'map'].includes(route.screen) && PL && !pl.moved) drawPlane(false); });
+
 
 // --- spaces ---
 function renderNewSpace(v){ ui.ns = ui.ns || { name: '', from: 'blank' }; v.innerHTML = main(newSpaceHtml(false)); }
@@ -597,7 +1325,9 @@ function ownerLine(m){
   if (m.owner) return `<div class="gline"><span class="gl-i" aria-hidden="true">·</span><span>Owner: <b>${esc(owner(m.owner))}</b> <span class="hint">who decides what this metric means</span></span></div>`;
   if (ro()) return `<div class="gline"><span class="gl-i warn" aria-hidden="true">!</span><span>Owner: no one named yet <span class="hint">who decides what this metric means</span></span></div>`;
   const id = 'ow-' + m.name.replace(/[^\w-]/g, '_');
-  return `<div class="gline owner-fix"><span class="gl-i warn" aria-hidden="true">!</span><span class="row" style="gap:6px;flex-wrap:wrap"><label for="${id}">Owner:</label><input id="${id}" class="owner-box" value="${esc(ME())}" placeholder="a name or a team" style="max-width:220px"><button class="small" onclick="saveOwner(${jq(m.name)}, ${jq(id)})">Save</button><span class="hint">who decides what this metric means</span></span></div>`;
+  // a person's save through Lorefile counts as looking at it: an unverified or changed metric is accepted as it is now
+  const t = TR('metric', m.name), accepts = t.grade === 'proposed' || !!t.changed_since;
+  return `<div class="gline owner-fix"><span class="gl-i warn" aria-hidden="true">!</span><span class="row" style="gap:6px;flex-wrap:wrap"><label for="${id}">Owner:</label><input id="${id}" class="owner-box" value="${esc(ME())}" placeholder="a name or a team" style="max-width:220px"><button class="small" onclick="saveOwner(${jq(m.name)}, ${jq(id)})">Save</button><span class="hint">${accepts ? '<b>saving also accepts this metric as it is now</b> · ' : ''}who decides what this metric means</span></span></div>`;
 }
 async function saveOwner(metric, id){ const v = ($(id) || {}).value || ''; if (!v.trim()) { note('Type a name or a team first.', true); return; } await patch({ op: 'set_metric', metric, owner: v.trim() }); }
 function renderLogic(v){
@@ -1128,20 +1858,6 @@ async function takeBack(id){
   const res = await post(B + '/api/proposals/take_back', { id });
   toast(res.written ? res : { ...res, error: res.error || 'Not taken back' });
   ui.rv = null; await loadSummary(); renderReview($('view'));
-}
-// the space as it would be after Accept: new green, changed amber, removed red, with a legend in words
-async function renderReviewMap(v, id){
-  const g = await api(B + '/api/graph?proposal=' + encodeURIComponent(id));
-  if (g.error) { v.innerHTML = main(`<div class="card"><b>${esc(g.error)}</b><button class="small" onclick="go('review',${jq(id)})">Back to the review</button></div>`); return; }
-  const doms = []; (g.nodes || []).forEach(n => { if (!doms.includes(n.domain)) doms.push(n.domain); });
-  const W = 220, H = 70, gx = 130, gy = 90, per = 3; const pos = {}; let y = 70, maxW = 0;
-  for (const d of doms) { const list = g.nodes.filter(n => n.domain === d); list.forEach((n, i) => { const col = i % per, row = Math.floor(i / per); pos[n.name] = [30 + col * (W + gx), y + row * (H + gy)]; maxW = Math.max(maxW, 30 + (col + 1) * (W + gx)); }); y += Math.ceil(list.length / per) * (H + gy) + 30; }
-  const word = { new: 'new', changed: 'changed', removed: 'removed', same: '' };
-  let edges = '', nodes = '';
-  for (const e of (g.edges || [])) { const p = pos[e.from], q = pos[e.to]; if (!p || !q) continue; const a = { x: p[0] + W/2, y: p[1] + H/2 }, b = { x: q[0] + W/2, y: q[1] + H/2 }; const dx = b.x - a.x, dy = b.y - a.y, len = Math.sqrt(dx*dx + dy*dy), ang = Math.atan2(dy, dx) * 180 / Math.PI; edges += `<div class="edge st-${e.status}" style="left:${a.x}px;top:${a.y}px;width:${len}px;transform:rotate(${ang}deg)"></div><div class="elabel st-${e.status}" style="left:${(a.x+b.x)/2-44}px;top:${(a.y+b.y)/2-10}px">${esc(e.name)}${word[e.status] ? ' · ' + word[e.status] : ''}</div>`; }
-  for (const n of (g.nodes || [])) { const [x, yy] = pos[n.name]; nodes += `<div class="node st-${n.status}" style="left:${x}px;top:${yy}px"><b>${esc(n.name)}</b><div class="tags">${word[n.status] ? `<span class="st-tag st-${n.status}">${word[n.status]}</span>` : ''}<span style="background:var(--chip);color:var(--muted)">${plural(n.fields, 'field')}</span></div></div>`; }
-  const legend = `<span><i class="st-dot st-new"></i>new (solid outline)</span><span><i class="st-dot st-changed"></i>changed (dashed outline)</span><span><i class="st-dot st-removed"></i>removed (struck through)</span>`;
-  v.innerHTML = `<div class="map"><div class="rv-bar">What this proposal would change: ${esc(g.headline || '')} · read-only · <button type="button" class="lnk" onclick="go('review',${jq(id)})">Back to the review</button></div><div style="position:relative;width:${Math.max(maxW + 30, 600)}px;height:${y + 20}px;margin:0 auto">${edges}${nodes}</div><div class="legend">${legend}</div></div>`;
 }
 // an agent reporting a check: a person promotes it, or not
 function checkCard(p){
