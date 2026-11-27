@@ -13,6 +13,7 @@
 
 use crate::edit::{self, Change, EditConfig, Note, Outcome, PAGE};
 use crate::mcp::{Hub, Server as McpServer};
+use crate::oauth;
 use crate::patch;
 use crate::proposals;
 use crate::spaces::{Loaded, Registry, Space};
@@ -103,7 +104,7 @@ fn write_auth_file(root: &Path, token: &str) -> std::io::Result<PathBuf> {
 }
 
 /// Unpadded base64url, the alphabet that is safe in URLs, headers and cookies.
-fn base64url(bytes: &[u8]) -> String {
+pub(crate) fn base64url(bytes: &[u8]) -> String {
     const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {
@@ -160,7 +161,7 @@ pub fn is_loopback(host: &str) -> bool {
 }
 
 /// Equal tokens, compared in time that does not depend on where they differ.
-fn same_token(given: &str, want: &str) -> bool {
+pub(crate) fn same_token(given: &str, want: &str) -> bool {
     let (a, b) = (given.as_bytes(), want.as_bytes());
     if a.len() != b.len() {
         return false;
@@ -199,7 +200,8 @@ fn signed_in(req: &Request, ctx: &Ctx, cookie_ok: bool) -> bool {
 /// The page's cookie, or (with `None`) the header that clears it. One name per
 /// port, because browsers share cookies across the ports of one host.
 fn cookie_header(req: &Request, ctx: &Ctx, value: Option<&str>) -> Header {
-    let secure = header_value(req, "X-Forwarded-Proto").map(|p| p.trim().eq_ignore_ascii_case("https")).unwrap_or(false);
+    // X-Forwarded-Proto, Forwarded or CF-Visitor: the request came in over HTTPS
+    let secure = oauth::asked(&|name| header_value(req, name)).https;
     let (v, age) = match value {
         Some(t) => (t, 400 * 24 * 3600),
         None => ("", 0),
@@ -220,24 +222,22 @@ fn redirect(to: &str) -> Response<std::io::Cursor<Vec<u8>>> {
         .with_header(header("Cache-Control", "no-store"))
 }
 
-fn html_escape(s: &str) -> String {
+pub(crate) fn html_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&#39;")
 }
 
 const SIGN_IN_FIRST: &str = "sign in first: open the link the server printed (it ends in ?token=…), or send Authorization: Bearer <token>";
-const WRONG_TOKEN: &str = "That is not this server's token. Check for a missing character, or for a newer token if the server was started again with another one.";
+pub(crate) const WRONG_TOKEN: &str = "That is not this server's token. Check for a missing character, or for a newer token if the server was started again with another one.";
 
 /// The login screen: one box, plain and light like the page.
 fn login_page(next: &str, error: Option<&str>) -> Response<std::io::Cursor<Vec<u8>>> {
     let err = error.map(|e| format!("<div class=\"err\">{}</div>", html_escape(e))).unwrap_or_default();
-    let html = LOGIN_HTML.replace("{{error}}", &err).replace("{{next}}", &html_escape(&local_path(next)));
+    let html = LOGIN_HTML.replace("{{style}}", PAGE_STYLE).replace("{{error}}", &err).replace("{{next}}", &html_escape(&local_path(next)));
     text_response(401, "text/html; charset=utf-8", html)
 }
 
-const LOGIN_HTML: &str = r##"<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light">
-<title>Lorefile · sign in</title>
-<style>
+/// The login screen's look, shared with the OAuth approval page: plain and light like the page.
+pub(crate) const PAGE_STYLE: &str = r##"
 :root{--bg:#f7f7f5;--panel:#fff;--ink:#1a1a1f;--muted:#6e6e78;--line:#e6e6e2;--line2:#d9d9d4;--accent:#2b5cff;--block:#b91c1c;--block-bg:#fde8e8;--mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
 *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans)}
 body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
@@ -250,7 +250,12 @@ input{flex:1;min-width:0;font:inherit;font-family:var(--mono);font-size:13px;pad
 button{font:inherit;padding:7px 16px;border:1px solid var(--accent);background:var(--accent);color:#fff;border-radius:9px;cursor:pointer;min-height:36px}
 p{margin:0;font-size:13px;color:var(--muted)}code{font-family:var(--mono);font-size:12px}
 .err{background:var(--block-bg);color:var(--block);border-radius:10px;padding:8px 12px;font-size:13px}
-</style></head>
+"##;
+
+const LOGIN_HTML: &str = r##"<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light">
+<title>Lorefile · sign in</title>
+<style>{{style}}</style></head>
 <body><main>
 <div class="brand"><div class="logo"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="20" r="2"/><path d="M7 7l3 3M17 7l-3 3M12 15v3"/></svg></div>Lorefile</div>
 {{error}}
@@ -275,7 +280,7 @@ p{margin:0;font-size:13px;color:var(--muted)}code{font-family:var(--mono);font-s
 </body></html>
 "##;
 
-fn percent_decode(s: &str) -> String {
+pub(crate) fn percent_decode(s: &str) -> String {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;
@@ -298,7 +303,7 @@ fn percent_decode(s: &str) -> String {
     String::from_utf8_lossy(&out).to_string()
 }
 
-fn query_params(url: &str) -> (String, HashMap<String, String>) {
+pub(crate) fn query_params(url: &str) -> (String, HashMap<String, String>) {
     let (path, qs) = url.split_once('?').unwrap_or((url, ""));
     let mut map = HashMap::new();
     for pair in qs.split('&').filter(|p| !p.is_empty()) {
@@ -667,11 +672,36 @@ fn spaces_json(reg: &mut Registry, edit: EditConfig) -> Json {
 }
 
 /// `+`, `/` and `=` would change meaning in a query string; base64url tokens have none.
-fn url_token(t: &str) -> String {
+pub(crate) fn url_token(t: &str) -> String {
     t.replace('+', "%2B").replace('/', "%2F").replace('=', "%3D")
 }
 
-pub fn run(reg: Registry, host: &str, port: u16, edit: EditConfig, login: Login) -> Result<()> {
+/// What the command line said about OAuth for connectors.
+#[derive(Default)]
+pub struct OAuthFlags {
+    /// `--no-oauth`
+    pub off: bool,
+    /// `--public-url`, checked and reduced to an origin
+    pub public_url: Option<String>,
+    /// `--oauth-redirect`, checked
+    pub redirects: Vec<String>,
+}
+
+/// Why OAuth is off: a word for the page, and the start-up line's words.
+fn oauth_off_reason(login: &Login, flags: &OAuthFlags) -> Option<(&'static str, String)> {
+    match &login.token {
+        None => Some(("no-auth", "off (--no-auth): ChatGPT and Claude connect with \"No authentication\", so anyone with the address gets in".into())),
+        Some(_) if flags.off => Some(("no-oauth", "off (--no-oauth)".into())),
+        Some(t) if t.len() < oauth::MIN_LOGIN => Some(("short-token", format!("off: the login token is shorter than {} characters, too easy to guess on an approval page the internet can reach (`openssl rand -base64 32` makes a good one)", oauth::MIN_LOGIN))),
+        Some(_) => None,
+    }
+}
+
+fn plural_word(n: usize, word: &str) -> String {
+    format!("{} {}{}", n, word, if n == 1 { "" } else { "s" })
+}
+
+pub fn run(reg: Registry, host: &str, port: u16, edit: EditConfig, login: Login, flags: OAuthFlags) -> Result<()> {
     let addr = format!("{}:{}", host, port);
     let server = Server::http(&addr).map_err(|e| anyhow::anyhow!("cannot bind {}: {}", addr, e))?;
     let mine = reg.user_spaces().len();
@@ -707,6 +737,37 @@ pub fn run(reg: Registry, host: &str, port: u16, edit: EditConfig, login: Login)
         }
     }
     eprintln!("        or over stdio on this machine: lorefile mcp --dir {}", reg.root.display());
+    let oauth_off = oauth_off_reason(&login, &flags);
+    let oauth_srv = match (&oauth_off, &login.token) {
+        (None, Some(t)) => {
+            let link_note = match &login.from {
+                Some(TokenFrom::Env) => Some(format!("sign in with the token in {}", TOKEN_ENV)),
+                Some(TokenFrom::Flag) => Some("sign in with the token given to --token".to_string()),
+                _ => None,
+            };
+            let cfg = oauth::Config { login: t.clone(), pinned: flags.public_url.clone(), extra_redirects: flags.redirects.clone(), edit_allowed: edit.allow, link_note };
+            Some(Arc::new(oauth::Server::open(&reg.root, cfg, oauth::Clock::system())))
+        }
+        _ => None,
+    };
+    match (&oauth_srv, &oauth_off) {
+        (Some(o), _) => {
+            let n = o.connection_count();
+            let count = if n == 0 { "no connections yet".to_string() } else { plural_word(n, "connection") };
+            match o.pinned() {
+                Some(pin) => eprintln!("OAuth   on at {} only (--public-url): give ChatGPT or Claude {}/mcp · {}", pin, pin, count),
+                None => eprintln!("OAuth   on for any HTTPS address that reaches this server (a tunnel or a proxy): give ChatGPT or Claude <that address>/mcp · {}", count),
+            }
+            if o.dropped > 0 {
+                eprintln!("        the login token changed: {} {} disconnected", plural_word(o.dropped, "connection"), if o.dropped == 1 { "was" } else { "were" });
+            }
+            if let Some(e) = &o.load_error {
+                eprintln!("        {}", e);
+            }
+        }
+        (None, Some((_, why))) => eprintln!("OAuth   {}{}", why, if flags.public_url.is_some() { "; --public-url is not used" } else { "" }),
+        (None, None) => {}
+    }
     if edit.allow {
         let commits = match edit.policy {
             edit::CommitPolicy::Auto => " and saves each change to the space's git history (a space inside another repository stays uncommitted)",
@@ -720,7 +781,7 @@ pub fn run(reg: Registry, host: &str, port: u16, edit: EditConfig, login: Login)
     let root_s = std::fs::canonicalize(&reg.root).unwrap_or_else(|_| reg.root.clone()).display().to_string();
     let single = reg.single;
 
-    let ctx = Arc::new(Ctx { edit, root_s, single, token: login.token, cookie: format!("lorefile-{}", port) });
+    let ctx = Arc::new(Ctx { edit, root_s, single, token: login.token, cookie: format!("lorefile-{}", port), oauth: oauth_srv, oauth_off });
     let reg = Arc::new(Mutex::new(reg));
     for req in server.incoming_requests() {
         let (reg, ctx) = (Arc::clone(&reg), Arc::clone(&ctx));
@@ -739,6 +800,75 @@ struct Ctx {
     token: Option<String>,
     /// The page's cookie name, `lorefile-<port>`.
     cookie: String,
+    /// The OAuth sign-in for connectors; `None` when it is off.
+    oauth: Option<Arc<oauth::Server>>,
+    /// Why it is off: a word for the page and the start-up line's words.
+    oauth_off: Option<(&'static str, String)>,
+}
+
+/// Who is calling `/mcp`: the owner (the login token, Claude Code's header), or a
+/// connection that signed in with OAuth.
+enum Caller {
+    Owner,
+    Connection(oauth::Grant),
+}
+
+/// Login token first, then an OAuth access token issued for exactly this MCP address
+/// on the public address this request came through.
+fn caller(req: &Request, ctx: &Ctx, public: Option<&str>, space: Option<&str>) -> Option<Caller> {
+    let Some(want) = &ctx.token else { return Some(Caller::Owner) };
+    let given = bearer(req)?;
+    if same_token(&given, want) {
+        return Some(Caller::Owner);
+    }
+    let (o, origin) = (ctx.oauth.as_ref()?, public?);
+    let resource = match space {
+        None => oauth::Resource::All,
+        Some(id) => oauth::Resource::Space(id.to_string()),
+    };
+    o.check(&given, origin, &resource).map(Caller::Connection)
+}
+
+fn reply_response(r: oauth::Reply) -> Response<std::io::Cursor<Vec<u8>>> {
+    let mut resp = Response::from_string(r.body).with_status_code(StatusCode(r.status));
+    for (k, v) in &r.headers {
+        if let Ok(h) = Header::from_bytes(k.as_bytes(), v.as_bytes()) {
+            resp = resp.with_header(h);
+        }
+    }
+    resp
+}
+
+/// Settings › Connections: list, and Disconnect (one, or `all`).
+fn oauth_api(req: &Request, ctx: &Ctx, method: &Method, path: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+    let list = path == "/api/oauth/connections";
+    let Some(o) = &ctx.oauth else {
+        let (reason, why) = ctx.oauth_off.clone().unwrap_or(("off", "off".into()));
+        return if list && *method == Method::Get {
+            json_response(200, &json!({ "on": false, "reason": reason, "why": why, "connections": [] }))
+        } else {
+            json_response_private(404, &json!({ "error": format!("OAuth is {}", why) }))
+        };
+    };
+    match method {
+        Method::Get if list => json_response(200, &o.connections_json()),
+        Method::Post if path.ends_with("/revoke") && !list => {
+            if !write_allowed(req) {
+                return json_response_private(403, &json!({ "error": WRITE_REFUSED }));
+            }
+            let id = path["/api/oauth/connections/".len()..path.len() - "/revoke".len()].to_string();
+            match o.disconnect(&percent_decode(&id)) {
+                Ok(n) => {
+                    let mut j = o.connections_json();
+                    j["ok"] = json!(true);
+                    j["disconnected"] = json!(n);
+                    json_response_private(200, &j)
+                }
+                Err(e) => json_response_private(404, &json!({ "error": e })),
+            }
+        }
+        _ => json_response(405, &json!({ "error": "method not allowed" })),
+    }
 }
 
 fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
@@ -753,6 +883,37 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     if method == Method::Get && full_path == "/healthz" {
         let _ = req.respond(json_response(200, &json!({ "ok": true })));
         return;
+    }
+    // OAuth for connectors: the public address this request came through, when OAuth answers
+    // on it (HTTPS-marked, or the pinned address). Plain http://127.0.0.1 gets None and no new routes.
+    let hdrs: Vec<(String, String)> = if ctx.oauth.is_some() { req.headers().iter().map(|h| (h.field.as_str().as_str().to_string(), h.value.as_str().to_string())).collect() } else { Vec::new() };
+    let get = |name: &'static str| hdrs.iter().find(|(k, _)| k.eq_ignore_ascii_case(name)).map(|(_, v)| v.clone());
+    let public = ctx.oauth.as_ref().and_then(|o| o.public_origin(&get));
+    if let (Some(o), Some(origin)) = (&ctx.oauth, &public) {
+        if oauth::is_route(&full_path) {
+            let mut body = String::new();
+            if method == Method::Post {
+                if req.body_length().map(|n| n > oauth::MAX_BODY).unwrap_or(false) {
+                    let _ = req.respond(json_response(413, &json!({ "error": "invalid_request", "error_description": "the body is larger than 16 KB" })));
+                    return;
+                }
+                let _ = req.as_reader().take(oauth::MAX_BODY as u64 + 1).read_to_string(&mut body);
+                if body.len() > oauth::MAX_BODY {
+                    let _ = req.respond(json_response(413, &json!({ "error": "invalid_request", "error_description": "the body is larger than 16 KB" })));
+                    return;
+                }
+            }
+            let r = oauth::Req { method: method.as_str(), path: &full_path, query: &params, header: &get, body: &body, origin, signed_in: signed_in(&req, ctx, true) };
+            let reply = o.handle(&r);
+            let sign_in = reply.sign_in;
+            let mut resp = reply_response(reply);
+            if sign_in {
+                // a correct token on the approval page also signs this browser in, as the login screen does
+                resp = resp.with_header(cookie_header(&req, ctx, ctx.token.as_deref()));
+            }
+            let _ = req.respond(resp);
+            return;
+        }
     }
     if method == Method::Get && path == "/api/auth" {
         let me = signed_in(&req, ctx, true);
@@ -778,10 +939,18 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     }
     let is_login = method == Method::Post && path == "/api/login";
     let is_logout = method == Method::Post && path == "/api/logout";
+    let mut who = None;
     if path == "/mcp" {
-        // MCP clients send the bearer header; the page's cookie does not open it
-        if !signed_in(&req, ctx, false) {
-            let resp = json_response(401, &json!({ "error": "send Authorization: Bearer <token>, the token the server printed when it started" })).with_header(header("WWW-Authenticate", "Bearer"));
+        // MCP clients send the bearer header (the login token, or an OAuth access token); the page's cookie does not open it
+        who = caller(&req, ctx, public.as_deref(), prefix_space.as_deref());
+        if who.is_none() {
+            let resp = match (&ctx.oauth, &public) {
+                // on an OAuth address the 401 says where to sign in (RFC 9728)
+                (Some(o), Some(origin)) => json_response(401, &json!({ "error": "sign in: ChatGPT and Claude connect here with OAuth; Claude Code can also send Authorization: Bearer <token>, the token the server printed when it started" }))
+                    .with_header(header("WWW-Authenticate", &o.challenge(origin, &full_path, bearer(&req).is_some())))
+                    .with_header(header("Vary", "Host, X-Forwarded-Host, X-Forwarded-Proto, Forwarded")),
+                _ => json_response(401, &json!({ "error": "send Authorization: Bearer <token>, the token the server printed when it started" })).with_header(header("WWW-Authenticate", "Bearer")),
+            };
             let _ = req.respond(resp);
             return;
         }
@@ -832,6 +1001,13 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
         return;
     }
 
+    // Settings › Connections: the agents that signed in with OAuth
+    if path == "/api/oauth/connections" || path.starts_with("/api/oauth/connections/") {
+        let resp = oauth_api(&req, ctx, &method, &path);
+        let _ = req.respond(resp);
+        return;
+    }
+
     // the page itself, for any space
     if is_page {
         let _ = req.respond(text_response(200, "text/html; charset=utf-8", INDEX_HTML.to_string()));
@@ -841,7 +1017,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     // MCP over Streamable HTTP: one JSON-RPC message or a batch per POST, answered as plain JSON
     if path == "/mcp" {
         let resp = match method {
-            Method::Post => mcp_http(&req, reg, ctx, prefix_space.as_deref(), json_body, &body_text),
+            Method::Post => mcp_http(&req, reg, ctx, prefix_space.as_deref(), json_body, &body_text, who.as_ref().unwrap_or(&Caller::Owner)),
             // no server-to-client stream and no sessions: this server only answers what it is asked
             Method::Get => json_response(405, &json!({ "error": "this MCP server sends no event stream; POST JSON-RPC messages to /mcp" })).with_header(header("Allow", "POST, DELETE")),
             Method::Delete => Response::from_string(String::new()).with_status_code(StatusCode(204)),
@@ -1124,7 +1300,10 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
 /// `initialize`, `tools/list` and `tools/call` (with `space`, and with
 /// `--allow-edit` deciding whether proposals are written) answer identically.
 /// `/s/<id>/mcp` serves that one space, like `lorefile mcp --space <id>`.
-fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>, json_body: bool, body: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+/// A connection that signed in with OAuth gets the propose tools only with `lorefile:propose`,
+/// and is named in proposals and the activity log.
+#[allow(clippy::too_many_arguments)] // the request, its parts and who sent it; a struct would only rename them
+fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>, json_body: bool, body: &str, who: &Caller) -> Response<std::io::Cursor<Vec<u8>>> {
     // the MCP spec asks servers to check Origin; the bearer header already keeps other sites out
     if !origin_matches(req) {
         return json_response(403, &json!({ "error": "cross-site requests are refused: the Origin does not match the Host" }));
@@ -1151,7 +1330,11 @@ fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>
             }
         },
     };
-    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only };
+    let (can_propose, via) = match who {
+        Caller::Owner => (true, crate::mcp::VIA.to_string()),
+        Caller::Connection(g) => (g.can_propose(), g.label()),
+    };
+    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only, can_propose, via };
     match hub.handle_body(&msg) {
         Some(reply) => json_response(200, &reply),
         // notifications only: accepted, nothing to answer

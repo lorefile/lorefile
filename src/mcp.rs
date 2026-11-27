@@ -21,6 +21,13 @@ use std::path::{Path, PathBuf};
 
 const PROTOCOL: &str = "2025-06-18";
 
+/// Who an agent's change is by over MCP: stdio, Claude Code's header. A connection that signed
+/// in with OAuth is named instead: `agent via MCP (connection "ChatGPT", approved 27 Nov)`.
+pub const VIA: &str = "agent via MCP";
+
+/// The tools that change an ontology: left out for a connection that may only read.
+const PROPOSE_TOOLS: [&str; 2] = ["propose_patch", "propose_change"];
+
 /// The tool list a client sees. With several spaces every tool takes a `space`
 /// argument naming the ontology it is about, and a `spaces` tool lists them.
 pub fn tool_definitions_for(reg: &Registry, only: Option<&str>) -> Json {
@@ -160,12 +167,14 @@ pub struct Server<'a> {
     /// The folder of spaces, when `summary` should say how the space's history stands
     /// (left out for shipped examples, which have none).
     pub history_root: Option<PathBuf>,
+    /// The author of proposals and activity lines: `agent via MCP`, or a named connection.
+    pub via: String,
 }
 
 impl<'a> Server<'a> {
     /// Share a data layer (and its open DuckDB) instead of opening a fresh one.
     pub fn with_data(ont: &'a Ontology, data: DataLayer<'a>) -> Self {
-        Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false), history_root: None }
+        Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false), history_root: None, via: VIA.to_string() }
     }
 
     /// Add the one History line to `summary`, reading the space's git history.
@@ -176,6 +185,11 @@ impl<'a> Server<'a> {
 
     pub fn with_edit(mut self, edit: EditConfig) -> Self {
         self.edit = edit;
+        self
+    }
+
+    pub fn with_via(mut self, via: &str) -> Self {
+        self.via = via.to_string();
         self
     }
 
@@ -447,20 +461,20 @@ impl<'a> Server<'a> {
                 let content = Self::arg_str(args, &["content", "text"]).unwrap_or_default();
                 let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
                 let before = validate::validate(ont);
-                let (out, queued) = Self::propose(&ont.root, self.edit, &before, &file, &content, &reason, "agent via MCP", None, "");
+                let (out, queued) = Self::propose(&ont.root, self.edit, &before, &file, &content, &reason, &self.via, None, "");
                 if out.written {
                     self.reload_needed.set(true);
                 }
                 Self::propose_change_result(&out, self.edit, queued.as_ref(), "")
             }
-            "propose_patch" if Self::arg_str(args, &["op"]).as_deref() == Some("record_check") => Self::record_check(ont, args, "agent via MCP"),
+            "propose_patch" if Self::arg_str(args, &["op"]).as_deref() == Some("record_check") => Self::record_check(ont, args, &self.via),
             "propose_patch" => {
                 let reason = Self::arg_str(args, &["reason"]).unwrap_or_default();
                 if let Some(ops) = args.get("ops").and_then(|o| o.as_array()) {
                     return match patch::plan_many(ont, ops) {
                         Ok(plan) => {
                             let before = validate::validate(ont);
-                            let (out, queued) = Self::propose_many(&ont.root, self.edit, &before, &plan, &reason, "agent via MCP");
+                            let (out, queued) = Self::propose_many(&ont.root, self.edit, &before, &plan, &reason, &self.via);
                             if out.written {
                                 self.reload_needed.set(true);
                             }
@@ -473,7 +487,7 @@ impl<'a> Server<'a> {
                 match patch::plan(ont, args) {
                     Ok(p) => {
                         let before = validate::validate(ont);
-                        let (out, queued) = Self::propose(&ont.root, self.edit, &before, &p.file, &p.text, &reason, "agent via MCP", Some((&p.kind, &p.name)), &p.summary);
+                        let (out, queued) = Self::propose(&ont.root, self.edit, &before, &p.file, &p.text, &reason, &self.via, Some((&p.kind, &p.name)), &p.summary);
                         if out.written {
                             self.reload_needed.set(true);
                         }
@@ -530,6 +544,11 @@ pub struct Hub<'r> {
     pub edit: EditConfig,
     /// `--space` (or `/s/<id>/mcp` over HTTP): serve one space only, and hide the `space` argument.
     pub only: Option<String>,
+    /// `false` for an OAuth connection without `lorefile:propose`: the propose tools are left
+    /// out of `tools/list` and refused in `tools/call`.
+    pub can_propose: bool,
+    /// The author of what this caller proposes: `VIA`, or a named connection.
+    pub via: String,
 }
 
 impl Hub<'_> {
@@ -581,6 +600,12 @@ impl Hub<'_> {
             (None, 1) => format!("This Lorefile server holds the ontology space '{}'{}. Tools default to it; pass `space` to look at a shipped example (ids start with @).", mine[0].id, if shipped > 0 { format!(" plus {} shipped examples", shipped) } else { String::new() }),
             (None, n) => format!("This Lorefile server holds {} ontology spaces: {}. Every tool takes `space`; ask the user which business or brand they mean when it is not obvious, or call `spaces`.", n, mine.iter().map(|s| s.id.as_str()).collect::<Vec<_>>().join(", ")),
         };
+        if !self.can_propose {
+            return format!(
+                "{} Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector. This connection may only read: it cannot propose changes, so when the user settles a definition, tell them it can be saved from a connection allowed to suggest changes. Definitions carry a trust grade. When you rely on one marked proposed or UNVERIFIED, say so before the number or the action: an agent wrote it and no person has reviewed it. Checked means a person compared it with real rows; say who and when if the user asks how sure this is. Numbers with a different `basis` (transactional, attributed, modelled, experimental) are shown side by side, never added.",
+                scope
+            );
+        }
         format!(
             "{} Call `summary` first to learn the vocabulary. Before saying an action is possible, call `validate`. Use `where_is` to find where a type's rows live; if it is readable here, `instances` and `query` (read-only SQL over the ontology tables and data views) answer from the real rows, otherwise query it with your own connector. To change an ontology, use `propose_patch` for one small fact (a description, a link, a guardrail, a glossary term, a metric, a data binding) or `propose_change` with the full new text of one YAML file; both are compiled and checked first{}. When the user settles a definition during your work (which event counts as success and where it comes from, which table or tool holds an entity's rows, what a word means, a rule to respect), offer to save it with `propose_patch`, so the next question runs the same way for everyone. Shipped examples cannot be changed. Definitions carry a trust grade. When you rely on one marked proposed or UNVERIFIED, say so before the number or the action: an agent wrote it and no person has reviewed it. Checked means a person compared it with real rows; say who and when if the user asks how sure this is. You cannot set a grade: a person accepts or checks in the web page{}. Numbers with a different `basis` (transactional, attributed, modelled, experimental) are shown side by side, never added.",
             scope,
@@ -608,7 +633,7 @@ impl Hub<'_> {
             _ => None,
         };
         let l = self.reg.get(id).map_err(|e| format!("{:#}", e))?;
-        let srv = Server::with_data(&l.ont, l.data()).with_edit(edit).with_history(history);
+        let srv = Server::with_data(&l.ont, l.data()).with_edit(edit).with_history(history).with_via(&self.via);
         let out = f(&srv);
         let reload = srv.reload_needed.get();
         drop(srv);
@@ -645,13 +670,22 @@ impl Hub<'_> {
             "ping" => ok(json!({})),
             "tools/list" => {
                 self.reg.rescan();
-                ok(json!({ "tools": tool_definitions_for(self.reg, self.only.as_deref()) }))
+                let mut tools = tool_definitions_for(self.reg, self.only.as_deref());
+                if !self.can_propose {
+                    if let Some(a) = tools.as_array_mut() {
+                        a.retain(|t| !PROPOSE_TOOLS.contains(&t["name"].as_str().unwrap_or("")));
+                    }
+                }
+                ok(json!({ "tools": tools }))
             }
             "tools/call" => {
                 let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
                 let mut args = params.get("arguments").cloned().unwrap_or(json!({}));
                 if name == "spaces" {
                     return ok(Server::text(self.spaces_text(), false));
+                }
+                if !self.can_propose && PROPOSE_TOOLS.contains(&name) {
+                    return ok(Server::text(crate::oauth::read_only_refusal(), true));
                 }
                 let want = args.get("space").and_then(|v| v.as_str()).map(|s| s.to_string());
                 if let Some(o) = args.as_object_mut() {
@@ -748,7 +782,7 @@ pub fn run_stdio(mut reg: Registry, edit: EditConfig, only: Option<String>) -> R
         only.as_ref().map(|o| format!(", serving only {}", o)).unwrap_or_default(),
         if edit.allow { ", edit mode on" } else { "" }
     );
-    let mut hub = Hub { reg: &mut reg, edit, only };
+    let mut hub = Hub { reg: &mut reg, edit, only, can_propose: true, via: VIA.to_string() };
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(l) => l,

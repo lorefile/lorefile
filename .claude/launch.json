@@ -105,6 +105,20 @@
         "7077"
       ],
       "port": 7077
+    },
+    {
+      "name": "ontology-oauth",
+      "runtimeExecutable": "./target/debug/lorefile",
+      "runtimeArgs": [
+        "serve",
+        "--dir",
+        "examples/supply-chain",
+        "--port",
+        "7078",
+        "--public-url",
+        "http://127.0.0.1:7078"
+      ],
+      "port": 7078
     }
   ]
 }

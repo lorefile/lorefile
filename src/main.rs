@@ -8,6 +8,7 @@ mod edit;
 mod iri;
 mod loader;
 mod mcp;
+mod oauth;
 mod ontology;
 mod ossie;
 mod patch;
@@ -139,6 +140,18 @@ enum Cmd {
         /// Allow --no-auth on an address other machines can reach (e.g. --host 0.0.0.0).
         #[arg(long, requires = "no_auth")]
         i_know: bool,
+        /// Turn off the OAuth sign-in that ChatGPT's and Claude's connectors use. (It is on by
+        /// itself with the login token, for requests that arrive over HTTPS through a tunnel or proxy.)
+        #[arg(long)]
+        no_oauth: bool,
+        /// Answer OAuth sign-ins on this one address only, e.g. https://acme-lorefile.fly.dev.
+        /// Optional: without it the address is read from each request. Else LOREFILE_PUBLIC_URL.
+        #[arg(long, value_name = "URL")]
+        public_url: Option<String>,
+        /// Allow one more OAuth return address, matched exactly (repeatable). ChatGPT's, Claude's
+        /// and this machine's loopback addresses are always allowed.
+        #[arg(long = "oauth-redirect", value_name = "URL")]
+        oauth_redirect: Vec<String>,
     },
     /// Who stands behind each definition: list the grades, accept, or record a check.
     Trust {
@@ -333,9 +346,15 @@ fn main() -> Result<()> {
         Cmd::Mcp { allow_edit, commit_edits, no_commit_edits } => {
             return mcp::run_stdio(reg, edit_config(allow_edit, commit_edits, no_commit_edits), cli.space);
         }
-        Cmd::Serve { port, host, allow_edit, commit_edits, no_commit_edits, token, no_auth, .. } => {
+        Cmd::Serve { port, host, allow_edit, commit_edits, no_commit_edits, token, no_auth, no_oauth, public_url, oauth_redirect, .. } => {
+            let public_url = public_url.or_else(|| std::env::var("LOREFILE_PUBLIC_URL").ok().filter(|v| !v.trim().is_empty()));
+            let flags = serve::OAuthFlags {
+                off: no_oauth,
+                public_url: public_url.as_deref().map(oauth::pin).transpose().map_err(|e| anyhow::anyhow!(e))?,
+                redirects: oauth_redirect.iter().map(|u| oauth::extra_redirect(u)).collect::<Result<Vec<_>, _>>().map_err(|e| anyhow::anyhow!(e))?,
+            };
             let login = serve::resolve_login(&reg.root, token, no_auth)?;
-            return serve::run(reg, &host, port, edit_config(allow_edit, commit_edits, no_commit_edits), login);
+            return serve::run(reg, &host, port, edit_config(allow_edit, commit_edits, no_commit_edits), login, flags);
         }
         _ => {}
     }
