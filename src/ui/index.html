@@ -149,7 +149,21 @@ nav .cb{position:absolute;top:6px;right:8px;width:8px;height:8px;border-radius:5
 /* ---------- the Graph ---------- */
 .gr-rows{display:flex;flex-direction:column;gap:8px;max-width:860px}.gr-rows-in{display:flex;flex-direction:column;gap:6px}
 .gr-row{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:13px}
+.gr-rows.twin{position:absolute;left:-10000px;width:600px}.gr-rows.twin:focus-within{position:static;width:auto}
 .gr-crumbs{font-size:12.5px}.gr-crumbs:empty{display:none}.gr-hint{margin-top:-4px}
+/* the drawing */
+.gr-stage{min-height:520px}.gr-svg .gr-rect{fill:#fff;stroke:#d6d6d0;stroke-width:1}
+.gr-node{cursor:pointer;outline:none}.gr-node.sel .gr-rect,.gr-node:focus-visible .gr-rect{stroke:var(--accent);stroke-width:2.5}
+.gr-node:focus-visible .gr-mn,.gr-centre.sel .gr-mn{box-shadow:0 0 0 2px var(--accent)}
+.gr-node.dim{opacity:.35}.gr-box.missing .gr-rect{stroke:var(--block);stroke-dasharray:5 4}.gr-box.ghost .gr-rect,.gr-node.st-new .gr-rect{stroke:var(--ok);stroke-width:2;stroke-dasharray:6 4}
+.gr-node.st-changed .gr-rect{stroke:var(--warn);stroke-width:2;stroke-dasharray:6 4}.gr-node.st-removed .gr-rect{stroke:var(--block);stroke-width:2}.gr-node.st-removed text{text-decoration:line-through}
+.gr-centre.st-new .gr-mn{border:2px dashed var(--ok)}.gr-centre.st-changed .gr-mn{border:2px dashed var(--warn)}.gr-centre.st-removed .gr-mn{border:2px solid var(--block);text-decoration:line-through}
+.gr-edge path{fill:none;stroke:#b4b4ad;stroke-width:1.6}.gr-edge.missing path{stroke:var(--block);stroke-dasharray:4 3}.gr-edge.ghost path,.gr-edge.st-new path{stroke:var(--ok);stroke-dasharray:6 4}.gr-edge.st-removed path{stroke:var(--block);opacity:.6}.gr-edge.st-changed path{stroke:var(--warn)}
+.gr-kindline path{stroke:#6e6e78;stroke-dasharray:2 3}.gr-ring path{stroke:#cfcfc8;stroke-width:1.2}.gr-logicline path{stroke:#cfcfc8;stroke-width:1.2}
+.gr-label text.lbl{font-size:12px}.gr-label.sel text.gl1{fill:var(--accent)}.gr-label:focus-visible text.gl1{text-decoration:underline}
+.gr-svg .lnkt{fill:var(--accent);cursor:pointer}.gr-chip.sev-block .gr-rect{stroke:#f0b4b4}.gr-chip.sev-warn .gr-rect{stroke:#f3d19c}
+.gr-mn{height:100%;overflow:hidden}.gr-mn .mn-f.hi{background:var(--accent-soft);border-radius:5px}.gr-fam.nodata .gr-rect{stroke-dasharray:5 4}
+@media (max-width:760px){.gr-stage{display:none}}
 /* ---------- areas ---------- */
 .pl-areaname{cursor:pointer}.pl-areaname:hover{text-decoration:underline}
 .pl-emptyarea rect{fill:rgba(255,255,255,.5);stroke:#b9b9b2;stroke-dasharray:6 5;stroke-width:1.5}
@@ -1200,7 +1214,9 @@ function planeAside(){
   const close = `<button class="small pl-close" onclick="pl.sel=null;drawPlane(true)" aria-label="Close the card">Close</button>`;
   if (key && key.startsWith('e:')) {
     const e = entOf(key.slice(2));
-    if (!e) h = `<div class="card"><b>${esc(labelOf(key.slice(2)))} is no longer in this space</b>${close}</div>`;
+    const on = pl.overlay ? ovNode(key.slice(2)) : null;
+    if (!e && on) h = `<div class="pl-card"><div class="row"><span class="monob">${esc(pl.overlay.monogram || 'A')}</span><h2 style="font-size:17px">${esc(labelOf(on.name))}</h2><span class="hint">${esc(on.status === 'new' ? 'new, waiting' : on.status === 'removed' ? 'would be removed' : on.status)}</span></div>${on.description ? `<div style="font-size:13.5px">${esc(on.description)}</div>` : ''}<div class="hint">${esc(on.domain || '')} · ${esc(plural(on.fields || 0, 'field'))} · from ${esc(pl.overlay.agent || 'an agent')}</div><div class="row"><button class="primary small" onclick="go('review',${jq(pl.overlay.id)})">Back to the review</button></div></div>`;
+    else if (!e) h = `<div class="card"><b>${esc(labelOf(key.slice(2)))} is no longer in this space</b>${close}</div>`;
     else {
       const ms = e.metrics.map(metOf).filter(Boolean);
       const fromWhere = {}; (e.reasons || []).forEach(r => { const k = r.from || 'itself'; (fromWhere[k] = fromWhere[k] || []).push(r); });
@@ -1240,6 +1256,8 @@ function planeAside(){
     const [, id, ...rest] = key.split(':'); const n = rest.join(':'); const w = (pl.overlay && pl.overlay.id === id) ? pl.overlay : (PL.waiting || []).find(x => x.id === id) || {};
     const adds = (w.nodes || []).filter(x => x.status === 'new').map(x => labelOf(x.name)); const changes = (w.nodes || []).filter(x => x.status === 'changed').map(x => labelOf(x.name));
     h = `<div class="pl-card"><div class="row"><span class="monob">${esc(w.monogram || 'A')}</span><h2 style="font-size:17px">${esc(labelOf(n))}</h2><span class="hint">waiting</span></div><div style="font-size:13.5px">${esc(w.headline || '')}</div><div class="hint">From ${esc(w.agent || 'an agent')}${adds.length ? ' · adds ' + esc(adds.join(', ')) : ''}${changes.length ? ' · changes ' + esc(changes.join(', ')) : ''}</div><div class="row"><button class="primary small" onclick="go('review',${jq(id)})">Review</button>${close}</div></div>`;
+  } else if (key && /^(gl|gg|gr|ga|gf|gx):|^gmore:kinds$/.test(key)) {
+    h = graphCardHtml(key, editable);
   } else if (key && key.startsWith('area:')) {
     h = areaCardHtml(key.slice(5), PL.space.editable && !pl.overlay);
   } else if (key === 'newarea' && PL.space.editable) {
@@ -1279,7 +1297,7 @@ async function renderReviewMap(v, id){
   v.innerHTML = main('<div class="empty">Drawing what this proposal would change…</div>');
   const g = await api(B + '/api/graph?proposal=' + encodeURIComponent(id));
   if (g.error) { v.innerHTML = main(`<div class="card"><b>${esc(g.error)}</b><button class="small" onclick="go('review',${jq(id)})">Back to the review</button></div>`); return; }
-  pl.overlay = { ...g, id, agent: (RV && RV.context && RV.context.agent) || 'an agent', monogram: ((RV && RV.context && RV.context.agent) || 'A').charAt(0).toUpperCase() };
+  pl.overlay = { ...g, id, agent: (RV && RV.context && RV.context.agent) || 'an agent', monogram: ((RV && RV.context && RV.context.agent) || 'A').charAt(0).toUpperCase() }; GR.ovCentre = null;
   await renderPlaneShell(v);
 }
 async function renderPlaneShell(v){
@@ -1292,7 +1310,7 @@ async function renderPlaneShell(v){
 }
 function renderPlaneScreen(){
   const v = $('view'); if (!v || !PL) return;
-  const tab = pl.overlay ? 'home' : route.screen === 'graph' ? 'graph' : route.screen === 'list' ? 'list' : 'home';
+  const tab = pl.overlay ? 'graph' : route.screen === 'graph' ? 'graph' : route.screen === 'list' ? 'list' : 'home';
   const banner = (PL.space.reasons || []).filter(r => r.light === 'red').length ? `<div class="banner bad">${esc(plural(PL.space.reasons.filter(r => r.light === 'red').length, 'error'))}: agents may get wrong answers · <button type="button" class="lnk" onclick="go('diagnostics')">Problems</button></div>`  : (!O.ok && !PL.space.empty ? `<div class="banner bad">${esc(plural(O.diagnostics.filter(d => d.level === 'error').length, 'error'))}: agents may get wrong answers · <button type="button" class="lnk" onclick="go('diagnostics')">Problems</button></div>` : '');
   const hint = { home: 'Everything at once. Click something to see it in the card.', graph: 'One entity in the middle, everything it touches around it. Click a neighbour to move there.', list: 'Every entity, metric, source and agent as rows. Sort by any column.' }[tab];
   const tabBtn = (k, t) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" onclick="go(${jq(k)})">${t}</button>`;
@@ -1312,7 +1330,7 @@ window.addEventListener('resize', () => { if (route.screen === 'home' && PL && !
 // ---------- the Graph: one entity in the middle, everything it touches around it (Part 5) ----------
 // The page builds it from /api/plane (PL), /api/summary (O) and /api/describe of the centre (DC);
 // no new endpoint. Rows here; the drawing over them comes with the graph step.
-const GR = { centre: null, trail: [], failed: {}, loading: {}, more: false, all: {}, show: null, msg: '' };
+const GR = { centre: null, trail: [], failed: {}, loading: {}, more: {}, all: {}, msg: '', ovCentre: null };
 // the centre's fields, fetched whenever they are missing: a failed answer is never kept (problem 5)
 async function graphDescribe(name){
   if (DC[name] && DC[name].properties) return DC[name];
@@ -1359,9 +1377,16 @@ function graphModel(name){
 }
 // the address says the centre; else the selection, the last centre, the most important entity
 function graphCentre(){
+  if (pl.overlay) {
+    const changed = (pl.overlay.nodes || []).filter(n => n.status !== 'same').map(n => n.name);
+    const touched = changed.concat((pl.overlay.edges || []).filter(x => x.status !== 'same').flatMap(x => [x.from, x.to]));
+    GR.msg = '';
+    return GR.ovCentre && (ovNode(GR.ovCentre) || entOf(GR.ovCentre)) ? GR.ovCentre : touched[0] || mostImportant();
+  }
+  if (GR.centre && !entOf(GR.centre) && route.arg === GR.centre && PL.entities.length) { const gone = GR.centre; GR.centre = null; location.replace('#graph'); GR.msg = `${gone} is no longer in this space`; return mostImportant(); }
   const want = route.screen === 'graph' ? route.arg : '';
   const sel = pl.sel && pl.sel.startsWith('e:') ? pl.sel.slice(2) : null;
-  GR.msg = '';
+  if (!GR.msg.endsWith('no longer in this space')) GR.msg = '';
   let c = want || sel || GR.centre || mostImportant();
   if (c && !entOf(c)) { GR.msg = `${c} isn't in this space`; c = mostImportant(); }
   return c;
@@ -1374,7 +1399,7 @@ function graphMove(name){
 }
 function crumbsHtml(){
   const t = GR.trail.slice(-6);
-  return t.length > 1 ? `<nav aria-label="Centres you visited" class="row" style="gap:4px">${t.map((n, i) => i === t.length - 1 ? `<b>${esc(labelOf(n))}</b>` : `<button type="button" class="lnk" onclick="graphMove(${jq(n)})">${esc(labelOf(n))}</button><span class="hint" aria-hidden="true">›</span>`).join('')}</nav>` : '';
+  return t.length > 1 ? `<div role="navigation" aria-label="Centres you visited" class="row" style="gap:4px">${t.map((n, i) => i === t.length - 1 ? `<b>${esc(labelOf(n))}</b>` : `<button type="button" class="lnk" onclick="graphMove(${jq(n)})">${esc(labelOf(n))}</button><span class="hint" aria-hidden="true">›</span>`).join('')}</div>` : '';
 }
 // the rows: the Graph's twin for phones and screen readers, the same content as the drawing
 function graphRows(M){
@@ -1401,19 +1426,368 @@ function graphRows(M){
 function selectGraph(key){ pl.sel = key; GR.sheet = true; planeAside(); if (phone()) { const sh = $('pl-aside'); if (sh) sh.classList.add('up'); } }
 async function drawGraph(keep){
   const rowsEl = $('gr-rows'); if (!rowsEl || !PL) return;
-  if (!PL.entities.length) { $('gr-stage') && ($('gr-stage').innerHTML = ''); rowsEl.innerHTML = `<div class="card"><b>No entities yet</b>${PL.space.editable ? `<button class="primary small" style="align-self:flex-start" onclick="go('entities')">Add an entity</button>` : ''}</div>`; planeBar(); planeAside(); return; }
+  if (!PL.entities.length && !pl.overlay) { $('gr-stage') && ($('gr-stage').innerHTML = ''); rowsEl.innerHTML = `<div class="card"><b>No entities yet</b>${PL.space.editable ? `<button class="primary small" style="align-self:flex-start" onclick="go('entities')">Add an entity</button>` : ''}</div>`; planeBar(); planeAside(); return; }
   const c = graphCentre();
-  if (c !== GR.centre) { GR.centre = c; if (GR.trail[GR.trail.length - 1] !== c) GR.trail.push(c); GR.trail = GR.trail.slice(-12); announce(`${labelOf(c)} is in the middle`); }
-  if (!pl.sel || !pl.sel.startsWith('e:') || !keep) pl.sel = 'e:' + c;
-  const M = graphModel(c);
-  $('gr-crumbs').innerHTML = (GR.msg ? `<div class="banner">${esc(GR.msg)}; showing ${esc(labelOf(c))}, the most important entity.</div>` : '') + crumbsHtml();
-  rowsEl.innerHTML = graphRows(M);
+  const moved = c !== GR.centre;
+  if (moved) { GR.centre = c; GR.more = {}; GR.moved = false; GR.focus = 'e:' + c; if (GR.trail[GR.trail.length - 1] !== c) GR.trail.push(c); GR.trail = GR.trail.slice(-12); announce(`${labelOf(c)} is in the middle`); }
+  if (!pl.sel || !keep || (pl.sel.startsWith('e:') && pl.sel !== 'e:' + c)) pl.sel = 'e:' + c;
+  const M = pl.overlay ? graphModelOverlay(c) : graphModel(c);
+  $('gr-crumbs').innerHTML = (GR.msg ? `<div class="banner">${esc(GR.msg)}; showing ${esc(labelOf(c))}, the most important entity.</div>` : '') + (pl.overlay ? '' : crumbsHtml());
+  rowsEl.innerHTML = graphRows(M); rowsEl.classList.toggle('twin', !phone());
   if (typeof drawGraphSvg === 'function') drawGraphSvg(M); else { const st = $('gr-stage'); if (st) st.hidden = true; }
-  planeBar(); planeAside();
+  grBar(M); planeAside();
   { const sh = $('pl-aside'); if (sh && phone() && !GR.sheet) sh.classList.remove('up'); GR.sheet = false; }
   // the centre's fields: fetched whenever they are missing, so a save never leaves "Loading fields…" behind
-  if (!M.d && !GR.loading[c] && !GR.failed[c]) { await graphDescribe(c); if (GR.centre === c && route.screen === 'graph') drawGraph(true); }
+  if (!M.d && entOf(c) && !GR.loading[c] && !GR.failed[c]) { await graphDescribe(c); if (GR.centre === c && (route.screen === 'graph' || pl.overlay)) drawGraph(true); }
 }
+// ---------- the Graph's drawing (Part 5): the same content as the rows, laid out so no label can overlap ----------
+// Deterministic: centre in the middle, links in on the left, links out on the right, logic above, rows and family
+// below. Each neighbour's row owns its label lane. No physics, no drag; the camera pans and zooms as on Overview.
+const GW = { box: 200, boxH: 52, row: 64, lane: 300, cw: 260, chip: 180, chipH: 44, ring: 160, ringH: 36 };
+GR.cam = null; GR.moved = false; GR.focus = null; GR.nodes = []; GR.step = store('lorefile-graph-step', false);
+GR.show = store('lorefile-graph-show', { links: true, logic: true, family: true });
+const keepGraph = () => { keep('lorefile-graph-step', GR.step); keep('lorefile-graph-show', GR.show); };
+// overlay: what a waiting proposal would change, drawn read-only over the Graph
+const ovNode = (n) => pl.overlay ? (pl.overlay.nodes || []).find(x => x.name === n) : null;
+const ovStatus = (n) => { const x = ovNode(n); return x && x.status !== 'same' ? x.status : ''; };
+function graphModelOverlay(name){
+  const node = ovNode(name) || { name, status: 'same', domain: 'Other', fields: 0 };
+  const e = entOf(name) || { name, label: labelOf(name), area: node.domain, icon: 'cube', light: 'none', kinds: [], description: node.description || '', fields: node.fields || 0 };
+  const out = [], inn = [];
+  for (const r of (pl.overlay.edges || [])) {
+    if (r.from === name) { const b = out.find(x => x.other === r.to); const l = { dir: 'out', other: r.to, name: r.name, words: '·', status: r.status, self: r.to === name, missing: !ovNode(r.to) && !entOf(r.to) }; if (b) b.labels.push(l); else out.push({ other: r.to, labels: [l], self: l.self, missing: l.missing }); }
+    else if (r.to === name) { const b = out.find(x => x.other === r.from) || inn.find(x => x.other === r.from); const l = { dir: 'in', other: r.from, name: r.name, words: '·', status: r.status }; if (b) b.labels.push(l); else inn.push({ other: r.from, labels: [l] }); }
+  }
+  const base = entOf(name) ? graphModel(name) : null;
+  return { e, d: base ? base.d : null, out, inn, metrics: base ? base.metrics : [], fns: base ? base.fns : [], guards: base ? base.guards : [], acts: base ? base.acts : [], actRules: base ? base.actRules : () => 0, kinds: base ? base.kinds : [], parent: base ? base.parent : null, node };
+}
+// more than 12 in a column: groups by link name, singles from the smallest groups first
+function columnRows(boxes, col){
+  if (boxes.length <= 12) return boxes.map(b => ({ box: b }));
+  if (GR.more[col]) { const all = boxes.slice(0, 60).map(b => ({ box: b })); if (boxes.length > 60) all.push({ note: `60 of ${boxes.length} shown · Find to go to one` }); return all; }
+  const by = {}; boxes.forEach(b => { const k = b.labels[0].name; (by[k] = by[k] || []).push(b); });
+  const groups = Object.entries(by).sort((a, b) => a[1].length - b[1].length);
+  const singles = [], grouped = [];
+  groups.forEach(([k, list], i) => { const left = groups.length - i - 1; if (singles.length + list.length + left + grouped.length <= 12) singles.push(...list); else grouped.push([k, list]); });
+  grouped.sort((a, b) => b[1].length - a[1].length);
+  return singles.map(b => ({ box: b })).concat(grouped.map(([k, list]) => ({ group: k, list }))).concat([{ showAll: boxes.length }]);
+}
+const cut = (s, n) => cutTo(s, n);
+function grApplyCam(){ const g = $('gr-cam'); if (g && GR.cam) g.setAttribute('transform', `translate(${GR.cam.x.toFixed(1)},${GR.cam.y.toFixed(1)}) scale(${GR.cam.k.toFixed(4)})`); const z = $('gr-zoom'); if (z) z.textContent = Math.round((GR.cam ? GR.cam.k : 1) * 100) + '%'; }
+// fit what was drawn: the camera group's own box, 40 px around it, never smaller than 0.4 or larger than 1.2
+function grFit(animate){
+  const svg = $('gr-svg'), g = $('gr-cam'); if (!svg || !g) return;
+  let bb; try { bb = g.getBBox(); } catch (e) { return; }
+  const w = svg.clientWidth || 900, h = svg.clientHeight || 560, pad = 40;
+  let k = Math.min((w - pad * 2) / Math.max(1, bb.width), (h - pad * 2) / Math.max(1, bb.height)); k = Math.max(0.4, Math.min(1.2, k));
+  const to = { x: w / 2 - (bb.x + bb.width / 2) * k, y: h / 2 - (bb.y + bb.height / 2) * k, k };
+  GR.moved = false;
+  if (!animate || reduced() || !GR.cam) { GR.cam = to; grApplyCam(); return; }
+  const from = { ...GR.cam }, t0 = performance.now();
+  const step = (t) => { const p = Math.min(1, (t - t0) / 220), e = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; GR.cam = { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e, k: from.k + (to.k - from.k) * e }; grApplyCam(); if (p < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function grZoom(f){ if (!GR.cam) return; const svg = $('gr-svg'); const w = svg ? svg.clientWidth : 800, h = svg ? svg.clientHeight : 500; const k = Math.max(0.2, Math.min(4, GR.cam.k * f)), s = k / GR.cam.k; GR.cam = { x: w / 2 - (w / 2 - GR.cam.x) * s, y: h / 2 - (h / 2 - GR.cam.y) * s, k }; GR.moved = true; grApplyCam(); }
+function grBar(M){
+  const el = $('pl-bar'); if (!el || !PL) return;
+  const c = PL.counts, L = c.lights;
+  const btn = (l) => { const n = L[l] || 0; return `<button class="pl-lb ${l}${pl.filter === l ? ' on' : ''}" ${n ? '' : 'disabled'} aria-pressed="${pl.filter === l}" onclick="pl.filter=pl.filter===${jq(l)}?null:${jq(l)};drawGraph(true)" title="${esc(n ? 'Show only: ' + lightWords(l) : 'none')}"><span aria-hidden="true">${LIGHTS[l][0]}</span> ${n}<span class="sr"> ${esc(LIGHTS[l][1])}</span></button>`; };
+  const chk = (k, t) => `<label class="chk"><input type="checkbox" ${GR.show[k] ? 'checked' : ''} onchange="GR.show[${jq(k)}]=this.checked;keepGraph();drawGraph(true)"> ${t}</label>`;
+  const touches = pl.overlay ? (pl.overlay.nodes || []).filter(n => n.status !== 'same').map(n => n.name) : [];
+  el.innerHTML = `${pl.overlay ? `<div class="rv-bar" style="flex:1 1 100%">What this proposal would change: ${esc(pl.overlay.headline || '')} · read-only · <button type="button" class="lnk" onclick="go('review',${jq(pl.overlay.id)})">Back to the review</button></div>${touches.length > 1 ? `<div class="row" style="flex:1 1 100%;gap:4px"><span class="hint">This proposal touches:</span>${touches.map(n => `<button class="chip pick ${n === GR.centre ? 'on' : ''}" onclick="GR.ovCentre=${jq(n)};drawGraph(false)">${esc(labelOf(n))}</button>`).join('')}</div>` : ''}` : ''}<b>${esc(PL.space.name)}</b><span class="pl-lights">${btn('red')}${btn('amber')}${btn('green')}</span><label class="chk"><input type="checkbox" ${GR.step ? 'checked' : ''} onchange="GR.step=this.checked;keepGraph();drawGraph(true)"> + one more step (E)</label><span class="hint">Show</span>${chk('links', 'Links')}${chk('logic', 'Logic')}${chk('family', 'Rows and family')}<span style="flex:1"></span><span class="pl-find"><input id="gr-find" placeholder="Find… (/)" value="${esc(pl.find)}" aria-label="Find an entity to put in the middle" oninput="planeFind(this.value);const h=$('pl-hits');if(h)h.innerHTML=pl.hits.filter(x=>x.key.startsWith('e:')).map((x,i)=>'<button class=&quot;result&quot; onclick=&quot;planeGo('+pl.hits.indexOf(x)+')&quot;><small>'+esc(x.kind)+'</small><span>'+esc(x.label)+'</span></button>').join('')" onkeydown="if(event.key==='Enter'){const i=pl.hits.findIndex(x=>x.key.startsWith('e:'));if(i>=0)planeGo(i)}else if(event.key==='Escape'){this.value='';planeFind('')}"><div id="pl-hits" class="pl-hits"></div></span><span class="pl-zoom"><button class="small" onclick="grZoom(0.8)" aria-label="Zoom out">−</button><span id="gr-zoom" class="hint">${Math.round((GR.cam ? GR.cam.k : 1) * 100)}%</span><button class="small" onclick="grZoom(1.25)" aria-label="Zoom in">+</button><button class="small" onclick="grFit()" title="Fit (0)">Fit</button></span>`;
+}
+// a neighbour box, 200 × 52 (or 160 × 36 one step further): glyph, label, area, light
+function boxSvg(n, x, y, opts){
+  const o = opts || {}, e = entOf(n), w = o.small ? GW.ring : GW.box, h = o.small ? GW.ringH : GW.boxH;
+  const st = pl.overlay ? ovStatus(n) : (o.ghost ? 'new' : '');
+  const key = o.missing ? 'gx:' + n : 'e:' + n;
+  const label = e ? e.label : labelOf(n);
+  const col = e ? domainColor(e.area) : '#8e8e96';
+  const dim = pl.filter && e && e.light !== pl.filter ? ' dim' : '';
+  const cls = `gr-node gr-box${o.missing ? ' missing' : ''}${st ? ' st-' + st : ''}${o.ghost ? ' ghost' : ''}${pl.sel === key ? ' sel' : ''}${dim}`;
+  const aria = o.aria || (o.missing ? `${n}, missing: no entity has this name` : `${label}${e ? ', in ' + e.area : ''}`);
+  GR.nodes.push({ key, x: x + w / 2, y: y + h / 2, col: o.col || 'out', entity: !o.missing && !!(e || ovNode(n)) });
+  return `<g class="${cls}" data-key="${esc(key)}" data-name="${esc(n)}" role="button" tabindex="-1" aria-label="${esc(aria)}" transform="translate(${x},${y})"><rect width="${w}" height="${h}" rx="10" class="gr-rect"/><rect width="4" height="${h - 12}" x="0" y="6" rx="2" fill="${o.missing ? 'var(--block)' : col}"/>${o.small ? '' : `<use href="#g-${esc(e ? e.icon : 'cube')}" x="12" y="${h / 2 - 11}" width="22" height="22" style="color:${col}"/>`}<text x="${o.small ? 12 : 42}" y="${o.small ? 22 : 23}" class="lbl">${esc(cut(o.missing ? `${n} (missing)` : label, o.small ? 18 : 24))}</text>${o.small ? '' : `<text x="42" y="40" class="sub">${esc(o.missing ? 'no entity has this name' : st === 'new' || o.ghost ? 'new, waiting' : e ? e.area : '')}</text>`}${e && e.light !== 'none' && !o.small ? badgeSvg(e.light, w - 12, 12) : ''}${e && e.same_label && !o.small ? `<title>${esc(n)}</title>` : `<title>${esc(n)}</title>`}</g>`;
+}
+function drawGraphSvg(M){
+  const st = $('gr-stage'); if (!st) return;
+  if (phone()) { st.hidden = true; return; }
+  st.hidden = false;
+  ensureGlyphs();
+  const e = M.e, name = e.name, editable = PL.space.editable && !pl.overlay;
+  GR.nodes = [];
+  const old = {}; st.querySelectorAll('.gr-box[data-name]').forEach(g => { const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') || ''); if (m) old[g.dataset.name] = [Number(m[1]), Number(m[2])]; });
+  const selM = pl.sel && pl.sel.startsWith('m:') ? metOf(pl.sel.slice(2)) : null;
+  const hi = new Set(selM ? (selM.uses || []) : []);
+  // --- the centre: its fields, the first 12 plus every field a metric uses ---
+  const d = M.d, used = usedFields(name), fields = d ? d.properties : null;
+  const list = fields ? (GR.all[name] ? fields : fields.filter((f, i) => i < 12 || used.has(f.name))) : null;
+  const more = fields ? fields.length - list.length : 0;
+  const isNew = pl.overlay && ovStatus(name) === 'new';
+  const rowsN = isNew ? 1 : list ? list.length : 1;
+  const CH = 66 + rowsN * 23 + (more > 0 || (GR.all[name] && fields && fields.length > 12) ? 24 : 0);
+  const cx0 = -GW.cw / 2, cy0 = -CH / 2;
+  const fieldRow = (f) => `<div class="mn-f${hi.has(f.name) ? ' hi' : ''}"><span class="k">${f.key ? '★' : ''}</span><span class="n" title="${esc(f.description || f.name)}">${esc(f.name)}</span>${!f.description && editable && !f.from ? `<input class="mn-in" placeholder="Not described" aria-label="Describe ${esc(f.name)}" onchange="graphDescribeField(${jq(name)},${jq(f.name)},this.value)">` : `<span class="t">${esc(typeWordJs(f))}</span>`}<span class="u">${used.has(f.name) ? 'Σ' : ''}</span></div>`;
+  const body = isNew ? `<div class="mn-s">new · ${esc(plural((M.node && M.node.fields) || 0, 'field'))}</div>`
+    : list ? list.map(fieldRow).join('') + (more > 0 ? `<button type="button" class="lnk mn-more" onclick="GR.all[${jq(name)}]=true;drawGraph(true)">+${more} more fields</button>` : GR.all[name] && fields.length > 12 ? `<button type="button" class="lnk mn-more" onclick="GR.all[${jq(name)}]=false;drawGraph(true)">Fold the fields</button>` : '')
+    : GR.failed[name] ? `<div class="mn-s">Couldn't load the fields · <button type="button" class="lnk" onclick="delete GR.failed[${jq(name)}];drawGraph(true)">Try again</button></div>` : `<div class="mn-s">Loading fields…</div>`;
+  const cst = pl.overlay ? ovStatus(name) : '';
+  let svg = '';
+  const centre = `<g class="gr-node gr-centre${pl.sel === 'e:' + name ? ' sel' : ''}${cst ? ' st-' + cst : ''}" data-key="e:${esc(name)}" data-centre="1" role="button" tabindex="-1" aria-label="${esc(`${e.label}, in the middle. ${d ? plural(d.properties.length, 'field') : ''}`)}" transform="translate(${cx0},${cy0})"><foreignObject width="${GW.cw}" height="${CH}"><div xmlns="http://www.w3.org/1999/xhtml" class="mn gr-mn${pl.sel === 'e:' + name ? ' sel' : ''}" style="border-top-color:${domainColor(e.area)}"><div class="mn-h"><svg width="18" height="18" style="color:${domainColor(e.area)};flex:0 0 auto" aria-hidden="true"><use href="#g-${esc(e.icon || 'cube')}"/></svg><b>${esc(e.label)}</b>${e.light && e.light !== 'none' ? `<span class="lb ${e.light}" aria-hidden="true">${LIGHTS[e.light][0]}</span>` : ''}</div>${d ? `<div class="mn-s">${esc(plural(d.properties.length, 'field'))}${d.key ? ' · key' : ''}</div>` : ''}${body}</div></foreignObject></g>`;
+  GR.nodes.push({ key: 'e:' + name, x: 0, y: 0, col: 'centre', entity: true, centre: true });
+  // --- links out (right) and links in (left): one row per neighbour, the label in that row's lane ---
+  const out = M.out.slice(), inn = M.inn.slice();
+  // waiting proposals' new links from or to the centre: dashed ghost rows, up to 5
+  if (!pl.overlay) for (const w of (PL.waiting || []).filter(w => w.drawn)) for (const ed of (w.edges || []).filter(x => x.status === 'new' && (x.from === name || x.to === name)).slice(0, 5)) { const other = ed.from === name ? ed.to : ed.from; if (!out.some(b => b.other === other) && !inn.some(b => b.other === other)) out.push({ other, labels: [{ dir: ed.from === name ? 'out' : 'in', name: ed.name, words: '·', ghost: w.id }], ghost: w.id, missing: false }); }
+  const self = out.find(b => b.self);
+  const outBoxes = out.filter(b => !b.self);
+  const colSvg = (boxes, side) => {
+    const rows = columnRows(boxes, side);
+    const hs = rows.map(r => r.box ? GW.row + 26 * Math.max(0, r.box.labels.length - 1) : r.group ? GW.row : 34);
+    if (side === 'out' && self) hs.unshift(GW.row);
+    const total = hs.reduce((a, b) => a + b, 0); let y = -total / 2, s = '', edgeI = 0;
+    const edges = rows.filter(r => r.box || r.group).length + (side === 'out' && self ? 1 : 0);
+    const edgeY = () => { const k = edges <= 1 ? 0.5 : edgeI / (edges - 1); edgeI++; return cy0 + 20 + (CH - 40) * k; };
+    const bx = side === 'out' ? GW.cw / 2 + GW.lane : -GW.cw / 2 - GW.lane - GW.box;
+    const laneX = side === 'out' ? GW.cw / 2 + 70 : -GW.cw / 2 - 70;
+    const labelSvg = (r, ly, x, anchor) => {
+      const toCentre = r.dir === 'in';
+      const words = `${r.dir === 'out' && side === 'out' ? '' : r.dir === 'in' && side === 'out' ? '← ' : ''}${linkWords(r.name)}${r.from && r.from !== name ? ' · from ' + r.from : ''}${r.ends ? ' · ends at ' + r.ends : ''}`;
+      const card = cardWords(r.dir === 'out' ? name : r.other, r.dir === 'out' ? r.other : name, r.card);
+      const noSentence = !r.words;
+      const key = `gl:${r.dir}|${r.dir === 'out' ? (r.from || name) : r.other}|${r.name}`;
+      GR.nodes.push({ key, x: x + (anchor === 'end' ? -90 : 90), y: ly, col: side, label: true });
+      return `<g class="gr-node gr-label${noSentence ? ' warn' : ''}${r.ghost ? ' ghost' : ''}${r.status && r.status !== 'same' ? ' st-' + r.status : ''}${pl.sel === key ? ' sel' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${linkWords(r.name)}: ${card}${noSentence ? ', no sentence' : ''}`)}"><text x="${x}" y="${ly - 19}" text-anchor="${anchor}" class="lbl gl1${noSentence ? ' warnc' : ''}">${esc(cut(words, 32))}${r.rules ? ` ⛉${r.rules}` : ''}</text><text x="${x}" y="${ly - 6}" text-anchor="${anchor}" class="sub">${esc(cut(card + (noSentence ? ' · no sentence' : ''), 32))}</text><title>${esc(`${words}: ${card}${r.words && r.words !== '·' ? '. ' + r.words : ''}`)}</title></g>`;
+    };
+    if (side === 'out' && self) {
+      // a self-link: a loop on the centre's right edge, its label in the first row of the out column
+      const h = hs[0], yr = y + h / 2, ye = edgeY();
+      s += `<g class="gr-edge"><path d="M${GW.cw / 2},${ye - 10} C${GW.cw / 2 + 60},${ye - 40} ${GW.cw / 2 + 60},${ye + 20} ${GW.cw / 2},${ye + 10}" marker-end="url(#pl-arrow)"/></g>`;
+      self.labels.forEach((r, i) => { s += labelSvg({ ...r, name: r.name, dir: 'out' }, yr - 8 + i * 16, laneX + 10, 'start'); });
+      s += `<text x="${bx}" y="${yr + 4}" class="sub">→ itself</text>`;
+      y += h; hs.shift();
+    }
+    rows.forEach((r, i) => {
+      const h = hs[i], yr = y + h / 2;
+      if (r.box) {
+        const b = r.box, ye = edgeY();
+        const missing = b.missing && !ovNode(b.other);
+        const xEdge = side === 'out' ? GW.cw / 2 : -GW.cw / 2, xBox = side === 'out' ? bx : bx + GW.box;
+        const bend = side === 'out' ? xEdge + 60 : xEdge - 60;
+        const anyIn = b.labels.some(l => l.dir === 'in'), anyOut = b.labels.some(l => l.dir === 'out');
+        const status = b.labels.map(l => l.status).find(x => x && x !== 'same') || '';
+        s += `<g class="gr-edge${missing ? ' missing' : ''}${b.ghost ? ' ghost' : ''}${status ? ' st-' + status : ''}"><path d="M${xEdge},${ye} C${bend},${ye} ${bend},${yr} ${side === 'out' ? xEdge + 120 : xEdge - 120},${yr} L${xBox},${yr}" ${side === 'out' ? (anyOut ? 'marker-end="url(#pl-arrow)"' : '') : 'marker-start="url(#pl-arrow)"'} ${side === 'out' && anyIn ? 'marker-start="url(#pl-arrow)"' : ''}/></g>`;
+        // two links to the same entity share its row, which grows 26 per extra label; each label keeps its own lines
+        b.labels.forEach((l, j) => { s += labelSvg(l, yr - 26 * (b.labels.length - 1 - j), side === 'out' ? xEdge + 96 : xEdge - 96, side === 'out' ? 'start' : 'end'); });
+        s += boxSvg(b.other, bx, yr - GW.boxH / 2, { col: side, missing, ghost: !!b.ghost, aria: missing ? null : `${labelOf(b.other)}. ${labelOf(name)} ${side === 'out' ? 'links to it as' : 'is linked from it as'} ${b.labels.map(l => linkWords(l.name)).join(' and ')}: ${cardWords(b.labels[0].dir === 'out' ? name : b.other, b.labels[0].dir === 'out' ? b.other : name, b.labels[0].card)}.` });
+      } else if (r.group) {
+        const key = `gg:${side}|${r.group}`, ye = edgeY(); GR.nodes.push({ key, x: bx + GW.box / 2, y: yr, col: side });
+        const xEdge = side === 'out' ? GW.cw / 2 : -GW.cw / 2, xBox = side === 'out' ? bx : bx + GW.box, bend = side === 'out' ? xEdge + 60 : xEdge - 60;
+        s += `<g class="gr-edge"><path d="M${xEdge},${ye} C${bend},${ye} ${bend},${yr} ${side === 'out' ? xEdge + 120 : xEdge - 120},${yr} L${xBox},${yr}"/></g>`;
+        s += `<g class="gr-node gr-box gr-group${pl.sel === key ? ' sel' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${r.list.length} more via ${linkWords(r.group)}: open the list`)}" transform="translate(${bx},${yr - GW.boxH / 2})"><rect width="${GW.box}" height="${GW.boxH}" rx="10" class="gr-rect"/><text x="14" y="23" class="lbl">+${r.list.length} via ${esc(cut(linkWords(r.group), 18))}</text><text x="14" y="40" class="sub">open the list</text></g>`;
+      } else if (r.showAll) {
+        s += `<g class="gr-node gr-more" data-key="gmore:${side}" role="button" tabindex="-1" aria-label="Show all ${r.showAll}"><text x="${bx}" y="${yr + 4}" class="sub lnkt">Show all (${r.showAll})</text></g>`;
+      } else if (r.note) {
+        s += `<text x="${bx}" y="${yr + 4}" class="sub">${esc(r.note)}</text>`;
+      }
+      y += h;
+    });
+    if (!rows.length && !(side === 'out' && self)) {
+      const x = side === 'out' ? GW.cw / 2 + 60 : -GW.cw / 2 - 60, anchor = side === 'out' ? 'start' : 'end';
+      const back = side === 'in' && M.out.some(b => b.labels.some(l => l.dir === 'in'));
+      s += `<text x="${x}" y="-4" text-anchor="${anchor}" class="sub">${side === 'out' ? `${esc(labelOf(name))} links to nothing.` : back ? `Nothing else links to ${esc(labelOf(name))}.` : `Nothing links to ${esc(labelOf(name))}.`}</text>${editable && side === 'in' ? `<g class="gr-node gr-addlink" data-key="addlink" role="button" tabindex="-1" aria-label="Add a link from ${esc(name)}"><text x="${x}" y="14" text-anchor="${anchor}" class="sub lnkt">Add a link</text></g>` : ''}`;
+    }
+    return { svg: s, rows };
+  };
+  let outC = { svg: '', rows: [] }, inC = { svg: '', rows: [] };
+  if (GR.show.links) { outC = colSvg(outBoxes, 'out'); inC = colSvg(inn, 'in'); }
+  // --- one step further: each neighbour's own neighbours, smaller, lines unlabelled ---
+  let ring = '';
+  if (GR.show.links && GR.step) {
+    const drawn = new Set([name, ...outBoxes.map(b => b.other), ...inn.map(b => b.other)]);
+    const placed = {};
+    const side = (C, dir) => {
+      const parents = C.rows.filter(r => r.box).map(r => r.box.other);
+      const kids = [];
+      for (const p of parents) { const ns = [...new Set(PL.links.filter(l => (l.from === p || l.to === p) && !l.missing).map(l => l.from === p ? l.to : l.from))].filter(n => n !== p && n !== name).slice(0, 6); ns.forEach(n => kids.push([p, n])); }
+      const list = kids.slice(0, 60), total = list.length * (GW.ringH + 8); let y = -total / 2;
+      const x = dir === 'out' ? GW.cw / 2 + GW.lane + GW.box + 120 : -GW.cw / 2 - GW.lane - GW.box - 120 - GW.ring;
+      const pos = (n) => { const g = GR.nodes.find(q => q.key === 'e:' + n); return g ? [g.x, g.y] : null; };
+      for (const [p, n] of list) {
+        const pp = pos(p); if (!pp) continue;
+        const px = dir === 'out' ? pp[0] + GW.box / 2 : pp[0] - GW.box / 2;
+        if (drawn.has(n) || placed[n]) { const q = pos(n) || placed[n]; if (q) ring += `<g class="gr-edge gr-ring"><path d="M${px},${pp[1]} L${q[0]},${q[1]}"/><title>${esc(labelOf(p) + ' and ' + labelOf(n))}</title></g>`; continue; }
+        placed[n] = [x + GW.ring / 2, y + GW.ringH / 2];
+        ring += `<g class="gr-edge gr-ring"><path d="M${px},${pp[1]} C${(px + x) / 2},${pp[1]} ${(px + x) / 2},${y + GW.ringH / 2} ${dir === 'out' ? x : x + GW.ring},${y + GW.ringH / 2}"/><title>${esc(labelOf(p) + ' and ' + labelOf(n))}</title></g>`;
+        ring += boxSvg(n, x, y, { small: true, col: dir === 'out' ? 'out2' : 'in2' });
+        y += GW.ringH + 8;
+      }
+    };
+    side(outC, 'out'); side(inC, 'in');
+  }
+  // --- logic above: metrics, functions, guardrails, actions; 6 to a row, lines to the centre's top ---
+  let logic = '';
+  if (GR.show.logic) {
+    const chips = [];
+    const group = (list, kind, make) => { if (list.length > 12 && !GR.more['logic:' + kind]) { list.slice(0, 11).forEach(x => chips.push(make(x))); chips.push({ key: `gmore:logic:${kind}`, glyph: '+', label: `+${list.length - 11} ${kind}`, sub: 'open the list' }); } else list.forEach(x => chips.push(make(x))); };
+    group(M.metrics, 'metrics', (m) => ({ key: 'm:' + m.name, glyph: 'Σ', label: m.label, sub: m.sentence ? m.sentence : 'counted by its own recipe', light: m.light, also: m.entities.filter(x => x !== name) }));
+    group(M.fns, 'functions', (f) => ({ key: 'gf:' + f.name, glyph: 'ƒ', label: labelOf(f.name), sub: 'runs: ' + ((f.runs || {}).kind || 'where?') }));
+    group(M.guards, 'guardrails', (c) => ({ key: 'gr:' + c.id, glyph: '⛉', label: `${c.id} ${c.name || ''}`, sub: (sevLabel[c.severity] || c.severity) + (c.from ? ' · from ' + c.from : ''), sev: c.severity, light: (() => { const t = TR('guardrail', c.id); return t.grade === 'proposed' || t.changed_since ? 'amber' : t.grade === 'checked' || t.grade === 'accepted' ? 'green' : 'none'; })() }));
+    group(M.acts, 'actions', (a) => ({ key: 'ga:' + (a.action || a.name), glyph: 'ϟ', label: human(a.action || a.name || ''), sub: M.actRules(a) ? `⛉${M.actRules(a)} guardrail${M.actRules(a) === 1 ? '' : 's'} on it` : 'an action' }));
+    const per = 6, gap = 14, rows = Math.ceil(chips.length / per);
+    chips.forEach((c, i) => {
+      const r = Math.floor(i / per), inRow = Math.min(per, chips.length - r * per), j = i - r * per;
+      const x = -(inRow * GW.chip + (inRow - 1) * gap) / 2 + j * (GW.chip + gap), y = cy0 - 70 - GW.chipH - r * (GW.chipH + gap);
+      const tx = -GW.cw / 2 + 20 + (GW.cw - 40) * (chips.length <= 1 ? 0.5 : i / (chips.length - 1));
+      GR.nodes.push({ key: c.key, x: x + GW.chip / 2, y: y + GW.chipH / 2, col: 'logic' });
+      logic += `<g class="gr-edge gr-logicline"><path d="M${x + GW.chip / 2},${y + GW.chipH} C${x + GW.chip / 2},${cy0 - 30} ${tx},${cy0 - 30} ${tx},${cy0}"/></g>`;
+      logic += `<g class="gr-node gr-chip${c.sev ? ' sev-' + c.sev : ''}${pl.sel === c.key ? ' sel' : ''}" data-key="${esc(c.key)}" role="button" tabindex="-1" aria-label="${esc(`${c.label}: ${c.sub}${c.also && c.also.length ? '; also counts ' + c.also.join(', ') : ''}`)}" transform="translate(${x},${y})"><rect width="${GW.chip}" height="${GW.chipH}" rx="9" class="gr-rect"/><text x="10" y="18" class="lbl">${esc(c.glyph)} ${esc(cut(c.label, 21))}</text><text x="10" y="34" class="sub">${esc(cut(c.also && c.also.length ? 'also counts ' + c.also.map(labelOf).join(', ') : c.sub, 28))}</text>${c.light && c.light !== 'none' ? badgeSvg(c.light, GW.chip - 10, 10) : ''}</g>`;
+    });
+    if (!chips.length) logic += `<text x="0" y="${cy0 - 40}" text-anchor="middle" class="sub">Nothing in its logic yet.</text>`;
+    logic = `<text x="${-GW.cw / 2}" y="${cy0 - 70 - GW.chipH - Math.max(0, rows - 1) * (GW.chipH + 14) - 14}" class="pl-tierlbl">LOGIC</text>` + logic;
+  }
+  // --- rows and family below: the source, the parent, the kinds ---
+  let fam = '';
+  if (GR.show.family) {
+    const y0 = CH / 2 + 70, items = [];
+    const src = e.where && e.extends ? { key: 'e:' + e.extends, label: `${labelOf(e.extends)}'s rows`, sub: 'where ' + e.where, glyph: 'cylinder' } : e.source ? { key: 's:' + e.source.name, label: e.source.name, sub: srcWords(e.source.kind), glyph: 'cylinder', light: (srcOf2(e.source.name) || {}).light } : { key: 'nodata', label: 'No data yet', sub: editable ? 'Bind a table' : 'no source', glyph: 'cylinder' };
+    items.push(src);
+    if (M.parent) items.push({ key: 'e:' + M.parent, label: labelOf(M.parent), sub: 'a kind of', glyph: (entOf(M.parent) || {}).icon || 'cube', dotted: true });
+    M.kinds.slice(0, 6).forEach(k => items.push({ key: 'e:' + k, label: labelOf(k), sub: 'a kind of ' + labelOf(name), glyph: (entOf(k) || {}).icon || 'cube', dotted: true }));
+    if (M.kinds.length > 6) items.push({ key: 'gmore:kinds', label: `+${M.kinds.length - 6} kinds`, sub: 'open the list', glyph: 'cube' });
+    const gap = 16, wAll = items.length * GW.box + (items.length - 1) * gap;
+    items.forEach((it, i) => {
+      const x = -wAll / 2 + i * (GW.box + gap), y = y0;
+      const tx = -GW.cw / 2 + 20 + (GW.cw - 40) * (items.length <= 1 ? 0.5 : i / (items.length - 1));
+      GR.nodes.push({ key: it.key, x: x + GW.box / 2, y: y + GW.boxH / 2, col: 'family', entity: it.key.startsWith('e:') });
+      fam += `<g class="gr-edge${it.dotted ? ' gr-kindline' : ''}"><path d="M${tx},${CH / 2} C${tx},${y0 - 30} ${x + GW.box / 2},${y0 - 30} ${x + GW.box / 2},${y}"/></g>`;
+      fam += `<g class="gr-node gr-box gr-fam${pl.sel === it.key ? ' sel' : ''}${it.key === 'nodata' ? ' nodata' : ''}" data-key="${esc(it.key)}" ${it.key.startsWith('e:') ? `data-name="${esc(it.key.slice(2))}"` : ''} role="button" tabindex="-1" aria-label="${esc(`${it.label}: ${it.sub}`)}" transform="translate(${x},${y})"><rect width="${GW.box}" height="${GW.boxH}" rx="10" class="gr-rect"/><use href="#g-${esc(it.glyph)}" x="12" y="${GW.boxH / 2 - 10}" width="20" height="20" style="color:#55555e"/><text x="40" y="23" class="lbl">${esc(cut(it.label, 22))}</text><text x="40" y="40" class="sub">${esc(cut(it.sub, 26))}</text>${it.light && it.light !== 'none' ? badgeSvg(it.light, GW.box - 12, 12) : ''}</g>`;
+    });
+    fam = `<text x="${-GW.cw / 2}" y="${y0 - 12}" class="pl-tierlbl">ROWS AND FAMILY</text>` + fam;
+  }
+  const outN = M.out.reduce((n, b) => n + b.labels.filter(l => l.dir === 'out').length, 0), inN = M.inn.reduce((n, b) => n + b.labels.length, 0);
+  const aria = `${e.label} and what it touches: ${outN ? plural(outN, 'link') + ' out' : 'no link out'}, ${inN ? inN + ' in' : 'none in'}, ${plural(M.guards.length, 'guardrail')}, ${plural(M.acts.length, 'action')}${e.source ? ', rows from ' + e.source.name : e.where ? ', rows from ' + e.extends : ''}`;
+  // a redraw from the keyboard keeps the focus in the drawing
+  const hadFocus = st.contains(document.activeElement) || GR.keepFocus; GR.keepFocus = false;
+  st.innerHTML = `<svg id="gr-svg" class="pl-svg gr-svg" role="group" aria-label="${esc(aria)}" tabindex="-1"><rect class="gr-bg" x="-100000" y="-100000" width="200000" height="200000" fill="transparent"/><g id="gr-cam">${logic}${fam}${inC.svg}${outC.svg}${ring}${centre}</g></svg>`;
+  wireGraph();
+  // a new centre: the boxes glide first under the old camera, then the camera fits what is drawn
+  const glide = !reduced() && Object.keys(old).length && GR.cam && !GR.moved && GR.lastCentre && GR.lastCentre !== name;
+  if (glide) { grApplyCam(); setTimeout(() => { if (GR.centre === name) grFit(true); }, 260); } else if (!GR.cam || !GR.moved) grFit(); else grApplyCam();
+  GR.lastCentre = name;
+  // boxes that stay on screen glide to their new places (250 ms; at once with reduced motion)
+  if (!reduced() && Object.keys(old).length) {
+    const moving = [];
+    st.querySelectorAll('.gr-box[data-name]').forEach(g => { const was = old[g.dataset.name]; const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(g.getAttribute('transform') || ''); if (was && m && (Math.abs(was[0] - Number(m[1])) > 1 || Math.abs(was[1] - Number(m[2])) > 1)) moving.push([g, was, [Number(m[1]), Number(m[2])]]); });
+    if (moving.length) { const t0 = performance.now(); const step = (t) => { const p = Math.min(1, (t - t0) / 250), k = p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; for (const [g, a, b] of moving) g.setAttribute('transform', `translate(${a[0] + (b[0] - a[0]) * k},${a[1] + (b[1] - a[1]) * k})`); if (p < 1) requestAnimationFrame(step); }; requestAnimationFrame(step); }
+  }
+  if (!GR.focus || !GR.nodes.some(n => n.key === GR.focus)) GR.focus = 'e:' + name;
+  grRoving(hadFocus);
+}
+async function graphDescribeField(type, property, text){
+  if (!text.trim()) return;
+  const r = await patch({ op: 'set_property_description', type, property, text: text.trim() });
+  // the save empties the field cache; the next draw fetches the centre's fields again
+  if (r && r.written) { delete DC[type]; }
+}
+function grItem(key){ return document.querySelector(`#gr-svg [data-key="${CSS.escape(key)}"]`); }
+function grRoving(move){
+  document.querySelectorAll('#gr-svg .gr-node').forEach(el => el.setAttribute('tabindex', '-1'));
+  const el = GR.focus && grItem(GR.focus);
+  if (el) { el.setAttribute('tabindex', '0'); if (move) el.focus({ preventScroll: true }); }
+}
+// a click: an entity moves the centre, anything else is selected and shown in the card; empty space goes back to the centre
+function graphActivate(key, open){
+  if (!key) return;
+  if (open) { openGraphItem(key); return; }
+  if (key === 'addlink') { ui.lf.from = GR.centre; go('links'); return; }
+  if (key === 'nodata') { if (PL.space.editable) { ui.typeTab = 'data'; go('entities', GR.centre); } return; }
+  if (key.startsWith('gmore:')) { const k = key.slice(6); if (k === 'out' || k === 'in') GR.more[k] = true; else if (k.startsWith('logic:')) GR.more[k] = true; else selectGraph(key); drawGraph(true); return; }
+  if (key.startsWith('e:')) { const n = key.slice(2); if (n === GR.centre) { pl.sel = key; drawGraph(true); } else if (pl.overlay) { if (ovNode(n) || entOf(n)) { GR.ovCentre = n; drawGraph(false); } } else graphMove(n); return; }
+  pl.sel = key; GR.focus = key; GR.sheet = true; drawGraph(true);
+  announce(`${(grItem(key) || { getAttribute: () => key }).getAttribute('aria-label') || key} selected`);
+}
+function openGraphItem(key){
+  if (key.startsWith('e:')) go('entities', key.slice(2)); else if (key.startsWith('m:') || key.startsWith('gf:')) go('logic'); else if (key.startsWith('gr:')) go('rules', key.slice(3)); else if (key.startsWith('ga:')) go('actions', key.slice(3)); else if (key.startsWith('s:')) go('sources'); else if (key.startsWith('gl:')) go('links');
+}
+function wireGraph(){
+  const svg = $('gr-svg'); if (!svg || svg.dataset.wired) return; svg.dataset.wired = '1';
+  svg.addEventListener('click', (ev) => {
+    if (GR.dragged) { GR.dragged = false; return; }
+    if (ev.target.closest('input,button,textarea,a')) return;
+    const it = ev.target.closest('.gr-node');
+    if (!it) { if (pl.sel !== 'e:' + GR.centre) { pl.sel = 'e:' + GR.centre; GR.focus = pl.sel; drawGraph(true); } return; }
+    GR.focus = it.dataset.key; graphActivate(it.dataset.key);
+  });
+  svg.addEventListener('dblclick', (ev) => { const it = ev.target.closest('.gr-node'); if (it && !ev.target.closest('input,button')) openGraphItem(it.dataset.key); });
+  svg.addEventListener('focusin', (ev) => { const it = ev.target.closest('.gr-node'); if (it) GR.focus = it.dataset.key; });
+  svg.addEventListener('keydown', graphKeys);
+  svg.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = svg.getBoundingClientRect(), cx = ev.clientX - r.left, cy = ev.clientY - r.top, f = Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0022)); const k = Math.max(0.2, Math.min(4, GR.cam.k * f)), s = k / GR.cam.k; GR.cam = { x: cx - (cx - GR.cam.x) * s, y: cy - (cy - GR.cam.y) * s, k }; GR.moved = true; grApplyCam(); }, { passive: false });
+  // pan by dragging empty space with a mouse; a node never captures the pointer, so a click on it always selects
+  let start = null;
+  svg.addEventListener('pointerdown', (ev) => { if (ev.pointerType !== 'mouse' || ev.target.closest('.gr-node')) return; start = { x: ev.clientX, y: ev.clientY, cx: GR.cam.x, cy: GR.cam.y }; });
+  svg.addEventListener('pointermove', (ev) => { if (!start) return; const dx = ev.clientX - start.x, dy = ev.clientY - start.y; if (Math.abs(dx) + Math.abs(dy) > 3) { GR.dragged = true; GR.cam.x = start.cx + dx; GR.cam.y = start.cy + dy; GR.moved = true; grApplyCam(); } });
+  const end = () => { start = null; };
+  svg.addEventListener('pointerup', end); svg.addEventListener('pointerleave', end);
+}
+// keys: ← and → between the columns and the centre, ↑ and ↓ within a column or from the centre into the bands
+function graphKeys(ev){
+  if (ev.target.closest('input,textarea,select,button')) return;
+  const k = ev.key, cur = GR.nodes.find(n => n.key === GR.focus) || GR.nodes.find(n => n.centre);
+  if (!cur) return;
+  const pick = (list, by) => list.sort(by)[0];
+  const near = (col) => pick(GR.nodes.filter(n => n.col === col && !n.label), (a, b) => Math.abs(a.y - cur.y) - Math.abs(b.y - cur.y));
+  let to = null;
+  if (k === 'ArrowRight') to = cur.col === 'in' || cur.col === 'in2' ? (cur.col === 'in2' ? near('in') : GR.nodes.find(n => n.centre)) : cur.col === 'centre' || cur.col === 'logic' || cur.col === 'family' ? near('out') || null : cur.col === 'out' ? near('out2') : null;
+  else if (k === 'ArrowLeft') to = cur.col === 'out' || cur.col === 'out2' ? (cur.col === 'out2' ? near('out') : GR.nodes.find(n => n.centre)) : cur.col === 'centre' || cur.col === 'logic' || cur.col === 'family' ? near('in') || null : cur.col === 'in' ? near('in2') : null;
+  else if (k === 'ArrowDown' || k === 'ArrowUp') {
+    const down = k === 'ArrowDown';
+    if (cur.col === 'centre') to = down ? pick(GR.nodes.filter(n => n.col === 'family'), (a, b) => Math.abs(a.x) - Math.abs(b.x)) : pick(GR.nodes.filter(n => n.col === 'logic'), (a, b) => (b.y - a.y) || Math.abs(a.x) - Math.abs(b.x));
+    else { const same = GR.nodes.filter(n => n.col === cur.col && !n.label && (down ? n.y > cur.y + 1 || (Math.abs(n.y - cur.y) <= 1 && n.x > cur.x) : n.y < cur.y - 1 || (Math.abs(n.y - cur.y) <= 1 && n.x < cur.x))); to = pick(same, (a, b) => (Math.abs(a.y - cur.y) - Math.abs(b.y - cur.y)) || (Math.abs(a.x - cur.x) - Math.abs(b.x - cur.x))); if (!to && ((down && cur.col === 'logic') || (!down && cur.col === 'family'))) to = GR.nodes.find(n => n.centre); }
+  }
+  if (to) { GR.focus = to.key; grRoving(true); const el = grItem(to.key); announce(el ? el.getAttribute('aria-label') : ''); ev.preventDefault(); return; }
+  if (k.startsWith('Arrow')) { ev.preventDefault(); return; }
+  if (k === 'Enter' && ev.shiftKey) { openGraphItem(GR.focus); ev.preventDefault(); return; }
+  if (k === 'Enter' || k === ' ') { if (GR.focus && GR.focus.startsWith('e:')) { GR.keepFocus = true; GR.focus = GR.focus; } graphActivate(GR.focus); ev.preventDefault(); return; }
+  if (k === 'Escape') { pl.sel = 'e:' + GR.centre; GR.focus = pl.sel; drawGraph(true); grRoving(true); ev.preventDefault(); return; }
+  if (k === 'e' || k === 'E') { GR.step = !GR.step; keepGraph(); drawGraph(true); return; }
+  if (k === '+' || k === '=') { grZoom(1.25); return; }
+  if (k === '-' || k === '_') { grZoom(0.8); return; }
+  if (k === '0') { grFit(); return; }
+}
+// the card for what the Graph can select beyond entities, metrics and sources
+function graphCardHtml(key, editable){
+  const close = `<button class="small pl-close" onclick="pl.sel='e:'+GR.centre;drawGraph(true)" aria-label="Close the card">Close</button>`;
+  if (key.startsWith('gl:')) {
+    const [dir, from, ln] = key.slice(3).split('|');
+    const r = (O.relationships || []).find(x => x.from === from && x.name === ln) || {};
+    const rules = (O.constraints || []).filter(c => c.applies_to === ln || c.applies_to === from + '.' + ln);
+    return `<div class="pl-card"><h2 style="font-size:17px">${esc(linkWords(ln))}</h2><div class="hint">a link · ${esc(from)} → ${esc(r.to || '')}</div><div>${esc(cardWords(from, r.to || '', r.cardinality))}</div>${r.description ? `<div style="font-size:13.5px">${esc(r.description)}</div>` : `<div class="gline"><span class="gl-i warn">!</span><span>No sentence yet. ${editable ? `<input id="gl-desc" placeholder="Describe this link: what does it mean?" style="width:100%"><button class="small" onclick="const v=$('gl-desc').value.trim();if(v)patch({op:'set_relationship_description',type:${jq(from)},relationship:${jq(ln)},text:v})">Describe this link</button>` : ''}</span></div>`}${rules.length ? `<h4 style="padding:0">When linking ${esc(from)} to ${esc(r.to || '')}</h4>${rules.map(c => `<div>${sev(c.severity)} <button type="button" class="lnk" onclick="go('rules',${jq(c.id)})">${esc(c.id)}</button> ${esc(c.name || '')}</div>`).join('')}` : ''}<div class="row">${close}</div></div>`;
+  }
+  if (key.startsWith('gg:') || key === 'gmore:kinds') {
+    const M = graphModel(GR.centre); if (!M) return '';
+    let list = [], title = '';
+    if (key === 'gmore:kinds') { list = M.kinds; title = `Kinds of ${labelOf(GR.centre)}`; }
+    else { const [side, ln] = key.slice(3).split('|'); const boxes = side === 'out' ? M.out : M.inn; list = boxes.filter(b => b.labels[0].name === ln).map(b => b.other); title = `${list.length} via ${linkWords(ln)}`; }
+    return `<div class="pl-card"><h2 style="font-size:17px">${esc(title)}</h2><div class="col">${list.map(n => `<button type="button" class="lnk" style="text-align:left" onclick="graphMove(${jq(n)})">${esc(labelOf(n))}</button>`).join('')}</div><div class="row">${close}</div></div>`;
+  }
+  if (key.startsWith('gr:')) {
+    const c = (O.constraints || []).find(x => x.id === key.slice(3)); if (!c) return '';
+    return `<div class="pl-card"><div class="row">${sev(c.severity)}<span class="mono hint">${esc(c.id)}</span></div><h2 style="font-size:16px">${esc(c.name || c.id)}</h2>${c.rationale ? `<div style="font-size:13px">${esc(c.rationale)}</div>` : ''}<div class="hint">applies to ${esc(c.applies_to)}</div>${gradeLine('guardrail', c.id)}<div>${ownerPicker('guardrail', c.id, c.owner || '')}</div><code class="block">${esc(c.rule)}</code><div class="row"><button class="primary small" onclick="go('rules',${jq(c.id)})">Open in Guardrails</button>${close}</div></div>`;
+  }
+  if (key.startsWith('ga:')) {
+    const a = (O.actions || []).find(x => (x.action || x.name) === key.slice(3)) || { action: key.slice(3) };
+    const rules = (O.constraints || []).filter(c => c.applies_to === (a.action || a.name));
+    return `<div class="pl-card"><h2 style="font-size:17px">ϟ ${esc(human(a.action || a.name || ''))}</h2>${a.description ? `<div style="font-size:13px">${esc(a.description)}</div>` : ''}${a.requires_approval_from ? `<div class="hint">Approval: ${esc(a.requires_approval_from)}</div>` : ''}${rules.length ? `<h4 style="padding:0">Guardrails on it</h4>${rules.map(c => `<div>${sev(c.severity)} ${esc(c.id)} ${esc(c.name || '')}</div>`).join('')}` : ''}<div class="row"><button class="primary small" onclick="go('actions',${jq(a.action || a.name)})">Open in Actions</button>${close}</div></div>`;
+  }
+  if (key.startsWith('gf:')) {
+    const f = (O.functions || []).find(x => x.name === key.slice(3)); if (!f) return '';
+    return `<div class="pl-card"><h2 style="font-size:17px">ƒ ${esc(labelOf(f.name))}</h2><div style="font-size:13px">${esc(f.description || '')}</div><div class="hint">Runs: ${esc(runsText(f.runs))}</div><div>${ownerPicker('function', f.name, f.owner || '')}</div><div class="row"><button class="primary small" onclick="go('logic')">Open in Logic</button>${close}</div></div>`;
+  }
+  if (key.startsWith('gx:')) return `<div class="pl-card"><h2 style="font-size:17px" class="warnc">${esc(key.slice(3))} (missing)</h2><div>A link points to ${esc(key.slice(3))}, but no entity has that name. Add it, or point the link elsewhere.</div><div class="row">${close}</div></div>`;
+  return '';
+}
+
 async function renderGraph(v){ pl.overlay = null; await renderPlaneShell(v); }
 
 // ---------- people: one owner picker for every place an owner shows (Part 1) ----------
