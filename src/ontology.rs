@@ -525,6 +525,7 @@ impl Ontology {
             // the domain: its parent's, unless it says or is listed
             if t.domain.is_none() && !self.manifest.domains.iter().any(|d| d.types.contains(&t.name)) {
                 t.domain = self.domain_of(&p);
+                t.domain_follows = t.domain.is_some();
             }
             // where: the parent's fields, values that fit, and never beside an own source
             if let Some(w) = t.where_.clone().filter(|w| !w.is_empty()) {

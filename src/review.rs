@@ -450,6 +450,62 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
         }
     }
 
+    // --- areas: added, renamed, described, deleted, reordered (Part 3, "Review words") ---
+    let (bd, ad) = (&before.manifest.domains, &after.manifest.domains);
+    let mut area_ren: HashMap<String, String> = HashMap::new();
+    for (i, b) in bd.iter().enumerate() {
+        if ad.iter().any(|a| a.name == b.name) {
+            continue;
+        }
+        // gone under its name: a rename when an area new under its name sits where it was with the same entities
+        if let Some(a) = ad.get(i).filter(|a| !bd.iter().any(|x| x.name == a.name) && a.types == b.types) {
+            area_ren.insert(b.name.clone(), a.name.clone());
+        }
+    }
+    // an entity whose `domain:` line only followed its area's new name hasn't moved
+    out.retain(|c| {
+        let only_area = c["kind"] == "entity" && c["op"] == "change" && c["fields"].as_array().map(|f| f.is_empty()).unwrap_or(false) && c["diffs"].as_array().map(|d| d.len() == 1 && d[0]["what"] == "area").unwrap_or(false);
+        !(only_area && area_ren.get(c["diffs"][0]["before"].as_str().unwrap_or("")).map(|n| c["diffs"][0]["after"] == n.as_str()).unwrap_or(false))
+    });
+    for a in ad {
+        match bd.iter().find(|b| b.name == a.name) {
+            Some(b) => {
+                let diffs: Vec<Json> = diff_text("description", &b.description, &a.description).into_iter().collect();
+                if !diffs.is_empty() {
+                    out.push(json!({ "kind": "area", "op": "change", "name": a.name, "label": a.name, "diffs": diffs, "sentence": format!("Describes the area {}.", a.name), "summary": "described differently" }));
+                }
+            }
+            None => match area_ren.iter().find(|(_, n)| *n == &a.name) {
+                Some((old, _)) => {
+                    let iri = after.iri_domain(&a.name);
+                    let short = iri.rsplit_once('/').map(|(_, t)| format!("…/{}", t)).unwrap_or(iri.clone());
+                    out.push(json!({ "kind": "area", "op": "rename", "name": a.name, "from": old, "label": a.name, "sentence": format!("Renames the area {} to {} (its IRI becomes {}).", old, a.name, short), "summary": format!("renamed from {}", old) }));
+                }
+                None => out.push(json!({ "kind": "area", "op": "add", "name": a.name, "label": a.name, "description": a.description, "sentence": format!("Adds the area {}.", a.name) })),
+            },
+        }
+    }
+    for b in bd {
+        if !ad.iter().any(|a| a.name == b.name) && !area_ren.contains_key(&b.name) {
+            let empty = !before.types.values().any(|t| before.domain_of(&t.name).as_deref() == Some(b.name.as_str()));
+            out.push(json!({ "kind": "area", "op": "remove", "name": b.name, "label": b.name, "sentence": if empty { format!("Deletes the empty area {}.", b.name) } else { format!("Deletes the area {}.", b.name) } }));
+        }
+    }
+    let kept_b: Vec<String> = bd.iter().map(|d| area_ren.get(&d.name).cloned().unwrap_or_else(|| d.name.clone())).filter(|n| ad.iter().any(|a| &a.name == n)).collect();
+    let kept_a: Vec<String> = ad.iter().map(|d| d.name.clone()).filter(|n| kept_b.contains(n)).collect();
+    if kept_b != kept_a {
+        out.push(json!({ "kind": "area", "op": "change", "name": "", "label": "The areas", "sentence": "Reorders the areas.", "summary": "reordered" }));
+    }
+    // an entity moved by an area's list only: its file is the same, its area isn't
+    for t in after.types.values() {
+        let Some(b) = before.type_(&t.name) else { continue };
+        let (was, now) = (before.domain_of(&b.name).unwrap_or_else(|| "Other".into()), after.domain_of(&t.name).unwrap_or_else(|| "Other".into()));
+        let renamed_area = area_ren.get(&was) == Some(&now);
+        if same(b, t) && was != now && !renamed_area {
+            out.push(json!({ "kind": "entity", "op": "change", "name": t.name, "label": label(&t.name), "fields": [], "diffs": [{ "what": "area", "before": was, "after": now }], "sentence": format!("Moves {} from {} to {}.", t.name, was, now), "summary": format!("moves from {} to {}", was, now), "structural": false }));
+        }
+    }
+
     // --- metrics ---
     let mgone: Vec<&MetricDef> = before.metrics.values().filter(|m| !after.metrics.contains_key(&m.name)).collect();
     let mnew: Vec<&MetricDef> = after.metrics.values().filter(|m| !before.metrics.contains_key(&m.name)).collect();
@@ -725,7 +781,7 @@ fn entity_change(before: &Ontology, after: &Ontology, b: &TypeDef, t: &TypeDef) 
             diffs.push(json!({ "what": "how columns map to the rows", "before": "", "after": "changed" }));
         }
     }
-    diffs.extend(diff_text("domain", b.domain.as_deref().unwrap_or(""), t.domain.as_deref().unwrap_or("")));
+    diffs.extend(diff_text("area", before.domain_of(&b.name).as_deref().unwrap_or("Other"), after.domain_of(&t.name).as_deref().unwrap_or("Other")));
     diffs.extend(diff_text("owner", &b.owner, &t.owner));
     // a kind: "is now a kind of Sale", "now picks Sale's rows where kind is promo"
     let mut kind_said: Vec<String> = Vec::new();
@@ -767,6 +823,9 @@ fn entity_change(before: &Ontology, after: &Ontology, b: &TypeDef, t: &TypeDef) 
     if diffs.iter().any(|d| d["what"] == "where rows come from" || d["what"] == "how columns map to the rows") {
         said.push("rows bound differently".into());
     }
+    if let Some(d) = diffs.iter().find(|d| d["what"] == "area") {
+        said.push(format!("moves from {} to {}", d["before"].as_str().unwrap_or(""), d["after"].as_str().unwrap_or("")));
+    }
     if said.is_empty() && fields.is_empty() && diffs.is_empty() {
         said.push("changed in ways this screen does not list (see the files)".into());
     }
@@ -796,6 +855,7 @@ fn kind_noun(kind: &str, n: usize) -> String {
         "link" => ("link", "links"),
         "function" => ("function", "functions"),
         "action" => ("action", "actions"),
+        "area" => ("area", "areas"),
         _ => ("change", "changes"),
     };
     format!("{} {}", n, if n == 1 { one } else { many })
@@ -803,7 +863,7 @@ fn kind_noun(kind: &str, n: usize) -> String {
 
 /// "1 entity (Promo sale, 14 fields)", grouped by kind, for adds, changes and removes.
 pub fn counts(changes: &[Json]) -> Json {
-    let order = ["entity", "metric", "source", "link", "rule", "word", "function", "action"];
+    let order = ["area", "entity", "metric", "source", "link", "rule", "word", "function", "action"];
     let mut adds = Vec::new();
     let mut changed = Vec::new();
     let mut removes = Vec::new();
@@ -1190,7 +1250,7 @@ pub fn graded_by(ont: &Ontology, p: &Proposal) -> Vec<(crate::trust::Kind, Strin
     out
 }
 
-const KIND_NOUN: [(&str, &str); 8] = [("entity", "the entity"), ("metric", "the metric"), ("source", "the source"), ("rule", "the guardrail"), ("function", "the function"), ("action", "the action"), ("link", "the link"), ("word", "the also-called word")];
+const KIND_NOUN: [(&str, &str); 9] = [("area", "the area"), ("entity", "the entity"), ("metric", "the metric"), ("source", "the source"), ("rule", "the guardrail"), ("function", "the function"), ("action", "the action"), ("link", "the link"), ("word", "the also-called word")];
 
 /// The whole answer of `GET /api/proposals/<id>/review`.
 pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json {
@@ -1572,6 +1632,29 @@ mod tests {
 
     fn src(filter: &str, measure: &str) -> MetricSource {
         MetricSource { connection: "c".into(), table: "t".into(), filter: filter.into(), measure: measure.into(), ..Default::default() }
+    }
+
+    #[test]
+    fn area_changes_read_as_sentences() {
+        let dir = std::env::temp_dir().join(format!("lorefile-review-areas-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("types")).unwrap();
+        std::fs::write(dir.join("ontology.yaml"), "name: shop\nnamespace: https://shop.example/ns#\ndomains:\n  - name: Core\n    types: [Order]\n  - name: Old\n    types: []\n  - name: Pipeline\n    types: [Deal]\n").unwrap();
+        std::fs::write(dir.join("types/order.yaml"), "type: Order\ndescription: x\nproperties:\n  order_id: { type: string, key: true, description: x }\n").unwrap();
+        std::fs::write(dir.join("types/deal.yaml"), "type: Deal\ndescription: x\nproperties:\n  deal_id: { type: string, key: true, description: x }\n").unwrap();
+        let ont = crate::load_ontology(&dir).unwrap().0;
+        let said = |ops: Vec<Json>| -> Vec<String> {
+            let plan = crate::patch::plan_many(&ont, &ops).unwrap();
+            let ov: crate::loader::Overrides = plan.files.iter().map(|(f, t)| (f.clone(), Some(t.clone()))).collect();
+            let (after, _) = crate::edit::check_many(&dir, &ov).unwrap();
+            compare(&ont, &after).iter().filter_map(|c| c["sentence"].as_str().map(|s| s.to_string())).collect()
+        };
+        assert_eq!(said(vec![json!({ "op": "add_area", "name": "Sales" })]), vec!["Adds the area Sales."]);
+        assert_eq!(said(vec![json!({ "op": "rename_area", "area": "Core", "to": "Sales" })]), vec!["Renames the area Core to Sales (its IRI becomes …/ns#domain.sales)."]);
+        assert_eq!(said(vec![json!({ "op": "delete_area", "area": "Old" })]), vec!["Deletes the empty area Old."]);
+        assert_eq!(said(vec![json!({ "op": "move_to_area", "type": "Order", "area": "Pipeline" })]), vec!["Moves Order from Core to Pipeline."]);
+        assert_eq!(said(vec![json!({ "op": "order_areas", "order": ["Pipeline", "Core", "Old"] })]), vec!["Reorders the areas."]);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

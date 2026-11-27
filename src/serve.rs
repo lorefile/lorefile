@@ -374,7 +374,7 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
         for t in &types {
             placed.push(t["name"].as_str().unwrap_or("").to_string());
         }
-        domains.push(json!({ "name": d.name, "description": d.description, "types": types }));
+        domains.push(json!({ "name": d.name, "description": d.description, "types": types, "color": d.color, "listed": d.types }));
     }
     let rest: Vec<Json> = ont
         .types
@@ -586,7 +586,14 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
         }
     } else if *method == Method::Delete {
         let file = params.get("file").cloned().unwrap_or_else(|| str_field(body, "file").to_string());
-        edit::apply(&st.dir, edit, &st.report, &file, Change::Delete, &Note::via(&by), None)
+        // the entities it defined also leave every area's list, in the same save
+        let files = patch::delete_files(&st.ont, &file);
+        if files.len() > 1 {
+            let summary = format!("Deleted {} (and took it off its area's list)", file);
+            edit::apply_files(&st.dir, edit, &st.report, &files, &Note { via: &by, summary: &summary, ..Default::default() }, None)
+        } else {
+            edit::apply(&st.dir, edit, &st.report, &file, Change::Delete, &Note::via(&by), None)
+        }
     } else if path == "/api/create" {
         let (kind, name, content) = (str_field(body, "kind"), str_field(body, "name"), str_field(body, "content"));
         let file = body.get("file").and_then(|f| f.as_str()).filter(|f| !f.trim().is_empty());
@@ -631,10 +638,10 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
                 let summary = if str_field(body, "op") == "make_parent" {
                     format!("made {} the parent of {}", str_field(body, "name"), body.get("children").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default())
                 } else {
-                    plan.summaries.join("; ")
+                    plan.sentences().join("; ")
                 };
                 extra["summary"] = json!(summary);
-                extra["summaries"] = json!(plan.summaries);
+                extra["summaries"] = json!(plan.sentences());
                 let label = if ops.len() == 1 { plan.kinds.first().cloned() } else { None };
                 let label = label.as_ref().map(|(k, n)| (k.as_str(), n.as_str()));
                 let label = if str_field(body, "op") == "make_parent" { Some(("type", str_field(body, "name"))) } else { label };

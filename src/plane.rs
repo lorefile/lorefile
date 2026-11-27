@@ -798,7 +798,9 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
         .iter()
         .filter_map(|a| {
             let ls: Vec<Light> = area_of.iter().filter(|(x, _)| x == a).map(|(_, l)| *l).collect();
-            if ls.is_empty() {
+            let listed = ont.manifest.domains.iter().position(|d| &d.name == a);
+            // an area ontology.yaml lists is drawn even when it is empty (decision 28): "+ New area" shows
+            if ls.is_empty() && listed.is_none() {
                 return None;
             }
             let mut counts = serde_json::Map::new();
@@ -806,7 +808,10 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
                 let e = counts.entry(l.word()).or_insert(json!(0));
                 *e = json!(e.as_u64().unwrap_or(0) + 1);
             }
-            Some(json!({ "name": a, "entities": ls.len(), "light": ls.iter().max().unwrap_or(&Light::None).word(), "lights": counts }))
+            let d = listed.map(|i| &ont.manifest.domains[i]);
+            // its own colour when it names one of the eight, else the colour of its position
+            let color = d.and_then(|d| d.color.clone()).filter(|c| crate::schema::AREA_COLORS.iter().any(|(n, _)| n == c));
+            Some(json!({ "name": a, "entities": ls.len(), "light": ls.iter().max().unwrap_or(&Light::None).word(), "lights": counts, "color": color, "description": d.map(|d| d.description.clone()).unwrap_or_default(), "listed": listed.is_some() }))
         })
         .collect();
 

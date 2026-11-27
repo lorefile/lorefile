@@ -121,6 +121,23 @@ pub fn validate(ont: &Ontology) -> Report {
             }
         }
     }
+    // W120: areas that don't add up (a typo in `domain:` used to make a new area silently)
+    for t in ont.types.values().filter(|t| !t.domain_follows) {
+        let Some(says) = t.domain.as_deref() else { continue };
+        let listed = ont.manifest.domains.iter().find(|d| d.types.iter().any(|x| x == &t.name));
+        if let Some(l) = listed.filter(|l| l.name != says) {
+            r.warn_on("W120", &t.file, ("entity", &t.name), format!("{} is listed under {} but says {}", t.name, l.name, says));
+        } else if !ont.manifest.domains.is_empty() && !ont.manifest.domains.iter().any(|d| d.name == says) {
+            r.warn_on("W120", &t.file, ("entity", &t.name), format!("{} says area `{}`, which ontology.yaml doesn't list", t.name, says));
+        }
+    }
+    for d in &ont.manifest.domains {
+        if let Some(c) = &d.color {
+            if !crate::schema::AREA_COLORS.iter().any(|(n, _)| n == c) {
+                r.warn_on("W120", "ontology.yaml", ("area", &d.name), format!("area {}: colour `{}` isn't one of {}", d.name, c, crate::schema::AREA_COLORS.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")));
+            }
+        }
+    }
 
     // types
     for t in ont.types.values() {

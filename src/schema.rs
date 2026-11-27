@@ -70,6 +70,18 @@ pub struct Domain {
     pub color: Option<String>,
 }
 
+/// The eight area colours, in palette order (specs/2026-11-27-people-areas-graph.md, decision 26).
+pub const AREA_COLORS: [(&str, &str); 8] = [
+    ("blue", "#2b5cff"),
+    ("teal", "#0f766e"),
+    ("violet", "#7c3aed"),
+    ("pink", "#db2777"),
+    ("slate", "#475569"),
+    ("sky", "#0369a1"),
+    ("green", "#4d7c0f"),
+    ("rose", "#9f1239"),
+];
+
 /// `people.yaml`: who is who, for what can't be worked out from the space. Written by Lorefile only.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -265,6 +277,9 @@ pub struct TypeDef {
     /// Set by the compiler for a `where` kind: the ancestor whose rows it picks from.
     #[serde(skip)]
     pub rows_of: Option<String>,
+    /// Set by the compiler: `domain` was taken from the parent (the file says no area of its own).
+    #[serde(skip)]
+    pub domain_follows: bool,
 }
 
 impl TypeDef {

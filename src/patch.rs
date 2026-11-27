@@ -10,6 +10,7 @@
 use crate::edit;
 use crate::loader::Overrides;
 use crate::ontology::{snake, Ontology};
+use crate::schema::Domain;
 use serde_json::{json, Value as Json};
 use serde_yaml::{Mapping, Value as Yaml};
 use std::collections::HashMap;
@@ -50,12 +51,17 @@ pub struct BatchPlan {
 impl BatchPlan {
     /// The sentences of the ops that wrote `file`, joined: a file's own heading.
     pub fn summary_for(&self, file: &str) -> String {
-        self.summaries.iter().zip(self.op_files.iter()).filter(|(_, f)| f.as_str() == file).map(|(s, _)| s.as_str()).collect::<Vec<_>>().join("; ")
+        self.summaries.iter().zip(self.op_files.iter()).filter(|(s, f)| f.as_str() == file && !s.is_empty()).map(|(s, _)| s.as_str()).collect::<Vec<_>>().join("; ")
+    }
+
+    /// Every op's sentence, in order, without the empty ones a multi-file op leaves on its other files.
+    pub fn sentences(&self) -> Vec<String> {
+        self.summaries.iter().filter(|s| !s.is_empty()).cloned().collect()
     }
 }
 
 /// Ops that write more than one file, so they go through `plan_many` and are saved as one change.
-pub const MULTI_FILE_OPS: [&str; 1] = ["make_parent"];
+pub const MULTI_FILE_OPS: [&str; 3] = ["make_parent", "rename_area", "move_to_area"];
 
 /// Does this one op write several files?
 pub fn multi_file(op: &Json) -> bool {
@@ -86,29 +92,34 @@ pub fn plan_many_over(ont: &Ontology, start: &[(String, String)], ops: &[Json]) 
         let ov: Overrides = pending.iter().map(|(k, v)| (k.clone(), Some(v.clone()))).collect();
         Some(edit::check_many(&ont.root, &ov).map_err(|e| format!("{:#}", e))?.0)
     };
-    // `make_parent` is several files: the new parent, and each child made a kind of it
-    let mut expanded: Vec<Json> = Vec::new();
-    for op in ops {
-        if field(op, "op") == "make_parent" {
-            let ws = Workspace { ont: current.as_ref().unwrap_or(ont), pending: &pending };
-            expanded.extend(expand_make_parent(&ws, op)?);
+    // `make_parent` stands for several ops, planned one after another; an area op may write
+    // several files at once. Both are worked out when their turn comes, against what came before.
+    let mut queue: std::collections::VecDeque<(usize, Json)> = ops.iter().cloned().enumerate().collect();
+    while let Some((i, op)) = queue.pop_front() {
+        if field(&op, "op").starts_with('_') {
+            return Err(format!("op {}: unknown op `{}`", i + 1, field(&op, "op")));
+        }
+        let ws = Workspace { ont: current.as_ref().unwrap_or(ont), pending: &pending };
+        let patches: Vec<Patch> = if field(&op, "op") == "make_parent" {
+            let ex = expand_make_parent(&ws, &op).map_err(|e| format!("op {} (make_parent): {}", i + 1, e))?;
+            for e in ex.into_iter().rev() {
+                queue.push_front((i, e));
+            }
+            continue;
+        } else if AREA_OPS.contains(&field(&op, "op")) {
+            plan_area(&ws, &op).map_err(|e| format!("op {} ({}): {}", i + 1, field(&op, "op"), e))?
         } else {
-            expanded.push(op.clone());
-        }
-    }
-    let ops: &[Json] = &expanded;
-    for (i, op) in ops.iter().enumerate() {
-        let p = {
-            let ws = Workspace { ont: current.as_ref().unwrap_or(ont), pending: &pending };
-            plan_in(&ws, op).map_err(|e| format!("op {} ({}): {}", i + 1, field(op, "op"), e))?
+            vec![plan_in(&ws, &op).map_err(|e| format!("op {} ({}): {}", i + 1, field(&op, "op"), e))?]
         };
-        if !pending.contains_key(&p.file) {
-            order.push(p.file.clone());
+        for p in patches {
+            if !pending.contains_key(&p.file) {
+                order.push(p.file.clone());
+            }
+            pending.insert(p.file.clone(), p.text.clone());
+            summaries.push(p.summary.clone());
+            kinds.push((p.kind.clone(), p.name.clone()));
+            op_files.push(p.file.clone());
         }
-        pending.insert(p.file.clone(), p.text.clone());
-        summaries.push(p.summary.clone());
-        kinds.push((p.kind.clone(), p.name.clone()));
-        op_files.push(p.file.clone());
         // the next op sees the ontology with everything so far in place
         let ov: Overrides = pending.iter().map(|(k, v)| (k.clone(), Some(v.clone()))).collect();
         let (o, _) = edit::check_many(&ont.root, &ov).map_err(|e| format!("op {}: {:#}", i + 1, e))?;
@@ -524,35 +535,42 @@ fn item_block(text: &str, list: &str, id_key: &str, id: &str) -> Option<(usize, 
     None
 }
 
-/// The item's text with its `owner:` line set to `owner` (or removed when empty), keeping every
-/// other line and comment. `None` when the item can't be found as block text.
-fn set_owner_line(text: &str, list: &str, id_key: &str, id: &str, owner: &str) -> Option<String> {
+/// The item's text with its `field:` line set to `value` (or removed when empty), keeping every
+/// other line and comment. A new line goes after the item's id line when `after_id`, else after
+/// its last line of content. `None` when the item can't be found as block text.
+fn set_line(text: &str, list: &str, id_key: &str, id: &str, fld: &str, value: &str, after_id: bool) -> Option<String> {
     let (first, end, key) = item_block(text, list, id_key, id)?;
     let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
-    let is_owner_line = |idx: usize, l: &str| -> bool {
+    let head_key = format!("{}:", fld);
+    let is_line = |idx: usize, l: &str| -> bool {
         let ind = l.len() - l.trim_start().len();
         let t = l.trim_start();
-        (ind == key && t.starts_with("owner:")) || (idx == first && key >= 2 && t.strip_prefix("- ").map(|r| r.starts_with("owner:")).unwrap_or(false))
+        (ind == key && t.starts_with(&head_key)) || (idx == first && key >= 2 && t.strip_prefix("- ").map(|r| r.starts_with(&head_key)).unwrap_or(false))
     };
-    let at = (first..end).find(|i| is_owner_line(*i, &lines[*i]));
-    match (at, owner.is_empty()) {
+    let at = (first..end).find(|i| is_line(*i, &lines[*i]));
+    match (at, value.is_empty()) {
         (Some(i), true) => {
             if i == first && key >= 2 {
-                return None; // `- owner: X` heads the item: leave that to the mapping
+                return None; // `- field: X` heads the item: leave that to the mapping
             }
             lines.remove(i);
         }
         (Some(i), false) => {
             let l = lines[i].clone();
-            let head = l.find("owner:").map(|p| p + "owner:".len())?;
+            let head = l.find(&head_key).map(|p| p + head_key.len())?;
             let comment = l.find(" #").filter(|p| *p > head).map(|p| l[l[..p].trim_end().len()..].to_string()).unwrap_or_default();
-            lines[i] = format!("{} {}{}", &l[..head], crate::people::yaml_scalar(owner), comment);
+            lines[i] = format!("{} {}{}", &l[..head], crate::people::yaml_scalar(value), comment);
         }
         (None, true) => {}
         (None, false) => {
-            // after the item's last line of content
+            let id_line = (first..end).find(|i| {
+                let t = lines[*i].trim_start();
+                let t = t.strip_prefix("- ").unwrap_or(t);
+                t.starts_with(&format!("{}:", id_key))
+            });
             let last = (first..end).rev().find(|i| !lines[*i].trim().is_empty() && !lines[*i].trim_start().starts_with('#')).unwrap_or(first);
-            lines.insert(last + 1, format!("{}owner: {}", " ".repeat(key), crate::people::yaml_scalar(owner)));
+            let at = if after_id { id_line.unwrap_or(last) } else { last };
+            lines.insert(at + 1, format!("{}{}: {}", " ".repeat(key), fld, crate::people::yaml_scalar(value)));
         }
     }
     let mut out = lines.join("\n");
@@ -560,6 +578,11 @@ fn set_owner_line(text: &str, list: &str, id_key: &str, id: &str, owner: &str) -
         out.push('\n');
     }
     Some(out)
+}
+
+/// `set_line` for `owner:`, a new line at the item's end.
+fn set_owner_line(text: &str, list: &str, id_key: &str, id: &str, owner: &str) -> Option<String> {
+    set_line(text, list, id_key, id, "owner", owner, false)
 }
 
 /// The item's mapping in a parsed file: a single-item file, or the list entry with `id_key: id`.
@@ -587,6 +610,320 @@ fn set_owner_mapping(text: &str, list: &str, id_key: &str, id: &str, owner: &str
         insert_after(m, "description", "owner", Yaml::String(owner.to_string()));
     }
     serde_yaml::to_string(&doc).map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Areas (specs/2026-11-27-people-areas-graph.md, Part 3)
+// ---------------------------------------------------------------------------
+
+/// The six area ops. All may write `ontology.yaml`; a rename or a move may write entity files too.
+pub const AREA_OPS: [&str; 6] = ["add_area", "rename_area", "describe_area", "move_to_area", "order_areas", "delete_area"];
+
+/// An area's name: 1 to 60 characters of letters, digits, spaces and `& - ' . / ( ) ,`, trimmed.
+fn area_name_ok(name: &str) -> Result<String, String> {
+    let n = name.split_whitespace().collect::<Vec<_>>().join(" ");
+    if n.is_empty() || n.chars().count() > 60 {
+        return Err("an area's name is 1 to 60 characters".into());
+    }
+    if !n.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '&' | '-' | '\'' | '.' | '/' | '(' | ')' | ',')) {
+        return Err(format!("`{}`: an area's name uses letters, digits, spaces and & - ' . / ( ) , only", n));
+    }
+    Ok(n)
+}
+
+/// The area a name means, by its exact name or, failing that, ignoring capitals.
+fn find_area(domains: &[Domain], name: &str) -> Option<usize> {
+    let n = name.trim();
+    domains.iter().position(|d| d.name == n).or_else(|| domains.iter().position(|d| d.name.eq_ignore_ascii_case(n)))
+}
+
+/// A new or renamed area's name may not be taken, be "Other", or give an existing area's IRI.
+fn area_name_free(domains: &[Domain], name: &str, except: Option<usize>) -> Result<(), String> {
+    if name.eq_ignore_ascii_case("other") {
+        return Err("Other is where entities with no area show; pick another name".into());
+    }
+    for (i, d) in domains.iter().enumerate() {
+        if Some(i) == except {
+            continue;
+        }
+        if d.name.eq_ignore_ascii_case(name) {
+            return Err(format!("there is already an area called {}", d.name));
+        }
+        if crate::iri::slug(&d.name) == crate::iri::slug(name) {
+            return Err(format!("{} and {} would both be …domain.{}; pick a name that differs in more than punctuation", name, d.name, crate::iri::slug(name)));
+        }
+    }
+    Ok(())
+}
+
+/// The colour an area shows at a position, by name: blue, teal, … in palette order.
+fn position_colour(i: usize) -> &'static str {
+    crate::schema::AREA_COLORS[i % crate::schema::AREA_COLORS.len()].0
+}
+
+/// After a reorder or a delete, every area whose position colour would change keeps the colour it
+/// had: `color:` is written on it (decision 26). `before` is each area's position before.
+fn keep_colours(domains: &mut [Domain], before: &[(String, usize)]) {
+    for (j, d) in domains.iter_mut().enumerate() {
+        if d.color.is_some() {
+            continue;
+        }
+        if let Some((_, i)) = before.iter().find(|(n, _)| n == &d.name) {
+            if position_colour(*i) != position_colour(j) {
+                d.color = Some(position_colour(*i).to_string());
+            }
+        }
+    }
+}
+
+/// A flow list of names: `[Order, Customer]`, each quoted when it needs to be.
+fn flow_names(names: &[String]) -> String {
+    format!("[{}]", names.iter().map(|n| crate::people::yaml_scalar(n)).collect::<Vec<_>>().join(", "))
+}
+
+/// `ontology.yaml`'s text with its `domains:` block replaced by `domains` (appended when it has
+/// none). Everything outside the block, comments included, stays as it was.
+fn with_domains(text: &str, domains: &[Domain]) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.iter().position(|l| l.starts_with("domains:"));
+    let pad = start
+        .and_then(|s| lines.iter().skip(s + 1).find(|l| l.trim_start().starts_with("- ")).map(|l| l.len() - l.trim_start().len()))
+        .unwrap_or(2);
+    let p = " ".repeat(pad);
+    let mut block: Vec<String> = Vec::new();
+    if domains.is_empty() {
+        block.push("domains: []".into());
+    } else {
+        block.push("domains:".into());
+        for d in domains {
+            block.push(format!("{}- name: {}", p, crate::people::yaml_scalar(&d.name)));
+            if !d.description.trim().is_empty() {
+                block.push(format!("{}  description: {}", p, crate::people::yaml_scalar(d.description.trim())));
+            }
+            block.push(format!("{}  types: {}", p, flow_names(&d.types)));
+            if let Some(c) = &d.color {
+                block.push(format!("{}  color: {}", p, c));
+            }
+        }
+    }
+    let mut out: Vec<String> = Vec::new();
+    match start {
+        None => {
+            out.extend(lines.iter().map(|l| l.to_string()));
+            out.extend(block);
+        }
+        Some(s) => {
+            // the block runs to the next top-level key; trailing comments and blanks belong to what follows
+            let flow = lines[s].trim_end() != "domains:";
+            let mut end = s + 1;
+            if !flow {
+                while end < lines.len() {
+                    let l = lines[end];
+                    let top = !l.trim().is_empty() && !l.starts_with(' ') && !l.starts_with('-') && !l.starts_with('#');
+                    if top {
+                        break;
+                    }
+                    end += 1;
+                }
+                while end > s + 1 && (lines[end - 1].trim().is_empty() || lines[end - 1].trim_start().starts_with('#')) {
+                    end -= 1;
+                }
+            }
+            out.extend(lines[..s].iter().map(|l| l.to_string()));
+            out.extend(block);
+            out.extend(lines[end..].iter().map(|l| l.to_string()));
+        }
+    }
+    let mut t = out.join("\n");
+    t.push('\n');
+    t
+}
+
+/// The domains as `ontology.yaml` says them now (pending text first), with the file's text.
+fn domains_now(ws: &Workspace) -> Result<(String, Vec<Domain>), String> {
+    let text = if ws.exists("ontology.yaml") { ws.read("ontology.yaml")? } else { format!("name: {}\n", ws.ont.manifest.name) };
+    let m: crate::schema::Manifest = serde_yaml::from_str(&text).map_err(|e| format!("ontology.yaml does not parse: {}", e))?;
+    Ok((text, m.domains))
+}
+
+fn manifest_patch(text: &str, domains: &[Domain], summary: String, name: &str) -> Patch {
+    Patch { file: "ontology.yaml".into(), text: with_domains(text, domains), kind: "area".into(), name: name.to_string(), summary }
+}
+
+/// Where a type's file says its area, if it does: the `domain:` of its block.
+fn file_domain(ws: &Workspace, t: &crate::schema::TypeDef) -> Result<Option<String>, String> {
+    let text = ws.read(&t.file)?;
+    let mut doc: Yaml = serde_yaml::from_str(&text).map_err(|e| format!("{} does not parse: {}", t.file, e))?;
+    Ok(find_item(&mut doc, "types", "type", &t.name).and_then(|m| m.get(key("domain")).and_then(|v| v.as_str()).map(|s| s.to_string())))
+}
+
+/// A type's file with its `domain:` line set (or removed for `None`): a line edit where it can be,
+/// placed right after `type:` when it is new; the mapping otherwise.
+fn set_domain(ws: &Workspace, t: &crate::schema::TypeDef, area: Option<&str>) -> Result<(String, String), String> {
+    let text = ws.read(&t.file)?;
+    let want = area.unwrap_or("");
+    let line = set_line(&text, "types", "type", &t.name, "domain", want, true);
+    let ok = |s: &str| {
+        let mut doc: Yaml = match serde_yaml::from_str(s) { Ok(d) => d, Err(_) => return false };
+        let got = find_item(&mut doc, "types", "type", &t.name).and_then(|m| m.get(key("domain")).and_then(|v| v.as_str()).map(|x| x.to_string()));
+        got.as_deref() == area
+    };
+    match line {
+        Some(s) if ok(&s) => Ok((t.file.clone(), s)),
+        _ => {
+            let (file, out) = edit_type_file(ws, &t.name, |m| {
+                match area {
+                    Some(a) => insert_after(m, "type", "domain", Yaml::String(a.to_string())),
+                    None => {
+                        m.remove(key("domain"));
+                    }
+                }
+                Ok(())
+            })?;
+            Ok((file, out))
+        }
+    }
+}
+
+/// Plan one area op as the files it writes, in order (`ontology.yaml` first).
+pub fn plan_area(ws: &Workspace, body: &Json) -> Result<Vec<Patch>, String> {
+    let ont = ws.ont;
+    let op = field(body, "op");
+    let (text, mut domains) = domains_now(ws)?;
+    match op {
+        "add_area" => {
+            let name = area_name_ok(field(body, "name"))?;
+            area_name_free(&domains, &name, None)?;
+            let description = field(body, "description").to_string();
+            domains.push(Domain { name: name.clone(), description, types: vec![], color: None });
+            Ok(vec![manifest_patch(&text, &domains, format!("added the area {}", name), &name)])
+        }
+        "describe_area" => {
+            let i = find_area(&domains, field(body, "area")).ok_or_else(|| format!("there is no area called {}", field(body, "area")))?;
+            let t = body.get("text").or_else(|| body.get("description")).and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+            if t.chars().count() > 600 {
+                return Err("an area's description is at most 600 characters".into());
+            }
+            domains[i].description = t;
+            let name = domains[i].name.clone();
+            Ok(vec![manifest_patch(&text, &domains, format!("described the area {}", name), &name)])
+        }
+        "rename_area" => {
+            let i = find_area(&domains, field(body, "area")).ok_or_else(|| format!("there is no area called {}", field(body, "area")))?;
+            let old = domains[i].name.clone();
+            let to = area_name_ok(field(body, "to"))?;
+            if to == old {
+                return Err(format!("{} is already called that", old));
+            }
+            area_name_free(&domains, &to, Some(i))?;
+            domains[i].name = to.clone();
+            let mut out = vec![manifest_patch(&text, &domains, format!("renamed the area {} to {}", old, to), &to)];
+            // every entity file that says `domain: <old>`
+            for t in ont.types.values() {
+                if file_domain(ws, t)?.as_deref() == Some(old.as_str()) {
+                    let pending: HashMap<String, String> = ws.pending.iter().map(|(k, v)| (k.clone(), v.clone())).chain(out.iter().map(|p| (p.file.clone(), p.text.clone()))).collect();
+                    let w2 = Workspace { ont, pending: &pending };
+                    let (file, new) = set_domain(&w2, t, Some(&to))?;
+                    match out.iter_mut().find(|p| p.file == file) {
+                        Some(p) => p.text = new,
+                        None => out.push(Patch { file: file.clone(), text: new, kind: "type".into(), name: t.name.clone(), summary: String::new() }),
+                    }
+                }
+            }
+            Ok(out)
+        }
+        "move_to_area" => {
+            let t = ont.type_(field(body, "type")).ok_or_else(|| format!("there is no entity called {}", field(body, "type")))?.clone();
+            let i = find_area(&domains, field(body, "area")).ok_or_else(|| format!("there is no area called {}", field(body, "area")))?;
+            let to = domains[i].name.clone();
+            let from = ont.domain_of(&t.name);
+            let says = file_domain(ws, &t)?;
+            let listed: Vec<usize> = domains.iter().enumerate().filter(|(_, d)| d.types.iter().any(|x| x == &t.name)).map(|(j, _)| j).collect();
+            if from.as_deref() == Some(to.as_str()) && says.as_deref().map(|s| s == to).unwrap_or(true) && listed.iter().all(|j| *j == i) {
+                return Err(format!("{} is already in {}", t.name, to));
+            }
+            let mut out: Vec<Patch> = Vec::new();
+            let was_listed = !listed.is_empty();
+            if was_listed {
+                for j in &listed {
+                    domains[*j].types.retain(|x| x != &t.name);
+                }
+                domains[i].types.push(t.name.clone());
+            }
+            let mut summary = format!("moved {} from {} to {}", t.name, from.clone().unwrap_or_else(|| "Other".into()), to);
+            // kinds that follow it go too; a kind moved on its own stops following
+            let followers: Vec<String> = ont.all_kinds_of(&t.name).into_iter().filter(|k| ont.types.get(k).map(|x| x.domain_follows).unwrap_or(false)).collect();
+            if !followers.is_empty() {
+                summary.push_str(&format!(" ({} {} {} and {} too)", followers.join(", "), if followers.len() == 1 { "follows" } else { "follow" }, t.name, if followers.len() == 1 { "moves" } else { "move" }));
+            }
+            if t.domain_follows {
+                summary.push_str(&format!(" ({} stops following {}'s area)", t.name, t.parent.clone().unwrap_or_default()));
+            }
+            if was_listed {
+                out.push(manifest_patch(&text, &domains, summary.clone(), &to));
+            }
+            // the file's own `domain:` line: changed where it says one, added where nothing said where it is
+            if says.is_some() || !was_listed {
+                let (file, new) = set_domain(ws, &t, Some(&to))?;
+                out.push(Patch { file, text: new, kind: "type".into(), name: t.name.clone(), summary: if out.is_empty() { summary } else { String::new() } });
+            }
+            Ok(out)
+        }
+        "order_areas" => {
+            let order: Vec<String> = body.get("order").and_then(|o| o.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.trim().to_string())).collect()).unwrap_or_default();
+            let mut next: Vec<Domain> = Vec::new();
+            for n in &order {
+                let i = find_area(&domains, n).ok_or_else(|| format!("there is no area called {}", n))?;
+                if next.iter().any(|d| d.name == domains[i].name) {
+                    return Err(format!("{} is named twice", domains[i].name));
+                }
+                next.push(domains[i].clone());
+            }
+            if let Some(missing) = domains.iter().find(|d| !next.iter().any(|x| x.name == d.name)) {
+                return Err(format!("say where {} goes: `order` names every area once", missing.name));
+            }
+            let before: Vec<(String, usize)> = domains.iter().enumerate().map(|(i, d)| (d.name.clone(), i)).collect();
+            keep_colours(&mut next, &before);
+            Ok(vec![manifest_patch(&text, &next, "reordered the areas".into(), "")])
+        }
+        "delete_area" => {
+            let i = find_area(&domains, field(body, "area")).ok_or_else(|| format!("there is no area called {}", field(body, "area")))?;
+            let name = domains[i].name.clone();
+            let mut held: Vec<String> = domains[i].types.clone();
+            for t in ont.types.values() {
+                if ont.domain_of(&t.name).as_deref() == Some(name.as_str()) && !held.contains(&t.name) {
+                    held.push(t.name.clone());
+                }
+            }
+            if !held.is_empty() {
+                let shown: Vec<&str> = held.iter().take(2).map(|s| s.as_str()).collect();
+                let more = held.len().saturating_sub(2);
+                return Err(format!("{} still holds {}{}; move them to another area first", name, shown.join(", "), if more > 0 { format!(" and {} more", more) } else { String::new() }));
+            }
+            let before: Vec<(String, usize)> = domains.iter().enumerate().map(|(i, d)| (d.name.clone(), i)).collect();
+            domains.remove(i);
+            keep_colours(&mut domains, &before);
+            Ok(vec![manifest_patch(&text, &domains, format!("deleted the empty area {}", name), &name)])
+        }
+        other => Err(format!("`{}` is not an area op", other)),
+    }
+}
+
+/// What deleting a file also writes: the names of the entities it defined leave every area's
+/// `types:` list, in the same save (a list that kept them would be E010).
+pub fn delete_files(ont: &Ontology, rel: &str) -> Vec<(String, Option<String>)> {
+    let mut out = vec![(rel.to_string(), None)];
+    let gone: Vec<String> = ont.types.values().filter(|t| t.file == rel).map(|t| t.name.clone()).collect();
+    if gone.is_empty() || !ont.manifest.domains.iter().any(|d| d.types.iter().any(|t| gone.contains(t))) {
+        return out;
+    }
+    let Ok(text) = std::fs::read_to_string(ont.root.join("ontology.yaml")) else { return out };
+    let mut domains = ont.manifest.domains.clone();
+    for d in domains.iter_mut() {
+        d.types.retain(|t| !gone.contains(t));
+    }
+    out.push(("ontology.yaml".into(), Some(with_domains(&text, &domains))));
+    out
 }
 
 pub fn plan(ont: &Ontology, body: &Json) -> Result<Patch, String> {
@@ -1276,8 +1613,15 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             let summary = if owner.is_empty() { format!("removed the owner of {} {}", noun, item) } else { format!("made {} the owner of {} {}", crate::people::shown(&owner), noun, item) };
             Ok(Patch { file, text: new, kind: pk.into(), name: item, summary })
         }
+        a if AREA_OPS.contains(&a) => {
+            let mut ps = plan_area(ws, body)?;
+            if ps.len() != 1 {
+                return Err(format!("{} writes several files here; send it in `ops`", a));
+            }
+            Ok(ps.remove(0))
+        }
         "record_check" => Err("record_check reports a check, it changes no file; send it on its own, not in `ops`".into()),
-        other => Err(format!("unknown op `{}`; one of add_type, add_property, set_type_description, set_metric, set_owner, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
+        other => Err(format!("unknown op `{}`; one of add_type, add_property, set_type_description, set_metric, set_owner, add_area, rename_area, describe_area, move_to_area, order_areas, delete_area, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
     }
 }
 
