@@ -1519,19 +1519,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     // the People screen: names from this space, plus (on the page only) names from the other spaces
     // this server serves, never shipped examples
     if method == Method::Get && (path == "/api/people" || path == "/api/people/plan") {
-        let mut other: Vec<String> = Vec::new();
-        if path == "/api/people" {
-            let ids: Vec<String> = reg.user_spaces().iter().filter(|s| s.id != space_id && !s.builtin).map(|s| s.id.clone()).collect();
-            for id in ids {
-                if let Ok(o) = reg.get(&id) {
-                    for p in crate::people::derive(&o.ont, &[]).people {
-                        if other.len() < 200 && !other.iter().any(|n| crate::people::fold(n) == crate::people::fold(&p.name)) {
-                            other.push(p.name);
-                        }
-                    }
-                }
-            }
-        }
+        let mut other: Vec<String> = if path == "/api/people" { reg.other_names(&space_id) } else { Vec::new() };
         let history_on = !space.builtin && space_edit().commit;
         let editable = base_edit.allow && !space.builtin;
         let resp = match reg.get(&space_id) {

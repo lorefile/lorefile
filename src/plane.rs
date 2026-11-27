@@ -743,6 +743,13 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
         if has_data {
             j["has_data"] = json!(true);
         }
+        // a kind with no area of its own follows its parent's (Part 3); its owner, for the card
+        if t.domain_follows {
+            j["area_follows"] = json!(true);
+        }
+        if !t.owner.trim().is_empty() {
+            j["owner"] = json!(t.owner.trim());
+        }
         if labels.get(&label.to_lowercase()).copied().unwrap_or(0) > 1 {
             j["same_label"] = json!(true);
         }

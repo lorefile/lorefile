@@ -18,7 +18,7 @@ input.need,textarea.need{background:var(--need);border-color:var(--need-line)}
 input:disabled,textarea:disabled,select:disabled{opacity:.55;background:var(--chip);cursor:default}
 textarea{resize:vertical}
 #app{display:grid;grid-template-rows:52px 1fr 34px;grid-template-columns:240px 1fr;height:100vh}
-header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header{grid-column:1/3;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:nowrap;min-width:0;overflow:hidden}
 header .logo{width:28px;height:28px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center}
 header .name{font-weight:700;font-size:15px}header select{max-width:260px;padding:5px 8px;min-height:32px;font-weight:600;font-size:13px}header .counts{color:var(--muted);font-size:13px}
 .meter{width:120px;height:6px;border-radius:999px;background:var(--line);overflow:hidden}.meter div{height:6px;background:var(--accent);border-radius:999px}
@@ -61,13 +61,6 @@ code.block{display:block;background:var(--bg);border-radius:8px;padding:8px 10px
 .form label{font-size:12.5px;color:var(--muted)}
 .verdict{padding:10px 12px;border-radius:10px;font-weight:600}.verdict.pass{background:var(--ok-bg);color:var(--ok)}.verdict.warn{background:var(--warn-bg);color:var(--warn)}.verdict.fail{background:var(--block-bg);color:var(--block)}.verdict.unknown{background:var(--chip);color:var(--muted)}
 .res{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--line);font-size:13px;align-items:flex-start}
-.map{position:relative;overflow:auto;flex:1 1 auto;min-width:0;background-image:radial-gradient(var(--line2) 1px,transparent 1px);background-size:22px 22px}
-.node{position:absolute;width:220px;height:70px;padding:9px 12px;border-radius:12px;border:1px solid var(--line);background:var(--panel);text-align:left;display:flex;flex-direction:column;gap:4px;justify-content:center;box-shadow:0 1px 2px rgba(0,0,0,.05);z-index:1;min-height:0}
-.node.sel{box-shadow:0 0 0 3px var(--accent),0 8px 20px rgba(0,0,0,.1)}.node b{font-size:14.5px}.node .tags{display:flex;gap:5px;flex-wrap:wrap}.node .tags span{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px}
-.edge{position:absolute;height:2px;background:var(--line2);transform-origin:0 50%;z-index:0}.edge.on{background:var(--ink)}
-.elabel{position:absolute;width:88px;text-align:center;font-size:10.5px;color:var(--faint);background:var(--bg);border-radius:999px;padding:1px 0;z-index:0}.elabel.on{color:var(--ink)}
-.legend{position:absolute;left:14px;bottom:12px;display:flex;gap:12px;font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 12px}
-.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
 footer{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:0 18px;border-top:1px solid var(--line);background:var(--panel);color:var(--muted);font-size:12.5px}
 .banner{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:8px 12px;font-size:13px}
 .toast{position:fixed;right:18px;bottom:48px;max-width:460px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--ok);border-radius:10px;padding:10px 14px;box-shadow:0 8px 24px rgba(0,0,0,.12);font-size:13px;z-index:50}.toast.bad{border-left-color:var(--block)}
@@ -109,10 +102,59 @@ button.lnk{background:none;border:none;color:var(--accent);padding:0;min-height:
 .rv-qs{display:flex;flex-direction:column;gap:10px}.rv-q{display:flex;flex-direction:column;gap:6px;font-size:13.5px}
 .rv-actions{position:sticky;bottom:-22px;background:var(--bg);padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-top:1px solid var(--line)}
 .rv-bar{position:sticky;top:0;left:0;z-index:3;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 14px;font-size:13px}
-.node.st-new{border:2px solid var(--ok)}.node.st-changed{border:2px dashed var(--warn)}.node.st-removed{border:2px solid var(--block);opacity:.8}.node.st-removed b{text-decoration:line-through}
-.edge.st-new{background:var(--ok)}.edge.st-changed{background:var(--warn)}.edge.st-removed{background:var(--block);opacity:.5}
 .st-tag.st-new{background:var(--ok-bg);color:var(--ok)}.st-tag.st-changed{background:var(--warn-bg);color:var(--warn)}.st-tag.st-removed{background:var(--block-bg);color:var(--block)}
-.legend i.st-dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;background:var(--panel)}.st-dot.st-new{border:2px solid var(--ok)}.st-dot.st-changed{border:2px dashed var(--warn)}.st-dot.st-removed{border:2px solid var(--block)}
+/* ---------- one-line header, and panels that fold (people-areas-graph spec, Part 2) ---------- */
+header .name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto}
+header select{min-width:140px;flex:0 1 260px;text-overflow:ellipsis}
+header .counts{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto}
+#h-meterrow{flex:0 0 auto;white-space:nowrap}#h-mode{white-space:nowrap;flex:0 0 auto}#h-mode .short{display:none}
+#h-tools{display:flex;gap:8px;flex:0 0 auto}#h-more{display:none;flex:0 0 auto;min-width:36px}
+.h-menu{position:fixed;top:48px;right:12px;z-index:40;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.1);padding:6px;display:flex;flex-direction:column;gap:4px;min-width:170px}
+.h-menu[hidden]{display:none}.h-menu button{text-align:left}
+@media (max-width:1280px){header .counts{display:none}}
+@media (max-width:1100px){#h-meterrow{display:none}}
+@media (max-width:1000px){#h-tools{display:none}#h-more{display:inline-flex;align-items:center;justify-content:center}#h-mode .long{display:none}#h-mode .short{display:inline}}
+#app{transition:grid-template-columns .15s ease}#app.navfold{grid-template-columns:56px 1fr}
+nav .ng{width:20px;height:20px;flex:0 0 auto;color:var(--muted);display:none}nav .step.home .ng,#app.navfold nav .ng{display:block}nav .step.home .ng{color:var(--accent)}nav .step.active .ng{color:var(--accent)}nav .step{position:relative}
+nav .foldbtn{margin-top:6px;align-self:flex-start;font-size:12.5px;min-height:32px;padding:4px 10px}
+nav .navsearch,nav .cb{display:none}
+nav .cb{position:absolute;top:6px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--warn)}
+#app.navfold nav{padding:10px 6px;align-items:center}
+#app.navfold nav h4,#app.navfold nav .t,#app.navfold nav .s,#app.navfold nav #find,#app.navfold nav .navhint,#app.navfold nav .dot{display:none}
+#app.navfold nav .step{justify-content:center;padding:8px 0;width:44px;min-height:40px}
+#app.navfold nav .badge{position:absolute;top:1px;right:0;margin:0;padding:0 5px;font-size:10px}
+#app.navfold nav .cb{display:block}#app.navfold nav .navsearch{display:flex;justify-content:center;width:44px;min-height:40px;border:none;background:transparent}
+#app.navfold nav .foldbtn{align-self:center}
+.list,.aside{position:relative;transition:flex-basis .15s ease,padding .15s ease}
+.colbtn{border:none;background:transparent;min-height:28px;padding:2px 6px;color:var(--muted);font-size:13px;align-self:flex-end}
+.strip{display:none;flex-direction:column;align-items:center;gap:10px;height:100%;cursor:pointer}
+.strip .vt{writing-mode:vertical-rl;transform:rotate(180deg);font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-height:70vh}
+.strip svg{width:18px;height:18px;color:var(--muted)}
+#app.listfold .list{flex:0 0 40px;padding:8px 4px;overflow:hidden}#app.listfold .list > :not(.strip){display:none}#app.listfold .list > .strip{display:flex}
+#app.asidefold .aside.foldable{flex:0 0 40px;padding:8px 4px;overflow:hidden}#app.asidefold .aside.foldable > :not(.strip){display:none}#app.asidefold .aside.foldable > .strip{display:flex}
+.asidehead{display:flex;justify-content:flex-end;margin:-8px -8px -6px 0}
+@media (prefers-reduced-motion: reduce){#app,.list,.aside{transition:none}}
+@media (max-width:760px){.colbtn,.asidehead,nav .foldbtn,nav .navsearch,.strip{display:none!important}}
+/* ---------- people and the owner picker ---------- */
+.picker{border:1px solid var(--line2);border-radius:10px;background:var(--panel);padding:8px;display:flex;flex-direction:column;gap:4px;max-width:420px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+.picker input{width:100%}.picker .pk-g{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:6px 6px 2px}
+.picker .pk-o{display:flex;gap:8px;align-items:center;text-align:left;background:transparent;border:none;border-radius:8px;padding:5px 8px;min-height:32px;width:100%;font-size:13px}
+.picker .pk-o:hover,.picker .pk-o.on{background:var(--accent-soft)}.picker .pk-o small{margin-left:auto;color:var(--muted);font-size:11.5px}
+.pk-save{border:1px solid var(--accent);border-radius:10px;padding:8px 10px;background:var(--accent-soft);display:flex;flex-direction:column;gap:6px;max-width:520px}
+.ownerl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pp-row{display:grid;grid-template-columns:minmax(140px,1.2fr) 70px minmax(160px,2fr) minmax(120px,1.2fr) auto;gap:8px;align-items:start;padding:8px 6px;border-bottom:1px solid var(--line);font-size:13px}
+.pp-row .also{grid-column:1/-1;color:var(--muted);font-size:12px;padding-left:2px}
+.pp-menu{display:flex;flex-direction:column;gap:4px;padding:6px 0}
+@media (max-width:760px){.pp-row{grid-template-columns:1fr auto}.pp-row > :nth-child(3),.pp-row > :nth-child(4){grid-column:1/-1}}
+/* ---------- the Graph ---------- */
+.gr-rows{display:flex;flex-direction:column;gap:8px;max-width:860px}.gr-rows-in{display:flex;flex-direction:column;gap:6px}
+.gr-row{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel);font-size:13px}
+.gr-crumbs{font-size:12.5px}.gr-crumbs:empty{display:none}.gr-hint{margin-top:-4px}
+/* ---------- areas ---------- */
+.pl-areaname{cursor:pointer}.pl-areaname:hover{text-decoration:underline}
+.pl-emptyarea rect{fill:rgba(255,255,255,.5);stroke:#b9b9b2;stroke-dasharray:6 5;stroke-width:1.5}
+.swatch{display:inline-block;width:14px;height:14px;border-radius:4px;vertical-align:-2px;margin-right:6px}
+.chiplist{display:flex;flex-wrap:wrap;gap:4px}.movelist{max-height:220px;overflow:auto;display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:8px;padding:6px}
 @media (max-width:760px){
   #app{grid-template-columns:1fr;grid-template-rows:auto auto 1fr auto;height:auto;min-height:100vh}
   header{grid-column:1;padding:8px 12px}header .counts,header .meter,#h-ready{display:none}header select{max-width:100%}
@@ -218,11 +260,12 @@ nav .step.home .dot{background:var(--accent-soft);color:var(--accent);font-size:
     <div class="logo" role="link" tabindex="0" title="Home" aria-label="Home" onclick="go('home')" onkeydown="if(event.key==='Enter')go('home')" style="cursor:pointer"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="20" r="2"/><path d="M7 7l3 3M17 7l-3 3M12 15v3"/></svg></div>
     <select id="h-space" title="Which space (ontology) to show" onchange="switchSpace(this.value)"></select>
     <span class="name" id="h-name">…</span><span class="counts" id="h-counts"></span>
-    <div class="row" style="gap:8px"><div class="meter"><div id="h-meter" style="width:0"></div></div><span style="font-size:12.5px;color:var(--muted)" id="h-ready"></span></div>
-    <span style="flex:1"></span>
+    <div class="row" id="h-meterrow" style="gap:8px"><div class="meter"><div id="h-meter" style="width:0"></div></div><span style="font-size:12.5px;color:var(--muted)" id="h-ready"></span></div>
+    <span style="flex:1 1 0;min-width:0"></span>
     <span id="h-mode" class="pill plain"></span>
-    <button class="small" onclick="reload()">Reload</button>
-    <a id="h-md" href="#" target="_blank"><button class="small">Summary.md</button></a>
+    <span id="h-tools"><button class="small" onclick="reload()">Reload</button><a id="h-md" href="#" target="_blank"><button class="small" tabindex="-1">Summary.md</button></a></span>
+    <button class="small" id="h-more" aria-expanded="false" aria-haspopup="true" aria-label="More: Reload, Summary.md" onclick="headerMenu()">⋯</button>
+    <div class="h-menu" id="h-menu" hidden><button class="small" onclick="headerMenu(false);reload()">Reload</button><button class="small" onclick="headerMenu(false);window.open($('h-md').href,'_blank')">Summary.md</button></div>
   </header>
   <nav id="nav"></nav>
   <div id="view"></div>
@@ -260,12 +303,16 @@ const nameBtn = (label, wait, js, cls, off) => { const ok = nameReady(); return 
 function syncNameButtons(){ const ok = nameReady(), n = ME(); document.querySelectorAll('[data-needs-name]').forEach(b => { b.disabled = !ok || b.hasAttribute('data-off'); b.textContent = ok ? b.dataset.label.replace('{n}', n) : b.dataset.wait; }); }
 function nameBoxHtml(id){
   const me = ME();
-  return `<div class="rv-q namebox"><label for="${id}"><b>Your name</b> <span class="hint">kept in this browser, recorded with every decision</span></label><div class="row"><input id="${id}" value="${esc(me)}" placeholder="e.g. Vinay" style="max-width:260px" autocomplete="name" oninput="nameTyped(this)">${me ? `<button type="button" class="lnk" onclick="notMe(${jq(id)})">not you?</button>` : ''}</div><div class="name-err"></div>${AUTH && !AUTH.required ? '<div class="hint">This server runs with --no-auth: anyone who can reach it can type any name.</div>' : ''}</div>`;
+  return `<div class="rv-q namebox"><label for="${id}"><b>Your name</b> <span class="hint">kept in this browser, recorded with every decision</span></label><div class="row"><input id="${id}" value="${esc(me)}" placeholder="e.g. Vinay" style="max-width:260px" autocomplete="name" list="people-names" oninput="nameTyped(this)">${peopleDatalist()}${me ? `<button type="button" class="lnk" onclick="notMe(${jq(id)})">not you?</button>` : ''}</div><div class="name-err"></div>${AUTH && !AUTH.required ? '<div class="hint">This server runs with --no-auth: anyone who can reach it can type any name.</div>' : ''}</div>`;
 }
+// this space's people, as suggestions for "Your name": persons who haven't left
+function peopleDatalist(){ const ps = ((typeof PEOPLE !== 'undefined' && PEOPLE && PEOPLE.people) || []).filter(p => p.kind === 'person' && !p.left); return ps.length ? `<datalist id="people-names">${ps.map(p => `<option value="${esc(p.name)}"></option>`).join('')}</datalist>` : ''; }
+// typing another spelling of someone offers the main one
+function spellingHint(v){ const p = v && typeof personOf === 'function' ? personOf(v) : null; return p && p.name !== v && p.kind === 'person' ? `<div class="hint">Another spelling of <b>${esc(p.name)}</b>. <button type="button" class="lnk" onclick="const b=this.closest('.namebox, .card').querySelector('input');b.value=${jq(p.name)};b.dispatchEvent(new Event('input'))">Use ${esc(p.name)}</button></div>` : ''; }
 function nameTyped(el){
   const v = el.value.trim(), err = el.closest('.namebox').querySelector('.name-err');
   if (v && !nameOk(v)) { err.innerHTML = `<div class="d error">✗ That name cannot be used. ${esc(NAME_RULE)}</div>`; setMe(''); }
-  else { err.innerHTML = ''; setMe(v); }
+  else { err.innerHTML = spellingHint(v); setMe(v); }
   syncNameButtons();
 }
 function notMe(id){ setMe(''); const b = $(id); if (b) { b.value = ''; nameTyped(b); b.focus(); } }
@@ -349,8 +396,11 @@ const human = (s) => String(s).replace(/_/g, ' ').replace(/^./, c => c.toUpperCa
 const sevLabel = { block: 'stop', warn: 'warn', info: 'note' };
 const sev = (s) => `<span class="sev ${s}">${sevLabel[s] || s}</span>`;
 const owner = (o) => o ? human(String(o).split('@')[0]) + (o.includes('@') ? ' team' : '') : 'no one named yet';
-const PALETTE = ['#2b5cff', '#0f766e', '#7c3aed', '#db2777', '#b45309', '#0369a1', '#4d7c0f', '#9f1239'];
-const domainColor = (d) => { const i = (O.domains || []).findIndex(x => x.name === d); return i >= 0 ? PALETTE[i % PALETTE.length] : '#6e6e78'; };
+// the eight area colours by name, in palette order; the 5th was the "look at it" amber and is now slate (decision 26)
+const AREA_COLORS = { blue: '#2b5cff', teal: '#0f766e', violet: '#7c3aed', pink: '#db2777', slate: '#475569', sky: '#0369a1', green: '#4d7c0f', rose: '#9f1239' };
+const PALETTE = Object.values(AREA_COLORS);
+// an area's own colour when it names one of the eight, else the colour of its position, as before
+const domainColor = (d) => { const doms = (O.domains || []).filter(x => x.name !== 'Other' || (O.manifest.domains || []).some(m => m.name === 'Other')); const i = doms.findIndex(x => x.name === d); if (i < 0) return '#6e6e78'; const c = doms[i].color; return AREA_COLORS[c] || PALETTE[i % PALETTE.length]; };
 const describe = async (name) => DC[name] || (DC[name] = await api(B + '/api/describe?name=' + encodeURIComponent(name)));
 
 // ---------- derived facts ----------
@@ -415,13 +465,14 @@ async function loadSummary(){
   try { PR = await api(B + '/api/proposals'); } catch (e) { PR = { proposals: [], activity: [] }; }
   // the picker counts too: every decision, edit, undo and reload passes through here. A failed fetch keeps the old one.
   try { const sp = await api('/api/spaces'); if (sp && sp.spaces) { SPACES = sp; renderSpacePicker(); } } catch (e) {}
-  LOADED_AT = Date.now();
+  LOADED_AT = Date.now(); PEOPLE_AT = 0; loadPeople();
   const f = facts(); const s = O.stats;
   $('h-name').textContent = O.manifest.name + (O.manifest.version ? ' v' + O.manifest.version : '');
   $('h-counts').textContent = `${plural(s.types, 'entity', 'entities')} · ${countOr(s.relationships, 'link')} · ${countOr(s.constraints, 'guardrail')} · ${countOr(s.actions, 'action')}`;
   $('h-meter').style.width = f.ready + '%'; $('h-ready').textContent = f.ready + '% filled in';
   $('h-ready').title = 'What the meter counts: fields described, links explained, entities with data. What to do next lists what is left beyond that.';
-  $('h-mode').textContent = O.editable ? (O.commit_edits ? 'edit mode · history on' : (nested() ? 'edit mode · changes stay uncommitted' : 'edit mode · history off')) : (O.space && O.space.builtin ? 'shipped ' + O.space.group + ' · read-only' : 'read-only');
+  const modeLong = O.editable ? (O.commit_edits ? 'edit mode · history on' : (nested() ? 'edit mode · changes stay uncommitted' : 'edit mode · history off')) : (O.space && O.space.builtin ? 'shipped ' + O.space.group + ' · read-only' : 'read-only');
+  $('h-mode').innerHTML = `<span class="long">${esc(modeLong)}</span><span class="short">${O.editable ? 'edit' : 'read-only'}</span>`; $('h-mode').title = modeLong;
   $('h-mode').className = 'pill ' + (O.editable ? '' : 'plain');
   renderNav(); renderFooter();
 }
@@ -435,7 +486,16 @@ document.addEventListener('visibilitychange', async () => {
   await loadSummary(); if (O && !O.error) render();
 });
 function go(screen, arg){ const h = screen + (arg ? '/' + encodeURIComponent(arg) : ''); if (location.hash.slice(1) === h) { onHash(); } else { location.hash = h; } }
-function onHash(){ const h = decodeURIComponent(location.hash.slice(1)); const [screen, ...rest] = h.split('/'); route = { screen: screen || 'home', arg: rest.join('/') }; ui.editor = null; renderNav(); render(); }
+function onHash(){
+  const h = decodeURIComponent(location.hash.slice(1)); let [screen, ...rest] = h.split('/');
+  // old links and bookmarks: the Map is the Graph now
+  if (screen === 'map') screen = 'graph';
+  let arg = rest.join('/'); if (screen === 'review' && arg.endsWith('/map')) arg = arg.slice(0, -4) + '/graph';
+  const prev = route; route = { screen: screen || 'home', arg }; ui.editor = null; ui.pick = null;
+  // one #graph/… to another moves the centre in place, without building the whole screen again
+  if (prev.screen === 'graph' && route.screen === 'graph' && $('gr-rows') && PL) { renderNav(); drawGraph(false); return; }
+  renderNav(); render();
+}
 window.addEventListener('hashchange', onHash);
 async function afterWrite(r){
   toast(r);
@@ -464,24 +524,65 @@ function note(text, bad){ const el = document.createElement('div'); el.className
 async function patch(body){ if (ro()) { toast({ error: 'read-only: start with --allow-edit' }); return null; } const r = await post(B + '/api/patch', body); await afterWrite(r); return r; }
 
 // ---------- rail ----------
+// ---------- panels that fold: the menu, the list column, the right panel (kept in this browser) ----------
+const PANELS_KEY = 'lorefile-panels';
+// what was kept; until a choice is kept the menu folds below 1100 px wide. Where nothing can be kept, everything opens.
+let PANELS_KEPT = (() => { try { return JSON.parse(localStorage.getItem(PANELS_KEY) || 'null'); } catch (e) { return {}; } })();
+const PANELS = new Proxy({}, { get: (_, k) => PANELS_KEPT && k in PANELS_KEPT ? !!PANELS_KEPT[k] : (k === 'nav' && PANELS_KEPT === null ? window.innerWidth < 1100 : false) });
+function setPanel(k, v){
+  const now = { nav: PANELS.nav, list: PANELS.list, aside: PANELS.aside }; now[k] = v; PANELS_KEPT = now;
+  try { localStorage.setItem(PANELS_KEY, JSON.stringify(now)); } catch (e) {}
+  applyPanels();
+  if (k === 'nav') renderNav();
+  // Home refits only when the camera hasn't been moved, the same rule as a window resize
+  if (k === 'aside' && route.screen === 'home' && PL && !pl.moved) setTimeout(() => drawPlane(false), 170);
+}
+function applyPanels(){
+  const app = $('app'); if (!app) return; const ph = phone();
+  app.classList.toggle('navfold', !!PANELS.nav && !ph); app.classList.toggle('listfold', !!PANELS.list && !ph); app.classList.toggle('asidefold', !!PANELS.aside && !ph);
+}
+// the list column's fold button and strip: `list` is its inner HTML, the strip names the open item
+const listCol = (inner) => `<div class="list"><button class="colbtn" onclick="setPanel('list',true)" aria-expanded="true" title="Fold the list">«</button>${inner}<div class="strip" role="button" tabindex="0" aria-expanded="false" aria-label="Open the list" onclick="setPanel('list',false)" onkeydown="if(event.key==='Enter')setPanel('list',false)"><span aria-hidden="true">»</span><span class="vt">${esc(route.arg || '')}</span></div></div>`;
+// the right panel's fold button, and its strip: what is selected, or how many things to do next
+const asideHead = () => `<div class="asidehead"><button class="colbtn" onclick="setPanel('aside',true)" aria-expanded="true" title="Fold this panel (])">»</button></div>`;
+const asideStrip = (glyph, label) => `<div class="strip" role="button" tabindex="0" aria-expanded="false" aria-label="Open the panel: ${esc(label)}" onclick="setPanel('aside',false)" onkeydown="if(event.key==='Enter')setPanel('aside',false)"><span aria-hidden="true">«</span>${glyph ? `<svg aria-hidden="true"><use href="#g-${esc(glyph)}"/></svg>` : ''}<span class="vt">${esc(label)}</span></div>`;
+function headerMenu(open){
+  const m = $('h-menu'), b = $('h-more'); if (!m || !b) return;
+  const on = open === undefined ? m.hidden : open; m.hidden = !on; b.setAttribute('aria-expanded', String(on));
+  if (on) { const first = m.querySelector('button'); if (first) first.focus(); }
+}
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && $('h-menu') && !$('h-menu').hidden) { headerMenu(false); $('h-more').focus(); return; }
+  const t = ev.target; if (ev.metaKey || ev.ctrlKey || ev.altKey || (t && (t.closest('input,textarea,select,[contenteditable="true"],[contenteditable=""]')))) return;
+  if (ev.key === '[' && !phone()) { setPanel('nav', !PANELS.nav); ev.preventDefault(); }
+  else if (ev.key === ']' && !phone()) { setPanel('aside', !PANELS.aside); ev.preventDefault(); }
+});
+document.addEventListener('click', (ev) => { const m = $('h-menu'); if (m && !m.hidden && !ev.target.closest('#h-menu,#h-more')) headerMenu(false); });
+window.addEventListener('resize', () => { if (O && PANELS_KEPT === null) renderNav(); else applyPanels(); if (window.innerWidth >= 1000) headerMenu(false); });
+
+// ---------- rail ----------
+const HOME_SCREENS = ['home', 'graph', 'list'];
 function renderNav(){
+  ensureGlyphs(); applyPanels();
   const f = facts(); const n = $('nav');
   const q = ui.search.trim();
-  let h = `<input id="find" placeholder="Find anything…" value="${esc(ui.search)}" oninput="searchNav(this.value)">`;
+  let h = `<input id="find" placeholder="Find anything…" value="${esc(ui.search)}" oninput="searchNav(this.value)"><button class="navsearch" title="Find anything" aria-label="Find anything" onclick="setPanel('nav',false);setTimeout(()=>{const i=$('find');if(i)i.focus()},40)"><svg class="ng" aria-hidden="true"><use href="#g-search"/></svg></button>`;
   if (q) { n.innerHTML = h + '<h4>Results</h4><div id="find-results"><div class="empty">…</div></div>'; return; }
   const build = [
-    ['sources', 'Sources', !(O.sources||[]).length ? 'none yet' : `${plural((O.sources||[]).length, 'source')} · ${f.unbound.length ? plural(f.unbound.length, 'entity', 'entities') + ' without data' : (f.types.length ? 'every entity has data' : 'no entities yet')}`, f.unbound.length > 0],
-    ['entities', 'Entities', f.types.length ? `${f.types.length} · ${f.gapTypes.length ? f.gapTypes.length + ' need plain words' : 'every field described'}` : 'none yet: start here', f.gapTypes.length > 0 || !f.types.length],
-    ['links', 'Links', f.rels.length ? `${f.rels.length} · ${f.relsNoDesc.length ? f.relsNoDesc.length + ' without a sentence' : 'every link explained'}` : 'none yet', f.relsNoDesc.length > 0],
-    ['logic', 'Logic', `${countOr(f.metrics.length, 'metric')} · ${countOr(f.fns.length, 'function')}${f.metricsNoOwner.length ? ' · ' + f.metricsNoOwner.length + ' with no owner' : ''}`, f.metricsNoOwner.length > 0],
-    ['rules', 'Guardrails', f.rules.length ? `${f.rules.length} · ${f.noOwner.length ? f.noOwner.length + ' with no sign-off' : 'every one signed off'}` : 'none yet', f.noOwner.length > 0],
-    ['actions', 'Actions', (O.actions||[]).length ? `${plural((O.actions||[]).length, 'thing')} agents may do` : 'none yet', false]
+    ['sources', 'Sources', 'cylinder', !(O.sources||[]).length ? 'none yet' : `${plural((O.sources||[]).length, 'source')} · ${f.unbound.length ? plural(f.unbound.length, 'entity', 'entities') + ' without data' : (f.types.length ? 'every entity has data' : 'no entities yet')}`, f.unbound.length > 0],
+    ['entities', 'Entities', 'cube', f.types.length ? `${f.types.length} · ${f.gapTypes.length ? f.gapTypes.length + ' need plain words' : 'every field described'}` : 'none yet: start here', f.gapTypes.length > 0 || !f.types.length],
+    ['links', 'Links', 'link', f.rels.length ? `${f.rels.length} · ${f.relsNoDesc.length ? f.relsNoDesc.length + ' without a sentence' : 'every link explained'}` : 'none yet', f.relsNoDesc.length > 0],
+    ['logic', 'Logic', 'chart', `${countOr(f.metrics.length, 'metric')} · ${countOr(f.fns.length, 'function')}${f.metricsNoOwner.length ? ' · ' + f.metricsNoOwner.length + ' with no owner' : ''}`, f.metricsNoOwner.length > 0],
+    ['rules', 'Guardrails', 'shield', f.rules.length ? `${f.rules.length} · ${f.noOwner.length ? f.noOwner.length + ' with no sign-off' : 'every one signed off'}` : 'none yet', f.noOwner.length > 0],
+    ['actions', 'Actions', 'bolt', (O.actions||[]).length ? `${plural((O.actions||[]).length, 'thing')} agents may do` : 'none yet', false]
   ];
-  h += `<button class="step home ${route.screen==='home'?'active':''}" onclick="go('home')"><span class="dot ok" aria-hidden="true">⌂</span><span><div class="t">Home</div><div class="s">how things are</div></span></button>`;
-  h += '<h4>Build</h4>' + build.map(([k, t, s, warn], i) => `<button class="step ${route.screen===k?'active':''}" onclick="go('${k}')"><span class="dot ${warn?'warn':'ok'}">${warn ? i+1 : '✓'}</span><span><div class="t">${t}</div><div class="s ${warn?'warn':''}">${esc(s)}</div></span></button>`).join('');
-  const use = [['usage', 'How to use it', 'what agents can answer now', 0], ['map', 'Map', 'the whole shape, opened up', 0], ['agents', 'Agents', 'MCP, proposals, activity', f.pending], ['history', 'History', 'what changed, who, when', 0], ['data', 'Data & SQL', 'one door across sources', 0], ['files', 'Files', 'every YAML, explained', 0], ['settings', 'Settings', 'sharing, server, MCP', 0]];
-  h += '<h4>Use</h4>' + use.map(([k, t, s, b]) => `<button class="step ${route.screen===k || (k==='agents' && route.screen==='review')?'active':''}" onclick="go('${k}')"><span><div class="t">${t}</div><div class="s">${s}</div></span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('');
-  h += `<div style="margin-top:auto;font-size:12px;color:var(--faint);padding:8px;line-height:1.5">Everything here is YAML files. Agents read the same files over MCP.</div>`;
+  const glyph = (g) => `<svg class="ng" aria-hidden="true"><use href="#g-${g}"/></svg>`;
+  h += `<button class="step home ${HOME_SCREENS.includes(route.screen)?'active':''}" title="Home" aria-label="Home" onclick="go('home')">${glyph('home')}<span><div class="t">Home</div><div class="s">how things are</div></span></button>`;
+  h += '<h4>Build</h4>' + build.map(([k, t, g, s, warn], i) => `<button class="step ${route.screen===k?'active':''}" title="${esc(t + ': ' + s)}" aria-label="${esc(t + ': ' + s)}" onclick="go('${k}')">${glyph(g)}<span class="dot ${warn?'warn':'ok'}">${warn ? i+1 : '✓'}</span><span><div class="t">${t}</div><div class="s ${warn?'warn':''}">${esc(s)}</div></span>${warn ? '<span class="cb" aria-hidden="true"></span>' : ''}</button>`).join('');
+  const use = [['usage', 'How to use it', 'chat', 'what agents can answer now', 0], ['agents', 'Agents', 'plug', 'MCP, proposals, activity', f.pending], ['people', 'People', 'people', 'who owns and decides', 0], ['history', 'History', 'clock', 'what changed, who, when', 0], ['data', 'Data & SQL', 'sheet', 'one door across sources', 0], ['files', 'Files', 'document', 'every YAML, explained', 0], ['settings', 'Settings', 'gear', 'sharing, server, MCP', 0]];
+  h += '<h4>Use</h4>' + use.map(([k, t, g, s, b]) => `<button class="step ${route.screen===k || (k==='agents' && route.screen==='review')?'active':''}" title="${esc(t)}" aria-label="${esc(t + (b ? ', ' + b + ' waiting' : ''))}" onclick="go('${k}')">${glyph(g)}<span><div class="t">${t}</div><div class="s">${s}</div></span>${b ? `<span class="badge">${b}</span>` : ''}</button>`).join('');
+  h += `<div class="navhint" style="margin-top:auto;font-size:12px;color:var(--faint);padding:8px;line-height:1.5">Everything here is YAML files. Agents read the same files over MCP.</div>`;
+  h += `<button class="small foldbtn" onclick="setPanel('nav',${!PANELS.nav})" aria-expanded="${!PANELS.nav}" title="${PANELS.nav ? 'Open the menu ([)' : 'Fold the menu ([)'}">${PANELS.nav ? '»' : '« Fold'}</button>`;
   n.innerHTML = h;
 }
 let searchTimer;
@@ -510,7 +611,7 @@ function renderFooter(){
 // ---------- screens ----------
 function render(){
   const v = $('view'); v.innerHTML = '';
-  const fn = { home: renderHome, map: renderMap, sources: renderSources, entities: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, review: renderReview, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace, logic: renderLogic, usage: renderUsage, files: renderFiles, settings: renderSettings, history: renderHistory }[route.screen] || renderHome;
+  const fn = { home: renderHome, graph: renderGraph, list: renderListTab, people: renderPeople, sources: renderSources, entities: renderThings, links: renderLinks, rules: renderRules, actions: renderActions, agents: renderAgents, review: renderReview, data: renderData, diagnostics: renderDiagnostics, 'new-space': renderNewSpace, logic: renderLogic, usage: renderUsage, files: renderFiles, settings: renderSettings, history: renderHistory }[route.screen] || renderHome;
   fn(v);
 }
 const main = (inner, extra) => `<div class="main">${inner}</div>${extra || ''}`;
@@ -531,6 +632,8 @@ function nextSteps(){
   if (f.gapTypes.length) nudges.push([`${plural(f.gapTypes.length, 'entity', 'entities')} ${f.gapTypes.length === 1 ? 'has' : 'have'} fields without plain words`, f.gapTypes.slice(0, 4).map(t => `${t.name} (${t.fields - t.described})`).join(', ') + (f.gapTypes.length > 4 ? '…' : ''), 'Add words', `ui.typeTab='fields';go('entities',${jq(f.gapTypes[0].name)})`]);
   if (f.relsNoDesc.length) nudges.push([`${plural(f.relsNoDesc.length, 'link')} ${f.relsNoDesc.length === 1 ? 'has' : 'have'} no sentence`, 'One line each, like "The carrier currently booked for the parcel".', 'Describe links', "go('links')"]);
   if (f.unbound.length) nudges.push([`${f.unbound.length > 4 ? plural(f.unbound.length, 'entity', 'entities') : f.unbound.map(t => t.name).join(' and ')} ${f.unbound.length === 1 ? 'has' : 'have'} no data behind ${f.unbound.length === 1 ? 'it' : 'them'}`, 'Agents can read their rules but cannot check a real row.', 'Bind a table', `ui.typeTab='data';go('entities',${jq(f.unbound[0].name)})`]);
+  const leftOwns = ((typeof PEOPLE !== 'undefined' && PEOPLE && PEOPLE.people) || []).filter(p => p.left).reduce((n, p) => n + (p.owns && p.owns.metric ? p.owns.metric.length : 0), 0);
+  if (leftOwns) nudges.push([`${plural(leftOwns, 'metric')} ${leftOwns === 1 ? 'is' : 'are'} owned by someone who left`, 'Name someone who is here, so a person still decides what it means.', 'See People', "go('people')"]);
   if (f.noOwner.length) nudges.push([`${plural(f.noOwner.length, 'guardrail')} ${f.noOwner.length === 1 ? 'has' : 'have'} no sign-off`, f.noOwner.map(r => r.id).join(', '), 'Name an owner', `go('rules',${jq(f.noOwner[0].id)})`]);
   if (!nudges.length) nudges.push(['Nothing waiting', 'Every field has words, every link a sentence, every entity a table, every metric an owner. Agents have what they need.', 'See agents', "go('agents')"]);
   return `<h4 title="Beyond what the meter counts (fields described, links explained, entities with data): owners, grades and what agents proposed">What to do next</h4>` + nudges.map(([t, d, cta, js]) => `<div class="card"><b style="font-size:13.5px">${esc(t)}</b><div style="font-size:12.5px;color:var(--muted)">${esc(d)}</div>${cta ? `<button class="small" style="align-self:flex-start" onclick="${js}">${cta}</button>` : ''}</div>`).join('');
@@ -539,7 +642,7 @@ function nextSteps(){
 // Home (isometric) and Map (flat, opened up) are one drawing, fed by GET /api/plane: the same
 // layout, lights, cards and ghosts, seen two ways. Never a row value or a metric's value.
 let PL = null, PL_AT = 0, LAY = null, PL_TIMER = null;
-const pl = { sel: null, focus: null, cam: null, moved: false, filter: null, list: false, find: '', hits: [], open: {}, all: {}, show: { entities: true, metrics: true, sources: true, links: true }, onlyLook: false, area: 'all', waiting: 'all', overlay: null, moving: null, failed: false, pins: null, layout: null, flat: false, drawnKeys: [] };
+const pl = { sel: null, focus: null, cam: null, moved: false, filter: null, find: '', hits: [], waiting: 'all', overlay: null, failed: false, pins: null, drawnKeys: [] };
 const GLYPHS = {
   receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/>',
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
@@ -565,7 +668,11 @@ const GLYPHS = {
   paperclip: '<path d="M20 11l-8.5 8.5a5 5 0 0 1-7-7L13 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L14 7"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 3 3.5 6 3.5 9s-1 6-3.5 9c-2.5-3-3.5-6-3.5-9s1-6 3.5-9"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>'
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  home: '<path d="M3 11l9-7 9 7M5 9.5V20h5v-6h4v6h5V9.5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'
 };
 const SRC_KIND = { from_user: 'files people give agents', mcp: 'agents fetch rows with tools', csv: 'readable here', parquet: 'readable here', duckdb: 'readable here', s3: 'files in a bucket', http: 'an HTTP API' };
 const srcWords = (kind) => SRC_KIND[String(kind || '').toLowerCase()] || 'agents fetch rows';
@@ -601,23 +708,27 @@ function normPlane(r){
 function planePoll(){
   clearInterval(PL_TIMER);
   PL_TIMER = setInterval(async () => {
-    if (document.visibilityState !== 'visible' || !['home', 'map'].includes(route.screen) || pl.moving) return;
-    if (await loadPlane()) drawPlane();
+    if (document.visibilityState !== 'visible' || !HOME_SCREENS.includes(route.screen)) return;
+    if (await loadPlane()) { if (route.screen === 'graph') drawGraph(true); else if (route.screen === 'list') planeList(); else drawPlane(true, { poll: true }); }
     else if (pl.failed) planeBar();
   }, 30000);
 }
 const planeKey = () => (O && O.space ? O.space.id : 'space');
-function prefs(){ if (pl.pins === null || pl.pinsFor !== planeKey()) { pl.pinsFor = planeKey(); pl.pins = store('lorefile-pins:' + planeKey(), {}); pl.layout = store('lorefile-layout:' + planeKey(), {}); } }
-// --- layout: automatic and deterministic; dragged cells (Map) win, kept in this browser ---
+function prefs(){ if (pl.pins === null || pl.pinsFor !== planeKey()) { pl.pinsFor = planeKey(); pl.pins = store('lorefile-pins:' + planeKey(), {}); } }
+// the flat Map is gone, and with it the positions it kept: deleted once, on first load
+try { Object.keys(localStorage).filter(k => k.startsWith('lorefile-layout:')).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+// --- layout: automatic and deterministic, the same on every draw ---
 function spiral(n){ const out = [[0, 0]]; let x = 0, y = 0, dx = 1, dy = 0, seg = 1, steps = 0, turns = 0; while (out.length < n) { x += dx; y += dy; out.push([x, y]); if (++steps === seg) { steps = 0; [dx, dy] = [-dy, dx]; if (++turns % 2 === 0) seg++; } } return out; }
 function planeLayout(){
   prefs();
-  const key = PL.version + '|' + JSON.stringify(pl.layout);
+  const key = PL.version;
   if (LAY && LAY.key === key) return LAY;
   const ents = PL.entities, byArea = {}, adj = {};
   ents.forEach(e => (byArea[e.area] = byArea[e.area] || []).push(e));
   PL.links.forEach(l => { (adj[l.from] = adj[l.from] || []).push(l.to); (adj[l.to] = adj[l.to] || []).push(l.from); });
   const names = PL.areas.map(a => a.name).filter(n => (byArea[n] || []).length);
+  // areas ontology.yaml lists with nothing in them yet: a dashed frame at the end of the grid (decision 28)
+  const emptyAreas = PL.areas.filter(a => !(byArea[a.name] || []).length && a.listed).map(a => a.name);
   const frames = names.map(name => {
     const list = byArea[name], inArea = new Set(list.map(e => e.name)), seen = new Set(), order = [];
     // the highest-scoring entity first, then always the best-scoring neighbour of what is placed
@@ -650,7 +761,7 @@ function planeLayout(){
     row.forEach(f => { const du = u0 - f.minU, dv = v0 - f.minV; for (const [n, [u, v]] of Object.entries(f.pos)) cells[n] = [u + du, v + dv]; f.box = [u0, v0, u0 + f.maxU - f.minU, v0 + f.maxV - f.minV]; f.center = [u0 - f.minU, v0 - f.minV]; u0 += f.maxU - f.minU + 3; });
     v0 += h + 2;
   }
-  for (const n of Object.keys(pl.layout)) { if (!cells[n]) delete pl.layout[n]; else cells[n] = pl.layout[n]; }
+  const empties = emptyAreas.map((name, i) => ({ name, cell: [i * 3, v0] }));
   // over 60 entities, the fit view draws each area's first-placed entities close together (the
   // full layout spreads an area of hundreds wide), each area with its "+N more" tile after them
   const compact = {}, cfold = {}, total = ents.length;
@@ -663,17 +774,16 @@ function planeLayout(){
       v0c += h + 2;
     }
   }
-  LAY = { key, cells, frames, compact, cfold };
+  LAY = { key, cells, frames, compact, cfold, empties };
   return LAY;
 }
-const proj = (u, v) => pl.flat ? [u * 260, v * 132] : [(u - v) * 84, (u + v) * 42];
+const proj = (u, v) => [(u - v) * 84, (u + v) * 42];
 // --- levels: under 60 entities everything shows at every zoom ---
 function planeLevel(){ if (!PL || PL.entities.length <= 60) return 'all'; const k = pl.cam ? pl.cam.k : 1; return k < 0.6 ? 'areas' : k < 1.6 ? 'top' : 'view'; }
 function shownEntities(){
-  const L = planeLayout(), lvl = planeLevel(), ents = PL.entities.filter(e => pl.area === 'all' || e.area === pl.area);
+  const L = planeLayout(), lvl = planeLevel(), ents = PL.entities;
   const keepIt = (e) => pl.pins[e.name] || pl.sel === 'e:' + e.name;
   let list = ents, folds = [];
-  if (pl.flat && pl.onlyLook) list = list.filter(e => e.light === 'red' || e.light === 'amber' || keepIt(e));
   if (lvl === 'areas') return { list: [], folds: [], lvl, cells: L.compact };
   if (lvl === 'top') {
     const out = [], extra = {}, taken = new Set(Object.values(L.compact).map(c => c.join(',')));
@@ -760,12 +870,12 @@ function planeBounds(cells){
 }
 const drawnProposals = () => pl.overlay ? [pl.overlay] : (PL.waiting || []).filter(w => w.drawn && (pl.waiting === 'all' || pl.waiting === w.id));
 // the links a waiting proposal adds (dashed green) or removes (dashed red), between real or ghost places
-function ghostLinks(pos, ghosts, flat){
+function ghostLinks(pos, ghosts){
   const at = (n) => { const p = pos(n); if (p) return p; const g = ghosts.find(x => x.n.name === n); return g ? proj(g.cell[0], g.cell[1]) : null; };
   let out = '';
   for (const w of drawnProposals()) for (const e of (w.edges || []).filter(e => e.status === 'new' || e.status === 'removed')) {
     const a = at(e.from), b = at(e.to); if (!a || !b) continue;
-    const dx = flat ? NODE_W / 2 : 0, dy = flat ? 35 : 0;
+    const dx = 0, dy = 0;
     out += `<g class="pl-link ghostlink ${e.status}"><line x1="${a[0] + dx}" y1="${a[1] + dy}" x2="${b[0] + dx}" y2="${b[1] + dy}"/><text x="${(a[0] + b[0]) / 2 + dx}" y="${(a[1] + b[1]) / 2 + dy - 6}" text-anchor="middle" class="sub">${esc(e.name)} · ${e.status === 'new' ? 'new, waiting' : 'removed, waiting'}</text></g>`;
   }
   return out;
@@ -785,7 +895,7 @@ function ghostCells(L){
   }
   return out;
 }
-function drawPlane(keepCam){
+function drawPlane(keepCam, opts){
   const host = $('pl-stage'); if (!host || !PL) return;
   ensureGlyphs(); prefs();
   const L0 = planeLayout(), S = shownEntities(); lastLevel = S.lvl;
@@ -795,7 +905,8 @@ function drawPlane(keepCam){
   const cells = { ...L.cells }; ghosts.forEach(g => { cells['ghost:' + g.n.name] = g.cell; });
   const empty = !PL.entities.length;
   if (empty) cells['__first'] = [0, 0];
-  if (PL.entities.length === 1 && !pl.flat) cells['__next'] = [1, 0];
+  if (PL.entities.length === 1) cells['__next'] = [1, 0];
+  (L0.empties || []).forEach(x => { cells['empty:' + x.name] = x.cell; cells['empty2:' + x.name] = [x.cell[0] + 1, x.cell[1]]; });
   const shown = new Set(S.list.map(e => e.name));
   const fitCells = PL.entities.length > 60 && S.lvl !== 'areas' ? Object.fromEntries(Object.entries(cells).filter(([n]) => shown.has(n) || n.startsWith('ghost:')).concat(S.folds.filter(f => f.cell).map(f => ['fold:' + f.area, f.cell]))) : cells;
   const B0 = planeBounds(Object.keys(fitCells).length ? fitCells : cells);
@@ -805,29 +916,39 @@ function drawPlane(keepCam){
   const filt = (e) => pl.filter && e.light !== pl.filter ? ' dim' : '';
   let svg = '';
   const keys = [];
-  if (pl.flat) svg = drawFlat(L, S, ghosts, B0, shown, dim, filt, keys);
-  else svg = drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty);
+  svg = drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty);
   pl.drawnKeys = keys;
-  host.innerHTML = `<svg id="pl-svg" class="pl-svg${pl.flat ? ' flat' : ''}" role="group" aria-label="${esc(planeAria())}" tabindex="-1"><rect class="pl-bg" x="-100000" y="-100000" width="200000" height="200000" fill="transparent"/><g id="pl-cam">${svg}</g></svg>`;
-  if (!keepCam || !pl.cam || !pl.moved) fitCam(pl.flat ? flatBounds(L, B0) : { x0: B0.x0, x1: B0.x1, y0: B0.y0 - 190, y1: B0.y1 + 170 }); else applyCam();
+  host.innerHTML = `<svg id="pl-svg" class="pl-svg" role="group" aria-label="${esc(planeAria())}" tabindex="-1"><rect class="pl-bg" x="-100000" y="-100000" width="200000" height="200000" fill="transparent"/><g id="pl-cam">${svg}</g></svg>`;
+  if (!keepCam || !pl.cam || !pl.moved) fitCam({ x0: B0.x0, x1: B0.x1, y0: B0.y0 - 190, y1: B0.y1 + 170 }); else applyCam();
   wirePlane();
   if (!pl.focus || !keys.includes(pl.focus)) pl.focus = keys.includes(pl.sel) ? pl.sel : keys[0] || null;
   rovingFocus(false);
-  planeBar(); planeAside();
-  if (pl.list || phone()) planeList();
+  planeBar();
+  // Home's 30-second refresh redraws the drawing, never a card someone is picking in or typing into
+  const aside = $('pl-aside'), busy = ui.pick || (aside && aside.contains(document.activeElement) && document.activeElement.matches('input,textarea,select'));
+  if (!(opts && opts.poll && busy)) planeAside();
+  if (phone()) planeList();
 }
 function planeAria(){ const c = PL.counts; const look = (c.lights.red || 0) + (c.lights.amber || 0); return `${PL.space.name}: ${plural(c.entities, 'entity', 'entities')}, ${plural(c.metrics, 'metric')}, ${plural(c.sources, 'source')}, ${plural(c.agents, 'agent')}; ${look ? plural(look, 'needs', 'need') + ' a look' : 'nothing needs a look'}`.replace(/(\d+) needs?/, (m, n) => n + (n === '1' ? ' needs' : ' need')); }
 function drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty){
   let back = '', linksSvg = '', tiles = '', between = '', tiers = '';
   // the plane, a rhombus around every cell, with the page's dot grid
-  const cs = Object.values({ ...L.cells, ...Object.fromEntries(ghosts.map(g => ['g' + g.n.name, g.cell])) });
+  const cs = Object.values({ ...L.cells, ...Object.fromEntries(ghosts.map(g => ['g' + g.n.name, g.cell])) }).concat((L.empties || []).flatMap(x => [x.cell, [x.cell[0] + 1, x.cell[1]]]));
   if (empty) cs.push([0, 0]); if (PL.entities.length === 1) cs.push([1, 0]);
   const us = cs.map(c => c[0]), vs = cs.map(c => c[1]);
   const [u0, u1, v0, v1] = [Math.min(...us) - 1, Math.max(...us) + 1, Math.min(...vs) - 1, Math.max(...vs) + 1];
   const P = (u, v) => proj(u, v).map(n => n.toFixed(1)).join(',');
   back += `<polygon class="pl-plane" points="${P(u0 - .5, v0 - .5)} ${P(u1 + .5, v0 - .5)} ${P(u1 + .5, v1 + .5)} ${P(u0 - .5, v1 + .5)}"/><polygon points="${P(u0 - .5, v0 - .5)} ${P(u1 + .5, v0 - .5)} ${P(u1 + .5, v1 + .5)} ${P(u0 - .5, v1 + .5)}" fill="url(#pl-dots)" opacity=".8"/>`;
   // area names on the plane, in their colour
-  if (L.frames.length > 1 || (L.frames[0] && L.frames[0].name !== 'Other')) for (const f of L.frames) { const bx = S.cells && f.cbox ? f.cbox : f.box; const [x, y] = proj(bx[0] - .6, bx[1] - .6); back += `<text class="pl-area" x="${x}" y="${y}" fill="${domainColor(f.name)}">${esc(f.name)}</text>`; }
+  if (L.frames.length > 1 || (L.frames[0] && L.frames[0].name !== 'Other') || (L.empties || []).length) for (const f of L.frames) { const bx = S.cells && f.cbox ? f.cbox : f.box; const [x, y] = proj(bx[0] - .6, bx[1] - .6); const key = 'area:' + f.name; keys.push(key); back += `<g class="pl-item pl-areaname${pl.sel === key ? ' sel' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(f.name + ', an area: open its card')}"><text class="pl-area" x="${x}" y="${y}" fill="${domainColor(f.name)}">${esc(f.name)}</text></g>`; }
+  // an area with nothing in it yet: a dashed frame two cells wide, so "+ New area" shows (decision 28)
+  for (const em of (L.empties || [])) {
+    const key = 'area:' + em.name; keys.push(key);
+    // the parallelogram over two cells, a little inside their edges
+    const P = (du, dv) => { const [x, y] = proj(em.cell[0] + du, em.cell[1] + dv); return `${x.toFixed(1)},${y.toFixed(1)}`; };
+    const [cx, cy] = proj(em.cell[0] + .5, em.cell[1]);
+    back += `<g class="pl-item pl-emptyarea${pl.sel === key ? ' sel' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(em.name + ': no entities yet' + (PL.space.editable ? '. Move entities here' : ''))}"><polygon points="${P(-.42, -.42)} ${P(1.42, -.42)} ${P(1.42, .42)} ${P(-.42, .42)}" fill="rgba(255,255,255,.55)" stroke="${domainColor(em.name)}" stroke-dasharray="6 5" stroke-width="1.5"/><text x="${cx}" y="${cy - 4}" text-anchor="middle" class="lbl" fill="${domainColor(em.name)}">${esc(em.name)}</text><text x="${cx}" y="${cy + 12}" text-anchor="middle" class="sub">no entities yet${PL.space.editable ? ' · Move entities here' : ''}</text></g>`;
+  }
   if (S.lvl === 'areas') {
     for (const f of L.frames) {
       const bx = f.cbox || f.box; const a = PL.areas.find(x => x.name === f.name) || { entities: 0, lights: {} }; const [x, y] = proj((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2); const key = 'area:' + f.name; keys.push(key);
@@ -837,14 +958,25 @@ function drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty){
   }
   const pos = (n) => { const c = L.cells[n]; return c ? proj(c[0], c[1]) : null; };
   // links on the plane
+  const placed = [], selName = pl.sel && pl.sel.startsWith('e:') ? pl.sel.slice(2) : null;
+  const labelled = new Set(selName ? PL.links.filter(l => l.from === selName || l.to === selName).map(l => ({ l, imp: (entOf(l.from === selName ? l.to : l.from) || { importance: 0 }).importance })).sort((x, y) => y.imp - x.imp).slice(0, 6).map(x => x.l) : []);
+  const placeLabel = (a, b, text) => {
+    const w = text.length * 6.2 + 8, h = 15;
+    for (const t of [0.5, 0.35, 0.65]) {
+      const x = a[0] + (b[0] - a[0]) * t, y = a[1] + (b[1] - a[1]) * t - 6, box = [x - w / 2, y - h + 3, x + w / 2, y + 3];
+      if (!placed.some(p => box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1])) { placed.push(box); return [x, y]; }
+    }
+    return null;
+  };
   if (S.lvl !== 'areas') for (const l of PL.links) {
     const a = pos(l.from); if (!a || !shown.has(l.from)) continue;
     if (l.missing) { linksSvg += `<g class="pl-link missing"><line x1="${a[0]}" y1="${a[1]}" x2="${a[0] + 70}" y2="${a[1] + 40}"/><text x="${a[0] + 74}" y="${a[1] + 50}" class="sub warnc">missing: ${esc(l.to)}</text></g>`; continue; }
     const b = pos(l.to); if (!b || !shown.has(l.to)) continue;
     const on = pl.sel === 'e:' + l.from || pl.sel === 'e:' + l.to;
-    linksSvg += `<g class="pl-link${on ? ' on' : ''}${pl.sel && !on && pl.sel.startsWith('e:') ? ' dim' : ''}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><title>${esc(`${l.from} ${l.name} ${l.to} · ${l.cardinality || ''}`)}</title>${on ? `<text x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 6}" text-anchor="middle" class="sub ${l.described ? '' : 'warnc'}">${esc(l.name)}${l.described ? '' : ' · no sentence'}</text>` : ''}</g>`;
+    const text = `${l.name}${l.described ? '' : ' · no sentence'}`, at = on && labelled.has(l) ? placeLabel(a, b, text) : null;
+    linksSvg += `<g class="pl-link${on ? ' on' : ''}${pl.sel && !on && pl.sel.startsWith('e:') ? ' dim' : ''}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><title>${esc(`${l.from} ${l.name} ${l.to} · ${l.cardinality || ''}`)}</title>${at ? `<text x="${at[0]}" y="${at[1]}" text-anchor="middle" class="sub ${l.described ? '' : 'warnc'}">${esc(text)}</text>` : ''}</g>`;
   }
-  linksSvg += ghostLinks(pos, ghosts, false);
+  linksSvg += ghostLinks(pos, ghosts);
   // "kind of": a thin dotted line from the kind to its parent, a hollow triangle at the parent's end
   let kindSvg = '';
   for (const k of (PL.kind_links || [])) {
@@ -905,93 +1037,10 @@ function drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty){
   if (loose.length) { const key = 'loose'; keys.push(key); const x = (srcs.length ? srcs[srcs.length - 1].x + 230 : (B0.x0 + B0.x1) / 2); tiers += `<g class="pl-item chip" data-key="loose" role="button" tabindex="-1" aria-label="${esc(plural(loose.length, 'metric') + ' not tied to an entity')}" transform="translate(${x},${bottom})"><text x="0" y="5" class="lbl">Σ ${esc(plural(loose.length, 'metric') + ' not tied to an entity')}</text></g>`; }
   return back + between + linksSvg + tiers + tiles + kindSvg;
 }
-// --- the Map: flat, opened up, three lanes: sources → entities ← metrics ---
-const NODE_W = 230;
+// --- fields a metric uses, and field types in words (the Graph's centre) ---
 function usedFields(name){ const out = new Set(); PL.metrics.forEach(m => { if (m.entities.includes(name)) (m.uses || []).forEach(f => out.add(f)); }); return out; }
-// an open node lists the first 12 fields, and every field a metric uses wherever it sits
-function shownFields(e){ const d = DC[e.name]; if (!d || !d.properties) return null; if (pl.all[e.name]) return d.properties; const used = usedFields(e.name); return d.properties.filter((f, i) => i < 12 || used.has(f.name)); }
-function nodeH(e){ if (!pl.open[e.name]) return 70; const d = DC[e.name], sf = shownFields(e); const rows = sf ? sf.length : 3; return Math.min(70 + 42 + rows * 23 + (d && d.properties && d.properties.length > rows ? 24 : 0) + (pl.all[e.name] && d && d.properties.length > 12 ? 24 : 0), 460); }
-function flatBounds(L, B0){ return { x0: B0.x0 - 360, x1: B0.x1 + 420, y0: B0.y0 - 20, y1: B0.y1 + 60 }; }
 const typeWordJs = (p) => { const u = (p.unit || '').trim(); const t = p.type || p.kind || ''; if (t === 'string') return 'text'; if (t === 'integer') return u ? `whole number (${u})` : 'whole number'; if (t === 'number') return /^[A-Z]{3}$|^[$€£¥₹]$/.test(u) ? `money (${u})` : u ? `number (${u})` : 'number'; if (t === 'boolean') return 'yes / no'; if (t === 'enum') return 'one of ' + (p.values || []).slice(0, 4).join(', '); return t; };
-function drawFlat(L, S, ghosts, B0, shown, dim, filt, keys){
-  const pos = (n) => { const c = L.cells[n]; return c ? proj(c[0], c[1]) : null; };
-  let nodes = '', top = '', arrows = '', lanes = '';
-  const xs = S.list.map(e => pos(e.name)).filter(Boolean).map(p => p[0]); const minX = Math.min(0, ...xs), maxX = Math.max(0, ...xs);
-  const fieldY = (e, f) => { const p = pos(e.name); if (!p) return null; if (!pl.open[e.name]) return p[1] + 30; const sf = shownFields(e) || []; const i = sf.findIndex(x => x.name === f); if (i < 0) return p[1] + 30; return p[1] + 70 + 42 + i * 23 + 11; };
-  // links between entities
-  if (pl.show.links) for (const l of PL.links) {
-    const a = pos(l.from); if (!a || !shown.has(l.from)) continue;
-    const b = l.missing ? [a[0] + NODE_W + 60, a[1] + 60] : pos(l.to); if (!b || (!l.missing && !shown.has(l.to))) continue;
-    const on = pl.sel === 'e:' + l.from || pl.sel === 'e:' + l.to;
-    const ax = a[0] + NODE_W / 2, ay = a[1] + 35, bx = b[0] + NODE_W / 2, by = b[1] + 35;
-    const self = l.from === l.to;
-    const d = self ? `M${a[0] + NODE_W} ${ay - 10} c 60 -40 60 60 0 20` : `M${ax} ${ay} L${bx} ${by}`;
-    arrows += `<g class="pl-link${on ? ' on' : ''}${pl.sel && pl.sel.startsWith('e:') && !on ? ' dim' : ''}${l.missing ? ' missing' : ''}"><path d="${d}" fill="none" marker-end="url(#${on ? 'pl-arrow-on' : 'pl-arrow'})"/><text x="${self ? a[0] + NODE_W + 50 : (ax + bx) / 2}" y="${self ? ay : (ay + by) / 2 - 6}" text-anchor="middle" class="sub ${l.described ? '' : 'warnc'}">${esc(l.missing ? 'missing: ' + l.to : l.name)}${l.cardinality ? ' · ' + esc(l.cardinality) : ''}${l.described ? '' : ' · no sentence'}</text></g>`;
-  }
-  arrows += ghostLinks(pos, ghosts, true);
-  for (const k of (PL.kind_links || [])) {
-    const a = pos(k.kind), b = pos(k.of); if (!a || !b || !shown.has(k.kind) || !shown.has(k.of) || !pl.show.entities) continue;
-    const pe = entOf(k.of), on = pl.sel === 'e:' + k.kind || pl.sel === 'e:' + k.of;
-    const ax = a[0] + NODE_W / 2, ay = a[1], bx = b[0] + NODE_W / 2, by = b[1] + (pe ? nodeH(pe) : 70) + 4;
-    const up = ay > by, y1 = up ? ay : a[1] + nodeH(entOf(k.kind) || { name: '' }), y2 = up ? by : b[1] - 4;
-    arrows += `<g class="pl-kindline${on ? ' on' : ''}"><path d="M${ax} ${y1} L${bx} ${y2}" fill="none" marker-end="url(#pl-kind)"/><title>${esc(k.kind + ' is a kind of ' + k.of)}</title><text x="${(ax + bx) / 2 + 6}" y="${(y1 + y2) / 2}" class="sub">kind of</text></g>`;
-  }
-  // entity nodes, as HTML inside the drawing so field lists wrap and inputs work
-  const node = (e) => {
-    const p = pos(e.name); if (!p) return;
-    const key = 'e:' + e.name; keys.push(key);
-    const open = !!pl.open[e.name], h = nodeH(e), d = DC[e.name];
-    const usedBy = {}; PL.metrics.forEach(m => (m.uses_how || []).forEach(u => { if (m.entities.includes(e.name)) usedBy[u.field] = (usedBy[u.field] || []).concat(m.label); }));
-    let body = '';
-    if (open) {
-      const props = d && d.properties ? d.properties : null;
-      const list = shownFields(e) || [];
-      body = `<div class="mn-desc">${esc(e.description || 'No description yet.')}</div><div class="mn-fields">${props ? list.map(f => `<div class="mn-f"><span class="k">${f.key ? '★' : ''}</span><span class="mono n">${esc(f.name)}</span><span class="t">${f.description ? esc(typeWordJs(f)) : (PL.space.editable && !pl.overlay ? `<input class="mn-in" aria-label="${esc('Plain words for ' + f.name)}" placeholder="Not described" onkeydown="if(event.key==='Enter'){mapDescribe(${jq(e.name)},${jq(f.name)},this.value)}" onclick="event.stopPropagation()">` : '<span class="warnc">Not described</span>')}</span><span class="u" title="${esc(usedBy[f.name] ? 'used by ' + usedBy[f.name].join(', ') : '')}">${usedBy[f.name] ? 'Σ' : ''}</span></div>`).join('') : '<div class="hint">Loading fields…</div>'}${props && props.length > list.length ? `<button type="button" class="lnk mn-more" onclick="event.stopPropagation();pl.all[${jq(e.name)}]=true;drawPlane(true)">+ ${props.length - list.length} more fields</button>` : (pl.all[e.name] && props && props.length > 12 ? `<button type="button" class="lnk mn-more" onclick="event.stopPropagation();pl.all[${jq(e.name)}]=false;drawPlane(true)">Show fewer</button>` : '')}</div>`;
-    }
-    const srcChip = e.source ? `<span class="grade ${e.source.grade === 'checked' ? 'checked' : e.source.grade === 'accepted' ? 'accepted' : e.source.grade === 'proposed' ? 'proposed' : e.source.grade === 'changed' ? 'changed' : ''}">${esc(e.source.grade === 'ungraded' ? 'source ungraded' : 'source ' + e.source.grade)}</span>` : '<span class="grade">no data yet</span>';
-    const html = `<div class="mn${pl.sel === key ? ' sel' : ''}${open ? ' open' : ''}" style="height:${h}px;border-top-color:${domainColor(e.area)}"><div class="mn-h"><svg width="20" height="20" style="color:${domainColor(e.area)}" aria-hidden="true"><use href="#g-${esc(e.icon)}"/></svg><b>${esc(cutTo(e.label, 24))}</b>${e.light !== 'none' ? `<span class="lb ${e.light}" aria-hidden="true">${LIGHTS[e.light][0]}</span>` : ''}<button type="button" class="mn-x" tabindex="-1" aria-label="${open ? 'Fold' : 'Open'} ${esc(e.label)}" onclick="event.stopPropagation();toggleNode(${jq(e.name)})">${open ? '▴' : '▾'}</button></div><div class="mn-s">${esc(plural(e.fields, 'field'))}${e.same_label ? ' · <span class="mono">' + esc(e.name) + '</span>' : ''} ${srcChip}</div>${body}</div>`;
-    const svgNode = `<g class="pl-item node${dim(e.name)}${filt(e)}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(ariaFor(e))}" transform="translate(${p[0]},${p[1]})"><foreignObject width="${NODE_W}" height="${h}">${html}</foreignObject></g>`;
-    if (open) top += svgNode; else nodes += svgNode;
-  };
-  if (pl.show.entities) S.list.forEach(node);
-  for (const g of ghosts) { const p = proj(g.cell[0], g.cell[1]), key = 'g:' + g.w.id + ':' + g.n.name; keys.push(key); nodes += `<g class="pl-item node ghostn" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${labelOf(g.n.name)}: new, waiting for review`)}" transform="translate(${p[0]},${p[1]})"><foreignObject width="${NODE_W}" height="70"><div class="mn ghost"><div class="mn-h"><span class="lb amber">${esc(g.w.monogram || 'A')}</span><b>${esc(cutTo(labelOf(g.n.name), 24))}</b></div><div class="mn-s">new · ${esc(plural(g.n.fields || 0, 'field'))} · waiting</div></div></foreignObject></g>`; }
-  // the sources lane on the left, each beside the first entity it serves
-  const stack = (items, h) => { items.sort((a, b) => a.y - b.y); let last = -Infinity; items.forEach(it => { it.y = Math.max(it.y, last + h + 14); last = it.y; }); return items; };
-  if (pl.show.sources) {
-    const sx = minX - 330;
-    const items = stack(PL.sources.map(s => { const ys = s.entities.map(n => pos(n)).filter(Boolean).map(p => p[1]); return { s, y: ys.length ? Math.min(...ys) : B0.y1 }; }), 76);
-    lanes += items.length ? `<text x="${sx}" y="${Math.min(...items.map(i => i.y)) - 12}" class="pl-tierlbl">SOURCES</text>` : '';
-    for (const it of items) {
-      const s = it.s, key = 's:' + s.name; keys.push(key);
-      lanes += `<g class="pl-item node" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${s.name}, source: ${s.words}`)}" transform="translate(${sx},${it.y})"><foreignObject width="200" height="76"><div class="mn src${pl.sel === key ? ' sel' : ''}"><div class="mn-h"><svg width="18" height="18" aria-hidden="true" style="color:#55555e"><use href="#g-${esc(s.icon)}"/></svg><b>${esc(cutTo(s.name, 20))}</b>${s.light !== 'none' ? `<span class="lb ${s.light}">${LIGHTS[s.light][0]}</span>` : ''}</div><div class="mn-s">${esc(s.words)}${s.entities.length ? '' : ' · not used yet'}</div></div></foreignObject></g>`;
-      for (const n of s.entities) { const p = pos(n); if (!p || !shown.has(n) || !pl.show.entities) continue; const on = pl.sel === key || pl.sel === 'e:' + n; arrows += `<g class="pl-arrow${on ? ' on' : ''}"><path d="M${sx + 200} ${it.y + 38} C ${sx + 260} ${it.y + 38}, ${p[0] - 60} ${p[1] + 28}, ${p[0]} ${p[1] + 28}" fill="none" marker-end="url(#${on ? 'pl-arrow-on' : 'pl-arrow'})"/>${on ? `<text x="${(sx + 200 + p[0]) / 2}" y="${(it.y + 38 + p[1] + 28) / 2 - 6}" text-anchor="middle" class="sub">rows come from</text>` : ''}</g>`; }
-    }
-  }
-  // the metrics lane on the right, each beside the entity it counts, arrows to the fields it uses
-  if (pl.show.metrics) {
-    const mx = maxX + NODE_W + 140;
-    const tied = PL.metrics.filter(m => m.entities.length), loose = PL.metrics.filter(m => !m.entities.length);
-    const items = stack(tied.map(m => { const ys = m.entities.map(n => pos(n)).filter(Boolean).map(p => p[1]); return { m, y: ys.length ? Math.min(...ys) : B0.y1 }; }), 104);
-    const shelfY = Math.max(B0.y1, ...items.map(i => i.y + 120));
-    loose.forEach((m, i) => items.push({ m, y: shelfY + 30 + i * 118, loose: true }));
-    lanes += `${items.length ? `<text x="${mx}" y="${Math.min(...items.map(i => i.y)) - 12}" class="pl-tierlbl">METRICS</text>` : ''}${loose.length ? `<text x="${mx}" y="${shelfY + 18}" class="sub">Metrics not tied to one entity</text>` : ''}`;
-    for (const it of items) {
-      const m = it.m, key = 'm:' + m.name; keys.push(key);
-      lanes += `<g class="pl-item node" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(`${m.label}, metric: ${m.sentence || 'counted by its own recipe'}. ${m.light !== 'none' ? cap(LIGHTS[m.light][1]) + '.' : ''}`)}" transform="translate(${mx},${it.y})"><foreignObject width="270" height="104"><div class="mn met${pl.sel === key ? ' sel' : ''}"><div class="mn-h"><span class="sig" aria-hidden="true">Σ</span><b>${esc(cutTo(m.label, 26))}</b>${m.light !== 'none' ? `<span class="lb ${m.light}">${LIGHTS[m.light][0]}</span>` : ''}</div><div class="mn-d">${esc(m.sentence ? m.sentence + '.' : 'Counted by its own recipe.')}</div><div class="mn-s">Owner: ${esc(m.owner ? owner(m.owner) : 'no one yet')}</div></div></foreignObject></g>`;
-      if (!pl.show.entities) continue;
-      for (const n of m.entities) {
-        const e = entOf(n), p = pos(n); if (!e || !p || !shown.has(n)) continue;
-        const on = pl.sel === key || pl.sel === 'e:' + n;
-        const targets = pl.open[n] ? (m.uses_how || []) : [{ field: '', how: (m.uses_how || []).map(u => u.how).filter((v, i, a) => a.indexOf(v) === i).join(', ') || 'counts' }];
-        for (const [ti, u] of targets.entries()) { const y = u.field ? fieldY(e, u.field) : p[1] + 30; arrows += `<g class="pl-arrow met${on ? ' on' : ''}"><path d="M${mx} ${it.y + 40} C ${mx - 50} ${it.y + 40}, ${p[0] + NODE_W + 50} ${y}, ${p[0] + NODE_W} ${y}" fill="none" marker-end="url(#${on ? 'pl-arrow-on' : 'pl-arrow'})"/>${on || pl.open[n] ? `<text x="${p[0] + NODE_W + 14}" y="${y - 5}" class="sub">${esc(u.how)}${u.field ? ' ' + esc(u.field) : ''}</text>` : ''}</g>`; }
-      }
-    }
-  }
-  return arrows + lanes + nodes + top;
-}
-async function toggleNode(name){ pl.open[name] = !pl.open[name]; if (pl.open[name] && !DC[name]) { drawPlane(true); await describe(name); } drawPlane(true); }
-async function mapDescribe(type, property, text){ if (!text.trim()) return; const r = await patch({ op: 'set_property_description', type, property, text }); if (r && r.written) { delete DC[type]; await loadPlane(true); await describe(type); drawPlane(true); } }
-// --- hit, focus, keys, drag ---
+// --- hit, focus, keys ---
 function itemAt(key){ return document.querySelector(`#pl-svg [data-key="${CSS.escape(key)}"]`); }
 function rovingFocus(move){
   document.querySelectorAll('#pl-svg .pl-item').forEach(el => el.setAttribute('tabindex', '-1'));
@@ -1008,14 +1057,25 @@ function nearest(dir){
 function announce(t){ const el = $('pl-live'); if (el) el.textContent = t; }
 function selectItem(key, opts){
   if (!key) return;
-  if (key.startsWith('area:')) { const f = planeLayout().frames.find(x => 'area:' + x.name === key); if (f) { const bx = f.cbox || f.box; const [x, y] = proj((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2); flyTo(x, y, 0.9); } return; }
+  if (key.startsWith('area:')) {
+    // an area's name: fly to it, as before, and open its card (Part 3)
+    const L = planeLayout(), f = L.frames.find(x => 'area:' + x.name === key), em = (L.empties || []).find(x => 'area:' + x.name === key);
+    pl.sel = key; pl.focus = key; ui.area = null; drawPlane(true);
+    if (f) { const bx = f.cbox || f.box; const [x, y] = proj((bx[0] + bx[2]) / 2, (bx[1] + bx[3]) / 2); flyTo(x, y, 0.9); }
+    else if (em) { const [x, y] = proj(em.cell[0] + .5, em.cell[1]); flyTo(x, y, 0.9); }
+    announce(`${key.slice(5)}, an area, selected`);
+    if (phone()) { const sh = $('pl-aside'); if (sh) sh.classList.add('up'); }
+    return;
+  }
   if (key.startsWith('fold:')) { zoomBy(1.8); return; }
   if (key === 'first') { go('entities'); return; }
+  if (route.screen === 'graph') { if (key.startsWith('e:')) graphMove(key.slice(2)); else selectGraph(key); return; }
+  if (route.screen === 'list') { pl.sel = key; planeAside(); if (phone()) { const sh = $('pl-aside'); if (sh) sh.classList.add('up'); } return; }
   pl.sel = key; pl.focus = key;
   const label = key.startsWith('e:') ? (entOf(key.slice(2)) || {}).label : key.startsWith('m:') ? (metOf(key.slice(2)) || {}).label : key.startsWith('s:') ? key.slice(2) : key.startsWith('a:') ? (agOf(key.slice(2)) || {}).name : key.startsWith('g:') ? labelOf(key.split(':').slice(2).join(':')) : key;
   announce(`${label || ''} selected`);
   drawPlane(true);
-  if (opts && opts.fly) { const el = itemAt(key); if (el) { const t = el.getAttribute('transform') || ''; const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(t); if (m) flyTo(Number(m[1]) + (pl.flat ? NODE_W / 2 : 0), Number(m[2]), Math.max(pl.cam.k, 1.2)); } }
+  if (opts && opts.fly) { const el = itemAt(key); if (el) { const t = el.getAttribute('transform') || ''; const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(t); if (m) flyTo(Number(m[1]), Number(m[2]), Math.max(pl.cam.k, 1.2)); } }
   if (phone()) { const sh = $('pl-aside'); if (sh) sh.classList.add('up'); }
   rovingFocus(true);
 }
@@ -1026,7 +1086,7 @@ function openItem(key){
 function wirePlane(){
   const svg = $('pl-svg'); if (!svg || svg.dataset.wired) return; svg.dataset.wired = '1';
   svg.addEventListener('click', (ev) => { if (pl.dragged) { pl.dragged = false; return; } const it = ev.target.closest('.pl-item'); if (!it) { if (pl.sel) { pl.sel = null; drawPlane(true); } return; } if (ev.target.closest('.pl-open')) { openItem(it.dataset.key); return; } selectItem(it.dataset.key); });
-  svg.addEventListener('dblclick', (ev) => { const it = ev.target.closest('.pl-item'); if (!it) return; if (pl.flat && it.dataset.key.startsWith('e:')) toggleNode(it.dataset.key.slice(2)); else openItem(it.dataset.key); });
+  svg.addEventListener('dblclick', (ev) => { const it = ev.target.closest('.pl-item'); if (!it) return; openItem(it.dataset.key); });
   svg.addEventListener('focusin', (ev) => { const it = ev.target.closest('.pl-item'); if (it) pl.focus = it.dataset.key; });
   svg.addEventListener('keydown', planeKeys);
   svg.addEventListener('wheel', (ev) => { ev.preventDefault(); const r = svg.getBoundingClientRect(); zoomBy(Math.exp(-ev.deltaY * (ev.ctrlKey ? 0.01 : 0.0022)), ev.clientX - r.left, ev.clientY - r.top); }, { passive: false });
@@ -1035,7 +1095,6 @@ function wirePlane(){
   svg.addEventListener('pointerdown', (ev) => {
     pts.set(ev.pointerId, [ev.clientX, ev.clientY]);
     const it = ev.target.closest('.pl-item');
-    if (pl.flat && it && it.dataset.key.startsWith('e:') && ev.pointerType === 'mouse' && !ev.target.closest('input,button')) { pl.drag = { key: it.dataset.key, x: ev.clientX, y: ev.clientY, el: it, t0: it.getAttribute('transform') }; svg.setPointerCapture(ev.pointerId); return; }
     if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k: pl.cam.k }; start = null; return; }
     if (it && ev.pointerType !== 'mouse') return;
     start = { x: ev.clientX, y: ev.clientY, cx: pl.cam.x, cy: pl.cam.y, ok: ev.pointerType === 'mouse' && !it };
@@ -1043,7 +1102,6 @@ function wirePlane(){
   });
   svg.addEventListener('pointermove', (ev) => {
     if (!pts.has(ev.pointerId)) return; pts.set(ev.pointerId, [ev.clientX, ev.clientY]);
-    if (pl.drag) { const dx = (ev.clientX - pl.drag.x) / pl.cam.k, dy = (ev.clientY - pl.drag.y) / pl.cam.k; if (Math.abs(dx) + Math.abs(dy) > 3) { pl.drag.moved = true; const m = /translate\(([-\d.]+),([-\d.]+)\)/.exec(pl.drag.t0); pl.drag.el.setAttribute('transform', `translate(${Number(m[1]) + dx},${Number(m[2]) + dy})`); pl.drag.at = [Number(m[1]) + dx, Number(m[2]) + dy]; } return; }
     if (pinch && pts.size === 2) { const [a, b] = [...pts.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]); const r = svg.getBoundingClientRect(); zoomBy((pinch.k * d / pinch.d) / pl.cam.k, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top); return; }
     if (!start) return; const dx = ev.clientX - start.x, dy = ev.clientY - start.y;
     if (!start.ok) { if (Math.abs(dx) + Math.abs(dy) > 8) { clearTimeout(hold); start = null; } return; }
@@ -1051,28 +1109,13 @@ function wirePlane(){
   });
   const end = (ev) => {
     pts.delete(ev.pointerId); clearTimeout(hold); svg.style.touchAction = '';
-    if (pl.drag) { const d = pl.drag; pl.drag = null; if (d.moved && d.at) { dropNode(d.key.slice(2), d.at); pl.dragged = true; } return; }
     if (pts.size < 2) pinch = null; if (!pts.size) start = null;
   };
   svg.addEventListener('pointerup', end); svg.addEventListener('pointercancel', end);
 }
-function dropNode(name, at){
-  // a drop snaps to the nearest cell; a taken cell swaps the two
-  const L = planeLayout(); const u = Math.round(at[0] / 260), v = Math.round(at[1] / 132);
-  const from = L.cells[name]; const other = Object.keys(L.cells).find(n => n !== name && L.cells[n][0] === u && L.cells[n][1] === v);
-  pl.layout[name] = [u, v]; if (other && from) pl.layout[other] = from;
-  keep('lorefile-layout:' + planeKey(), pl.layout); LAY = null; drawPlane(true);
-  announce(`${labelOf(name)} moved${other ? ', swapped with ' + labelOf(other) : ''}`);
-}
 function planeKeys(ev){
   if (ev.target.closest('input,textarea,select,button.lnk')) return;
   const k = ev.key;
-  if (pl.moving) {
-    const L = planeLayout(), c = (pl.layout[pl.moving] || L.cells[pl.moving]).slice();
-    if (k === 'ArrowRight') c[0]++; else if (k === 'ArrowLeft') c[0]--; else if (k === 'ArrowDown') c[1]++; else if (k === 'ArrowUp') c[1]--;
-    else if (k === 'Enter' || k === 'Escape') { const n = pl.moving; pl.moving = null; announce(k === 'Enter' ? `${labelOf(n)} placed` : 'Move cancelled'); ev.preventDefault(); return; } else return;
-    ev.preventDefault(); dropNode(pl.moving, proj(c[0], c[1])); return;
-  }
   if (k.startsWith('Arrow')) { const n = nearest(k); if (n) { pl.focus = n; rovingFocus(true); const el = itemAt(n); announce(el ? el.getAttribute('aria-label') : ''); } ev.preventDefault(); return; }
   if (k === 'Enter' && ev.shiftKey) { openItem(pl.focus); ev.preventDefault(); return; }
   if (k === 'Enter' || k === ' ') { selectItem(pl.focus); ev.preventDefault(); return; }
@@ -1081,12 +1124,11 @@ function planeKeys(ev){
   if (k === '-' || k === '_') { zoomBy(0.8); return; }
   if (k === '0') { drawPlane(false); return; }
   if (k === 'p' || k === 'P') { if (pl.focus && pl.focus.startsWith('e:')) togglePin(pl.focus.slice(2)); return; }
-  if ((k === 'm' || k === 'M') && pl.flat && pl.focus && pl.focus.startsWith('e:')) { pl.moving = pl.focus.slice(2); announce(`Moving ${labelOf(pl.moving)}: arrow keys, then Enter`); return; }
 }
 document.addEventListener('keydown', (ev) => {
-  if (!['home', 'map'].includes(route.screen) || ev.target.closest('input,textarea,select')) return;
-  if (ev.key === '/') { const f = $('pl-find'); if (f) { ev.preventDefault(); f.focus(); } }
-  else if (ev.key === 'l' || ev.key === 'L') { if (!ev.metaKey && !ev.ctrlKey) { pl.list = !pl.list; renderPlaneScreen(); } }
+  if (!HOME_SCREENS.includes(route.screen) || ev.target.closest('input,textarea,select')) return;
+  if (ev.key === '/') { const f = $('pl-find') || $('gr-find'); if (f) { ev.preventDefault(); f.focus(); } }
+  else if (ev.key === 'l' || ev.key === 'L') { if (!ev.metaKey && !ev.ctrlKey) { if (route.screen === 'list') go(pl.lastTab || 'home'); else { pl.lastTab = route.screen; go('list'); } } }
   else if (ev.key === 'Escape' && pl.sel && !ev.target.closest('#pl-svg')) { pl.sel = null; drawPlane(true); }
 });
 function togglePin(name){ prefs(); if (pl.pins[name]) delete pl.pins[name]; else pl.pins[name] = 1; keep('lorefile-pins:' + planeKey(), pl.pins); announce(pl.pins[name] ? `${labelOf(name)} pinned in this browser` : `${labelOf(name)} unpinned`); drawPlane(true); }
@@ -1102,7 +1144,7 @@ function planeFind(q){
   pl.hits = out.slice(0, 12);
   const el = $('pl-hits'); if (el) el.innerHTML = pl.hits.length ? pl.hits.map((h, i) => `<button class="result" onclick="planeGo(${i})"><small>${esc(h.kind)}</small><span>${esc(h.label)}${h.why ? ` <span class="hint">${esc(h.why)}</span>` : ''}</span></button>`).join('') : (f ? '<div class="hint" style="padding:6px">No matches</div>' : '');
 }
-function planeGo(i){ const h = pl.hits[i || 0]; if (!h) return; pl.find = ''; const f = $('pl-find'); if (f) f.value = ''; const el = $('pl-hits'); if (el) el.innerHTML = ''; const n = h.key.startsWith('e:') ? h.key.slice(2) : null; if (n) { prefs(); pl.forceShow = n; } if (pl.flat && pl.area !== 'all' && n && entOf(n) && entOf(n).area !== pl.area) pl.area = 'all'; selectItem(h.key, { fly: true }); }
+function planeGo(i){ const h = pl.hits[i || 0]; if (!h) return; pl.find = ''; const f = $('pl-find'); if (f) f.value = ''; const el = $('pl-hits'); if (el) el.innerHTML = ''; const n = h.key.startsWith('e:') ? h.key.slice(2) : null; if (n) { prefs(); pl.forceShow = n; } selectItem(h.key, { fly: true }); }
 // --- the bar, the legend, the card, the list ---
 function planeBar(){
   const el = $('pl-bar'); if (!el || !PL) return;
@@ -1115,9 +1157,9 @@ function planeBar(){
   const spaceBadge = PL.space.light !== 'none' ? ` <span class="lb ${PL.space.light}" title="${esc((PL.space.reasons || []).map(r => r.text).join('; '))}">${LIGHTS[PL.space.light][0]}</span>` : '';
   el.innerHTML = `${pl.overlay ? `<div class="rv-bar" style="flex:1 1 100%">What this proposal would change: ${esc(pl.overlay.headline || '')} · read-only · <button type="button" class="lnk" onclick="go('review',${jq(pl.overlay.id)})">Back to the review</button></div>` : ''}<b>${esc(PL.space.name)}</b>${spaceBadge}<span class="hint">${esc(plural(c.entities, 'entity', 'entities'))} · ${esc(plural(c.metrics, 'metric'))} · ${esc(plural(c.sources, 'source'))} · ${esc(plural(c.agents, 'agent'))}</span><span class="pl-lights">${btn('red')}${btn('amber')}${btn('green')}</span>${wctl}${undrawn ? `<span class="hint">${plural(undrawn, 'waiting proposal')} can't be drawn: <button type="button" class="lnk" onclick="go('agents')">Review it</button></span>` : ''}${PL.waiting_more ? `<span class="hint">+${PL.waiting_more} more waiting</span>` : ''}${pl.failed ? `<span class="hint">couldn't refresh · <button type="button" class="lnk" onclick="loadPlane(true).then(drawPlane)">Try again</button></span>` : ''}<span style="flex:1"></span><span class="pl-find"><input id="pl-find" placeholder="Find… (/)" value="${esc(pl.find)}" aria-label="Find an entity, metric or source" oninput="planeFind(this.value)" onkeydown="if(event.key==='Enter'){planeGo(0)}else if(event.key==='Escape'){this.value='';planeFind('')}"><div id="pl-hits" class="pl-hits"></div></span><span class="pl-zoom"><button class="small" onclick="zoomBy(0.8)" aria-label="Zoom out">−</button><span id="pl-zoom" class="hint">${Math.round((pl.cam ? pl.cam.k : 1) * 100)}%</span><button class="small" onclick="zoomBy(1.25)" aria-label="Zoom in">+</button><button class="small" onclick="drawPlane(false)" title="Fit (0)">Fit</button></span>`;
   if (pl.find) planeFind(pl.find);
-  const tools = $('pl-tools'); if (tools) tools.innerHTML = pl.flat && !pl.overlay ? `<span class="hint">Show</span>${['entities', 'metrics', 'sources', 'links'].map(k => `<label class="chk"><input type="checkbox" ${pl.show[k] ? 'checked' : ''} onchange="pl.show[${jq(k)}]=this.checked;drawPlane(true)"> ${cap(k)}</label>`).join('')}<label class="chk"><input type="checkbox" ${pl.onlyLook ? 'checked' : ''} onchange="pl.onlyLook=this.checked;drawPlane(true)"> Only what needs a look</label>${pl.onlyLook ? `<span class="hint">${PL.entities.filter(e => e.light !== 'red' && e.light !== 'amber').length} hidden</span>` : ''}<label class="hint">Area <select onchange="pl.area=this.value;LAY=null;drawPlane(false)"><option value="all">all</option>${PL.areas.map(a => `<option ${pl.area === a.name ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select></label><button class="small" onclick="pl.layout={};keep('lorefile-layout:'+planeKey(),{});LAY=null;drawPlane(false)">Reset layout</button><span class="hint">Drag a box to move it (or select it and press M).</span>` : '';
+  const tools = $('pl-tools'); if (tools) tools.innerHTML = PL.space.editable && !pl.overlay && route.screen === 'home' ? `<button class="small" onclick="pl.sel='newarea';ui.area={name:'',description:''};drawPlane(true)">+ New area</button>` : '';
 }
-const legendHtml = () => `<details class="pl-legendbox" ${phone() ? '' : 'open'}><summary>What the colours mean</summary><div class="pl-legend"><span><span class="lb red">✗</span> wrong: agents may get wrong answers</span><span><span class="lb amber">!</span> look at it: a person should check</span><span><span class="lb green">✓</span> a person stands behind it</span><span><span class="lb none"></span> no badge: nothing to fix, nobody has graded it</span>${pl.flat || pl.overlay ? '<span><span class="ghostk"></span> dashed: waiting for review</span>' : ''}</div></details>`;
+const legendHtml = () => `<details class="pl-legendbox" ${phone() ? '' : 'open'}><summary>What the colours mean</summary><div class="pl-legend"><span><span class="lb red">✗</span> wrong: agents may get wrong answers</span><span><span class="lb amber">!</span> look at it: a person should check</span><span><span class="lb green">✓</span> a person stands behind it</span><span><span class="lb none"></span> no badge: nothing to fix, nobody has graded it</span>${pl.overlay || (PL && (PL.waiting || []).length) ? '<span><span class="ghostk"></span> dashed: waiting for review</span>' : ''}</div></details>`;
 function reasonLines(rs, editable){
   return (rs || []).map(r => {
     const fx = r.fix && editable ? inlineFix(r.fix) : '';
@@ -1134,10 +1176,11 @@ function inlineFix(f){
     const id = 'pf-d-' + (f.a + '-' + f.b).replace(/[^\w-]/g, '_');
     return `<div class="row" style="margin-top:4px;gap:6px"><label class="sr" for="${id}">Why are they different on purpose?</label><input id="${id}" placeholder="Why are they different on purpose?" style="flex:1 1 160px;min-width:0"><button class="small" onclick="planeDistinct(${jq(f.a)}, ${jq(f.b)}, ${jq(id)})">These are different</button></div>`;
   }
+  if (f.field === 'owner' && f.op === 'set_metric') return `<div style="margin-top:4px">${ownerPicker('metric', f.metric, '')}</div>`;
   const id = 'pf-' + (f.metric || f.type || '').replace(/[^\w-]/g, '_') + '-' + f.field;
   const tm = f.op === 'set_metric' ? TR('metric', f.metric) : null, accepts = tm && (tm.grade === 'proposed' || !!tm.changed_since);
   const label = f.field === 'owner' ? 'Who decides what it means?' : f.op === 'set_type_description' ? `What is one ${labelOf(f.type)}?` : 'What does it measure?';
-  return `<div class="row" style="margin-top:4px;gap:6px"><label class="sr" for="${id}">${esc(label)}</label><input id="${id}" placeholder="${esc(label)}" value="${esc(f.field === 'owner' ? ME() : '')}" style="flex:1 1 160px;min-width:0"><button class="small" onclick="planeFix(${jq(JSON.stringify(f))}, ${jq(id)})">Save</button>${accepts ? '<span class="hint">saving also accepts this metric as it is now</span>' : ''}</div>`;
+  return `<div class="row" style="margin-top:4px;gap:6px"><label class="sr" for="${id}">${esc(label)}</label><input id="${id}" placeholder="${esc(label)}" value="" style="flex:1 1 160px;min-width:0"><button class="small" onclick="planeFix(${jq(JSON.stringify(f))}, ${jq(id)})">Save</button>${accepts ? '<span class="hint">saving also accepts this metric as it is now</span>' : ''}</div>`;
 }
 async function planeDistinct(a, b, id){
   if (!decideName()) return;
@@ -1151,6 +1194,7 @@ async function planeFix(fj, id){
 }
 function planeAside(){
   const el = $('pl-aside'); if (!el || !PL) return;
+  prefs();
   const key = pl.sel; const editable = PL.space.editable && !pl.overlay;
   let h = '';
   const close = `<button class="small pl-close" onclick="pl.sel=null;drawPlane(true)" aria-label="Close the card">Close</button>`;
@@ -1163,7 +1207,10 @@ function planeAside(){
       const waiting = (PL.waiting || []).filter(w => (w.nodes || []).some(n => n.name === e.name && n.status !== 'same'));
       h = `<div class="pl-card"><div class="row" style="gap:8px"><svg width="22" height="22" style="color:${domainColor(e.area)}" aria-hidden="true"><use href="#g-${esc(e.icon)}"/></svg><h2 style="font-size:17px">${esc(e.label)}</h2>${e.same_label ? `<span class="mono hint">${esc(e.name)}</span>` : ''}<span style="margin-left:auto" class="lbw ${e.light}">${e.light !== 'none' ? `<span class="lb ${e.light}">${LIGHTS[e.light][0]}</span> ` : ''}${esc(e.light === 'none' ? 'nothing to fix' : LIGHTS[e.light][1])}</span></div>
         ${e.extends || (e.kinds || []).length ? `<div class="hint">${e.extends ? `A kind of <button type="button" class="lnk" onclick="selectItem('e:'+${jq(e.extends)},{fly:true})">${esc(labelOf(e.extends))}</button>${e.where ? ' · ' + esc(e.where) : ''} · ` : ''}Kinds: ${(e.kinds || []).length ? e.kinds.map(k => `<button type="button" class="lnk" onclick="selectItem('e:'+${jq(k)},{fly:true})">${esc(labelOf(k))}</button>`).join(', ') : 'none'}</div>` : ''}
-        <div class="hint">${esc(e.area)} · entity · ${esc(e.icon_why.startsWith('name: ') ? 'icon from the word ' + e.icon_why.slice(6) : e.icon_why.startsWith('source: ') ? 'icon from its source' : 'no word in its name gave an icon')}</div>
+        <div class="hint">entity · ${esc(e.icon_why.startsWith('name: ') ? 'icon from the word ' + e.icon_why.slice(6) : e.icon_why.startsWith('source: ') ? 'icon from its source' : 'no word in its name gave an icon')}</div>
+        ${areaLine(e.name, e.area, !!e.area_follows, e.extends, 'card')}
+        ${editable ? ownerPicker('entity', e.name, e.owner || '') : (e.owner ? ownerPicker('entity', e.name, e.owner) : '')}
+        ${PL.links.filter(l => l.from === e.name || l.to === e.name).length > 6 ? `<div class="hint">+${PL.links.filter(l => l.from === e.name || l.to === e.name).length - 6} more links than the drawing labels: <button type="button" class="lnk" onclick="go('graph',${jq(e.name)})">Open in graph</button></div>` : ''}
         ${e.description ? `<div style="font-size:13.5px">${esc(e.description)}</div>` : `<div class="gline"><span class="gl-i warn">!</span><span>No description yet.${editable ? inlineFix({ op: 'set_type_description', type: e.name, field: 'description' }) : ''}</span></div>`}
         <div class="hint">${esc(plural(e.fields, 'field'))}${e.key ? ' · key ' + esc(e.key) : ' · no key'}${e.units.length ? ' · ' + esc(e.units.map(u => /^[A-Z]{3}$/.test(u) ? 'money in ' + u : u).join(', ')) : ''}</div>
         <div class="drow"><span class="hint">Source</span><span>${e.where && e.extends ? `${esc(labelOf(e.extends))}'s rows where ${esc(e.where)}${gradeLine('binding', e.name)}` : e.source ? `${esc(e.source.name)}: ${esc(srcWords(e.source.kind))}${O && TR('binding', e.name) ? gradeLine('binding', e.name) : ''}` : `No data yet ${PL.space.editable ? `<button class="small" onclick="ui.typeTab='data';go('entities',${jq(e.name)})">Bind a table</button>` : ''}`}</span></div>
@@ -1174,11 +1221,11 @@ function planeAside(){
         ${(e.reasons || []).length ? `<h4 style="padding:0">Look at</h4>${Object.entries(fromWhere).map(([k, rs]) => `${k !== 'itself' ? `<div class="hint">From ${esc(k.startsWith('metric ') ? labelOf(k.slice(7)) : k)}</div>` : ''}${reasonLines(k !== 'itself' ? rs.map(r => ({ ...r, text: r.text.replace(/^[^:]+: /, '') })) : rs, editable)}`).join('')}` : ''}
         ${waiting.length ? `<h4 style="padding:0">Waiting</h4>${waiting.map(w => `<div class="row"><span>${esc(w.headline || w.id)}</span><button class="small" onclick="go('review',${jq(w.id)})">Review</button></div>`).join('')}` : ''}
         ${PL.entities.length > 60 ? `<div class="hint">Why it's shown: ${esc((e.importance_why || []).join(', ') || 'nothing in particular')}</div>` : ''}
-        <div class="row"><button class="primary small" onclick="go('entities',${jq(e.name)})">Open ${esc(cutTo(e.label, 24))}</button>${pl.flat ? `<button class="small" onclick="toggleNode(${jq(e.name)})">${pl.open[e.name] ? 'Fold' : 'Show fields'}</button>` : `<button class="small" onclick="pl.open[${jq(e.name)}]=true;describe(${jq(e.name)});go('map')">Show on the map</button>`}<button class="small" onclick="togglePin(${jq(e.name)})">${pl.pins[e.name] ? 'Unpin' : 'Pin'}</button>${close}</div></div>`;
+        <div class="row"><button class="primary small" onclick="go('entities',${jq(e.name)})">Open ${esc(cutTo(e.label, 24))}</button><button class="small" onclick="go('graph',${jq(e.name)})">Open in graph</button><button class="small" onclick="togglePin(${jq(e.name)})">${pl.pins[e.name] ? 'Unpin' : 'Pin'}</button>${close}</div></div>`;
     }
   } else if (key && key.startsWith('m:')) {
     const m = metOf(key.slice(2));
-    h = m ? `<div class="pl-card"><div class="row"><span class="sig">Σ</span><h2 style="font-size:17px">${esc(m.label)}</h2><span style="margin-left:auto" class="lbw">${m.light !== 'none' ? `<span class="lb ${m.light}">${LIGHTS[m.light][0]}</span> ` : ''}${esc(m.light === 'none' ? 'nothing to fix' : LIGHTS[m.light][1])}</span></div><div style="font-size:14px">${esc(m.sentence ? m.sentence + '.' : 'Counted by its own recipe; see Logic.')}</div><div class="hint">${m.entities.length ? 'Counts ' + esc(m.entities.map(labelOf).join(', ')) : 'Not tied to one entity'}${m.uses.length ? ' · uses ' + esc(m.uses.join(', ')) : ''}</div>${gradeLine('metric', m.name)}<div class="gline"><span class="gl-i ${m.owner ? '' : 'warn'}">${m.owner ? '·' : '!'}</span><span>Owner: ${m.owner ? `<b>${esc(owner(m.owner))}</b>` : 'no one named yet'}</span></div>${m.caveats ? `<div class="hint">Caveat: ${esc(m.caveats)}</div>` : ''}${reasonLines(m.reasons, editable)}<div class="row"><button class="primary small" onclick="go('logic')">Open in Logic</button>${close}</div></div>` : '';
+    h = m ? `<div class="pl-card"><div class="row"><span class="sig">Σ</span><h2 style="font-size:17px">${esc(m.label)}</h2><span style="margin-left:auto" class="lbw">${m.light !== 'none' ? `<span class="lb ${m.light}">${LIGHTS[m.light][0]}</span> ` : ''}${esc(m.light === 'none' ? 'nothing to fix' : LIGHTS[m.light][1])}</span></div><div style="font-size:14px">${esc(m.sentence ? m.sentence + '.' : 'Counted by its own recipe; see Logic.')}</div><div class="hint">${m.entities.length ? 'Counts ' + esc(m.entities.map(labelOf).join(', ')) : 'Not tied to one entity'}${m.uses.length ? ' · uses ' + esc(m.uses.join(', ')) : ''}</div>${gradeLine('metric', m.name)}<div class="gline"><span class="gl-i ${m.owner ? '' : 'warn'}">${m.owner ? '·' : '!'}</span>${ownerPicker('metric', m.name, m.owner || '')}</div>${m.caveats ? `<div class="hint">Caveat: ${esc(m.caveats)}</div>` : ''}${reasonLines(m.reasons, editable)}<div class="row"><button class="primary small" onclick="go('logic')">Open in Logic</button>${close}</div></div>` : '';
   } else if (key && key.startsWith('s:')) {
     const s = srcOf2(key.slice(2));
     h = s ? `<div class="pl-card"><div class="row"><svg width="20" height="20" aria-hidden="true"><use href="#g-${esc(s.icon)}"/></svg><h2 style="font-size:17px">${esc(s.name)}</h2></div><div class="hint">source · ${esc(s.words)}</div>${s.description ? `<div style="font-size:13px">${esc(s.description)}</div>` : ''}<div class="drow"><span class="hint">Rows of</span><span>${s.entities.length ? esc(s.entities.map(labelOf).join(', ')) : 'not used yet'}</span></div><div class="drow"><span class="hint">Metrics</span><span>${s.metrics.length ? esc(s.metrics.map(labelOf).join(', ')) : 'none'}</span></div>${reasonLines(s.reasons, false)}<div class="hint">Lorefile keeps what the rows mean, never the rows.</div><div class="row"><button class="primary small" onclick="go('sources')">Open in Sources</button>${close}</div></div>` : '';
@@ -1193,6 +1240,10 @@ function planeAside(){
     const [, id, ...rest] = key.split(':'); const n = rest.join(':'); const w = (pl.overlay && pl.overlay.id === id) ? pl.overlay : (PL.waiting || []).find(x => x.id === id) || {};
     const adds = (w.nodes || []).filter(x => x.status === 'new').map(x => labelOf(x.name)); const changes = (w.nodes || []).filter(x => x.status === 'changed').map(x => labelOf(x.name));
     h = `<div class="pl-card"><div class="row"><span class="monob">${esc(w.monogram || 'A')}</span><h2 style="font-size:17px">${esc(labelOf(n))}</h2><span class="hint">waiting</span></div><div style="font-size:13.5px">${esc(w.headline || '')}</div><div class="hint">From ${esc(w.agent || 'an agent')}${adds.length ? ' · adds ' + esc(adds.join(', ')) : ''}${changes.length ? ' · changes ' + esc(changes.join(', ')) : ''}</div><div class="row"><button class="primary small" onclick="go('review',${jq(id)})">Review</button>${close}</div></div>`;
+  } else if (key && key.startsWith('area:')) {
+    h = areaCardHtml(key.slice(5), PL.space.editable && !pl.overlay);
+  } else if (key === 'newarea' && PL.space.editable) {
+    h = newAreaCardHtml();
   } else if (key === 'loose') {
     const loose = PL.metrics.filter(m => !m.entities.length);
     h = `<div class="pl-card"><h2 style="font-size:17px">Metrics not tied to one entity</h2>${loose.map(m => `<div><b>${esc(m.label)}</b>: ${esc(m.sentence || 'counted by its own recipe')}</div>`).join('')}<div class="row"><button class="primary small" onclick="go('logic')">Open in Logic</button>${close}</div></div>`;
@@ -1202,7 +1253,8 @@ function planeAside(){
     const first = !PL.entities.length ? `<div class="card"><b>Start this space</b><div class="hint">An entity is a kind of thing in your business: Customer, Order, Campaign.</div><div class="row"><button class="primary small" ${PL.space.editable ? '' : 'disabled'} onclick="go('entities')">Add an entity</button><button class="small" onclick="ui.learnHint=!ui.learnHint;planeAside()">Let an agent learn a file</button>${canCopySpace() ? `<button class="small" onclick="go('new-space')">Copy an example</button>` : ''}</div>${ui.learnHint ? `<div class="hint">In ChatGPT or Claude, connected to this space, attach a file and say:</div><div class="row"><code class="block" style="flex:1 1 auto">Save this file to Lorefile</code><button class="small" onclick="copyText('Save this file to Lorefile')">Copy</button></div><button type="button" class="lnk" onclick="go('agents')">How to connect an agent</button>` : ''}</div>` : '';
     h = first + nextSteps();
   }
-  el.innerHTML = (editable && pl.sel ? nameBar() : '') + h;
+  const selLabel = key && key.startsWith('e:') ? [((entOf(key.slice(2)) || {}).icon) || 'cube', labelOf(key.slice(2))] : key && key.startsWith('m:') ? ['chart', labelOf(key.slice(2))] : key && key.startsWith('area:') ? ['', key.slice(5) + ' (area)'] : key && key.startsWith('s:') ? ['cylinder', key.slice(2)] : ['', `What to do next · ${(nextSteps().match(/class="card"/g) || []).length}`];
+  el.innerHTML = asideHead() + (editable && pl.sel ? nameBar() : '') + h + asideStrip(selLabel[0], selLabel[1]);
   el.classList.toggle('up', !!pl.sel && phone());
 }
 function planeList(){
@@ -1221,10 +1273,10 @@ function planeList(){
   el.innerHTML = `<table class="pl-table"><thead><tr>${th('name', 'Name')}${th('kind', 'Kind')}${th('area', 'Area')}${th('light', 'Light')}<th>Why</th><th></th></tr></thead><tbody>${list.map(r => `<tr><td>${r.key ? `<button type="button" class="lnk" onclick="selectItem(${jq(r.key)},{fly:true})">${esc(r.name)}</button>` : esc(r.name)}</td><td class="hint">${esc(r.kind)}</td><td class="hint">${esc(r.area)}</td><td>${r.light !== 'none' ? `<span class="lb ${r.light}" aria-hidden="true">${LIGHTS[r.light][0]}</span> ` : ''}${esc(r.light === 'none' ? 'nothing to fix' : LIGHTS[r.light][1])}</td><td class="hint">${esc((r.reasons || []).map(x => x.text).join('; '))}${r.waiting ? ` <button class="small" onclick="go('review',${jq(r.waiting)})">Review</button>` : ''}</td><td>${r.key ? `<button class="small" onclick="openItem(${jq(r.key)})">Open</button>` : ''}</td></tr>`).join('')}</tbody></table>${list.length ? '' : '<div class="hint">Nothing with that light.</div>'}`;
 }
 // --- the screens ---
-async function renderHome(v){ pl.flat = false; pl.overlay = null; await renderPlaneShell(v); }
-async function renderMap(v){ pl.flat = true; pl.overlay = null; await renderPlaneShell(v); }
+async function renderHome(v){ pl.overlay = null; await renderPlaneShell(v); }
+async function renderListTab(v){ pl.overlay = null; await renderPlaneShell(v); }
 async function renderReviewMap(v, id){
-  pl.flat = true; v.innerHTML = main('<div class="empty">Drawing what this proposal would change…</div>');
+  v.innerHTML = main('<div class="empty">Drawing what this proposal would change…</div>');
   const g = await api(B + '/api/graph?proposal=' + encodeURIComponent(id));
   if (g.error) { v.innerHTML = main(`<div class="card"><b>${esc(g.error)}</b><button class="small" onclick="go('review',${jq(id)})">Back to the review</button></div>`); return; }
   pl.overlay = { ...g, id, agent: (RV && RV.context && RV.context.agent) || 'an agent', monogram: ((RV && RV.context && RV.context.agent) || 'A').charAt(0).toUpperCase() };
@@ -1240,12 +1292,352 @@ async function renderPlaneShell(v){
 }
 function renderPlaneScreen(){
   const v = $('view'); if (!v || !PL) return;
-  const showList = pl.list || phone();
+  const tab = pl.overlay ? 'home' : route.screen === 'graph' ? 'graph' : route.screen === 'list' ? 'list' : 'home';
   const banner = (PL.space.reasons || []).filter(r => r.light === 'red').length ? `<div class="banner bad">${esc(plural(PL.space.reasons.filter(r => r.light === 'red').length, 'error'))}: agents may get wrong answers · <button type="button" class="lnk" onclick="go('diagnostics')">Problems</button></div>`  : (!O.ok && !PL.space.empty ? `<div class="banner bad">${esc(plural(O.diagnostics.filter(d => d.level === 'error').length, 'error'))}: agents may get wrong answers · <button type="button" class="lnk" onclick="go('diagnostics')">Problems</button></div>` : '');
-  v.innerHTML = `<div class="pl-wrap"><a href="#" class="pl-skip" onclick="event.preventDefault();pl.list=true;renderPlaneScreen();const t=document.querySelector('#pl-list button');if(t)t.focus()">Skip to list</a>${roBanner()}${banner}<div id="pl-bar" class="pl-bar"></div><div id="pl-tools" class="pl-tools"></div><div class="pl-views" role="tablist"><button role="tab" aria-selected="${route.screen === 'home'}" class="${route.screen === 'home' && !pl.overlay ? 'on' : ''}" onclick="go('home')">Home</button><button role="tab" aria-selected="${route.screen === 'map' || !!pl.overlay}" class="${route.screen === 'map' || pl.overlay ? 'on' : ''}" onclick="go('map')">Map</button><button role="tab" aria-selected="${showList}" class="${showList ? 'on' : ''}" onclick="pl.list=!pl.list;renderPlaneScreen()">List (L)</button></div><div id="pl-stage" class="pl-stage${pl.flat ? ' flat' : ''}"></div>${legendHtml()}<div id="pl-list" class="pl-list" ${showList ? '' : 'hidden'}></div><div id="pl-live" class="sr" aria-live="polite"></div></div><div id="pl-aside" class="aside pl-aside"></div>`;
-  drawPlane(true);
+  const hint = { home: 'Everything at once. Click something to see it in the card.', graph: 'One entity in the middle, everything it touches around it. Click a neighbour to move there.', list: 'Every entity, metric, source and agent as rows. Sort by any column.' }[tab];
+  const tabBtn = (k, t) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" onclick="go(${jq(k)})">${t}</button>`;
+  const body = tab === 'list'
+    ? `<div id="pl-list" class="pl-list"></div>`
+    : tab === 'graph'
+      ? `<div id="gr-crumbs" class="gr-crumbs"></div><div id="gr-stage" class="pl-stage gr-stage"></div><div id="gr-rows" class="gr-rows"></div>`
+      : `<div id="pl-stage" class="pl-stage"></div>${legendHtml()}<div id="pl-list" class="pl-list" ${phone() ? '' : 'hidden'}></div>`;
+  const skip = tab === 'home' ? `<a href="#" class="pl-skip" onclick="event.preventDefault();go('list')">Skip to list</a>` : tab === 'graph' ? `<a href="#gr-rows" class="pl-skip" onclick="event.preventDefault();const t=document.querySelector('#gr-rows button');if(t)t.focus()">Skip to rows</a>` : '';
+  v.innerHTML = `<div class="pl-wrap">${skip}${roBanner()}${banner}<div id="pl-bar" class="pl-bar"></div><div id="pl-tools" class="pl-tools"></div><div class="pl-views" role="tablist">${tabBtn('home', 'Overview')}${tabBtn('graph', 'Graph')}${tabBtn('list', 'List')}</div><div class="hint gr-hint">${esc(hint)}</div>${body}<div id="pl-live" class="sr" aria-live="polite"></div></div><div id="pl-aside" class="aside pl-aside foldable"></div>`;
+  if (tab === 'graph') drawGraph(false);
+  else if (tab === 'list') { planeBar(); planeList(); planeAside(); }
+  else drawPlane(true);
 }
-window.addEventListener('resize', () => { if (['home', 'map'].includes(route.screen) && PL && !pl.moved) drawPlane(false); });
+window.addEventListener('resize', () => { if (route.screen === 'home' && PL && !pl.moved) drawPlane(false); else if (route.screen === 'graph' && PL) drawGraph(true); });
+
+// ---------- the Graph: one entity in the middle, everything it touches around it (Part 5) ----------
+// The page builds it from /api/plane (PL), /api/summary (O) and /api/describe of the centre (DC);
+// no new endpoint. Rows here; the drawing over them comes with the graph step.
+const GR = { centre: null, trail: [], failed: {}, loading: {}, more: false, all: {}, show: null, msg: '' };
+// the centre's fields, fetched whenever they are missing: a failed answer is never kept (problem 5)
+async function graphDescribe(name){
+  if (DC[name] && DC[name].properties) return DC[name];
+  if (GR.loading[name]) return null;
+  GR.loading[name] = true; delete GR.failed[name];
+  try {
+    const d = await api(B + '/api/describe?name=' + encodeURIComponent(name));
+    if (d && d.properties) { DC[name] = d; } else { GR.failed[name] = (d && d.error) || 'no answer'; }
+  } catch (e) { GR.failed[name] = String(e); }
+  delete GR.loading[name];
+  return DC[name] && DC[name].properties ? DC[name] : null;
+}
+const mostImportant = () => (PL && PL.entities[0]) ? PL.entities[0].name : null;
+// "many quotes → one opportunity": a link's cardinality in words
+const pluralWord = (w) => /(s|x|ch|sh)$/.test(w) ? w + 'es' : /[^aeiou]y$/.test(w) ? w.slice(0, -1) + 'ies' : w + 's';
+function cardWords(from, to, card){
+  const x = labelOf(from).toLowerCase(), y = labelOf(to).toLowerCase(), c = String(card || 'many-to-one');
+  if (c === 'one-to-many') return `one ${x} → many ${pluralWord(y)}`;
+  if (c === 'one-to-one') return `one ${x} ↔ one ${y}`;
+  if (c === 'many-to-many') return `many ${pluralWord(x)} ↔ many ${pluralWord(y)}`;
+  return `many ${pluralWord(x)} → one ${y}`;
+}
+const linkWords = (n) => String(n || '').replace(/_/g, ' ');
+// what the Graph draws for one centre, from what the page already has
+function graphModel(name){
+  const e = entOf(name); if (!e) return null;
+  const d = DC[name] && DC[name].properties ? DC[name] : null;
+  const rules = (O.constraints || []);
+  const rulesOnLink = (from, ln) => rules.filter(c => c.applies_to === ln || c.applies_to === from + '.' + ln).length;
+  const outRaw = d ? d.relationships.map(r => ({ dir: 'out', other: r.to, name: r.name, card: r.cardinality, words: r.description, from: r.from || null, self: r.to === name, missing: !entOf(r.to) })) : PL.links.filter(l => l.from === name).map(l => ({ dir: 'out', other: l.to, name: l.name, card: l.cardinality, words: l.described ? '·' : '', self: l.to === name, missing: l.missing }));
+  const inRaw = d ? d.incoming.map(r => ({ dir: 'in', other: r.from, name: r.name, card: r.cardinality, words: r.description, ends: r.ends_at || null })) : PL.links.filter(l => l.to === name && l.from !== name).map(l => ({ dir: 'in', other: l.from, name: l.name, card: l.cardinality, words: l.described ? '·' : '' }));
+  outRaw.forEach(r => { r.rules = rulesOnLink(r.from || name, r.name); });
+  inRaw.forEach(r => { r.rules = rulesOnLink(r.other, r.name); });
+  // one box per neighbour: two links to the same entity share it, and a link each way sits in the out column
+  const out = [], inn = [];
+  for (const r of outRaw) { const box = out.find(b => b.other === r.other); if (box) box.labels.push(r); else out.push({ other: r.other, labels: [r], missing: r.missing, self: r.self }); }
+  for (const r of inRaw) { if (r.other === name) continue; const box = out.find(b => b.other === r.other); if (box) { box.labels.push(r); continue; } const b2 = inn.find(b => b.other === r.other); if (b2) b2.labels.push(r); else inn.push({ other: r.other, labels: [r] }); }
+  const metrics = PL.metrics.filter(m => m.entities.includes(name));
+  const fns = (O.functions || []).filter(f => Object.values(f.inputs || {}).some(t => t === name || (e.extends && t === e.extends)));
+  const guards = d ? d.constraints : [];
+  const acts = d ? (d.actions || []).map(a => (O.actions || []).find(x => (x.action || x.name) === a) || { action: a }) : [];
+  const actRules = (a) => rules.filter(c => c.applies_to === (a.action || a.name)).length;
+  return { e, d, out, inn, metrics, fns, guards, acts, actRules, kinds: e.kinds || [], parent: e.extends || null };
+}
+// the address says the centre; else the selection, the last centre, the most important entity
+function graphCentre(){
+  const want = route.screen === 'graph' ? route.arg : '';
+  const sel = pl.sel && pl.sel.startsWith('e:') ? pl.sel.slice(2) : null;
+  GR.msg = '';
+  let c = want || sel || GR.centre || mostImportant();
+  if (c && !entOf(c)) { GR.msg = `${c} isn't in this space`; c = mostImportant(); }
+  return c;
+}
+function graphMove(name){
+  if (!name || !entOf(name)) return;
+  pl.sel = 'e:' + name;
+  if (route.screen === 'graph' && route.arg === name) { drawGraph(true); return; }
+  location.hash = 'graph/' + encodeURIComponent(name);
+}
+function crumbsHtml(){
+  const t = GR.trail.slice(-6);
+  return t.length > 1 ? `<nav aria-label="Centres you visited" class="row" style="gap:4px">${t.map((n, i) => i === t.length - 1 ? `<b>${esc(labelOf(n))}</b>` : `<button type="button" class="lnk" onclick="graphMove(${jq(n)})">${esc(labelOf(n))}</button><span class="hint" aria-hidden="true">›</span>`).join('')}</nav>` : '';
+}
+// the rows: the Graph's twin for phones and screen readers, the same content as the drawing
+function graphRows(M){
+  const e = M.e, row = (inner) => `<div class="gr-row">${inner}</div>`;
+  const ent = (n, extra) => entOf(n) ? `<button type="button" class="lnk" onclick="graphMove(${jq(n)})">${esc(labelOf(n))}</button>${extra || ''}` : `<span class="warnc">${esc(n)} (missing)</span>`;
+  const lbl = (r) => `${esc(linkWords(r.name))}${r.from && r.from !== e.name ? ` <span class="hint">· from ${esc(r.from)}</span>` : ''}${r.ends ? ` <span class="hint">· ends at ${esc(r.ends)}</span>` : ''}${r.words ? '' : ' <span class="warnc">· no sentence</span>'}${r.rules ? ` <span class="hint">⛉${r.rules}</span>` : ''}`;
+  const outRows = M.out.map(b => b.labels.map(r => row(r.dir === 'out' ? `${lbl(r)} → ${b.self ? '<b>itself</b>' : ent(b.other)} <span class="hint">· ${esc(cardWords(r.dir === 'out' ? e.name : b.other, r.dir === 'out' ? b.other : e.name, r.card))}</span>` : `← ${lbl(r)} from ${ent(b.other)} <span class="hint">· ${esc(cardWords(b.other, e.name, r.card))}</span>`)).join('')).join('');
+  const inRows = M.inn.map(b => b.labels.map(r => row(`${ent(b.other)} ${lbl(r)} → ${esc(labelOf(e.name))} <span class="hint">· ${esc(cardWords(b.other, e.name, r.card))}</span>`)).join('')).join('');
+  const logic = [
+    ...M.metrics.map(m => row(`<span class="sig">Σ</span> <button type="button" class="lnk" onclick="selectGraph('m:'+${jq(m.name)})">${esc(m.label)}</button> <span class="hint">${esc(m.sentence || 'counted by its own recipe')}</span>`)),
+    ...M.fns.map(f => row(`<span class="sig">ƒ</span> ${esc(labelOf(f.name))} <span class="hint">· ${esc((f.runs || {}).kind || 'runs where?')}</span>`)),
+    ...M.guards.map(c => row(`<span class="sig">⛉</span> <button type="button" class="lnk" onclick="go('rules',${jq(c.id)})">${esc(c.id)}</button> ${esc(c.name || '')} ${sev(c.severity)}${c.from ? ` <span class="hint">· from ${esc(c.from)}</span>` : ''}`)),
+    ...M.acts.map(a => row(`<span class="sig">ϟ</span> ${esc(human(a.action || a.name || ''))}${M.actRules(a) ? ` <span class="hint">⛉${M.actRules(a)}</span>` : ''}`))
+  ];
+  const src = e.where && e.extends ? `${esc(labelOf(e.extends))}'s rows where ${esc(e.where)}` : e.source ? `${esc(e.source.name)}: ${esc(srcWords(e.source.kind))}` : `No data yet${PL.space.editable ? ` · <button type="button" class="lnk" onclick="ui.typeTab='data';go('entities',${jq(e.name)})">Bind a table</button>` : ''}`;
+  const fam = [row(`<span class="sig">⛁</span> ${src}`), ...(M.parent ? [row(`a kind of ${ent(M.parent)}`)] : []), ...M.kinds.map(k => row(`kind: ${ent(k)}`))];
+  const desc = M.d ? `${plural(M.d.properties.length, 'field')}${M.d.key ? ' · key ' + esc(M.d.key) : ''}` : (GR.failed[e.name] ? `Couldn't load the fields · <button type="button" class="lnk" onclick="drawGraph(true)">Try again</button>` : 'Loading fields…');
+  return `<div class="gr-rows-in"><div class="card"><div class="row" style="gap:8px"><svg width="20" height="20" style="color:${domainColor(e.area)}" aria-hidden="true"><use href="#g-${esc(e.icon)}"/></svg><b style="font-size:15px">${esc(e.label)}</b>${e.light !== 'none' ? `<span class="lb ${e.light}">${LIGHTS[e.light][0]}</span>` : ''}<span class="hint">${esc(e.area)}</span></div><div class="hint">${desc}</div>${e.description ? `<div style="font-size:13px">${esc(e.description)}</div>` : ''}</div>
+    <h4 style="padding:0">Links out (${M.out.reduce((n, b) => n + b.labels.filter(r => r.dir === 'out').length, 0)})</h4>${outRows || `<div class="hint">${esc(labelOf(e.name))} links to nothing.</div>`}
+    <h4 style="padding:0">Links in (${M.inn.reduce((n, b) => n + b.labels.length, 0)})</h4>${inRows || `<div class="hint">Nothing links to ${esc(labelOf(e.name))}.${PL.space.editable ? ` <button type="button" class="lnk" onclick="ui.lf.from=${jq(e.name)};go('links')">Add a link</button>` : ''}</div>`}
+    <h4 style="padding:0">Logic (${logic.length})</h4>${logic.join('') || '<div class="hint">Nothing in its logic yet.</div>'}
+    <h4 style="padding:0">Rows and family</h4>${fam.join('')}</div>`;
+}
+function selectGraph(key){ pl.sel = key; GR.sheet = true; planeAside(); if (phone()) { const sh = $('pl-aside'); if (sh) sh.classList.add('up'); } }
+async function drawGraph(keep){
+  const rowsEl = $('gr-rows'); if (!rowsEl || !PL) return;
+  if (!PL.entities.length) { $('gr-stage') && ($('gr-stage').innerHTML = ''); rowsEl.innerHTML = `<div class="card"><b>No entities yet</b>${PL.space.editable ? `<button class="primary small" style="align-self:flex-start" onclick="go('entities')">Add an entity</button>` : ''}</div>`; planeBar(); planeAside(); return; }
+  const c = graphCentre();
+  if (c !== GR.centre) { GR.centre = c; if (GR.trail[GR.trail.length - 1] !== c) GR.trail.push(c); GR.trail = GR.trail.slice(-12); announce(`${labelOf(c)} is in the middle`); }
+  if (!pl.sel || !pl.sel.startsWith('e:') || !keep) pl.sel = 'e:' + c;
+  const M = graphModel(c);
+  $('gr-crumbs').innerHTML = (GR.msg ? `<div class="banner">${esc(GR.msg)}; showing ${esc(labelOf(c))}, the most important entity.</div>` : '') + crumbsHtml();
+  rowsEl.innerHTML = graphRows(M);
+  if (typeof drawGraphSvg === 'function') drawGraphSvg(M); else { const st = $('gr-stage'); if (st) st.hidden = true; }
+  planeBar(); planeAside();
+  { const sh = $('pl-aside'); if (sh && phone() && !GR.sheet) sh.classList.remove('up'); GR.sheet = false; }
+  // the centre's fields: fetched whenever they are missing, so a save never leaves "Loading fields…" behind
+  if (!M.d && !GR.loading[c] && !GR.failed[c]) { await graphDescribe(c); if (GR.centre === c && route.screen === 'graph') drawGraph(true); }
+}
+async function renderGraph(v){ pl.overlay = null; await renderPlaneShell(v); }
+
+// ---------- people: one owner picker for every place an owner shows (Part 1) ----------
+let PEOPLE = null, PEOPLE_AT = 0;
+async function loadPeople(force){
+  if (!force && PEOPLE && PEOPLE.space === SPACE && Date.now() - PEOPLE_AT < 15000) return PEOPLE;
+  try { const r = await api(B + '/api/people'); if (r && r.people) { PEOPLE = r; PEOPLE.space = SPACE; PEOPLE_AT = Date.now(); } } catch (e) {}
+  return PEOPLE || { people: [], other_spaces: [], unowned: {}, same_person: [] };
+}
+const foldName = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().split(/\s+/).filter(Boolean).join(' ');
+const personOf = (name) => { const f = foldName(name); return f ? ((PEOPLE && PEOPLE.people) || []).find(p => foldName(p.name) === f || (p.also || []).some(a => foldName(a) === f)) : null; };
+// the owner name rule: the name rule plus & and /, and never an address
+const ownerOk = (n) => n.length <= 60 && /^[\p{L}\p{N} .'_&/-]+$/u.test(n) && !/agent/i.test(n) && !n.toLowerCase().split(/\s+/).includes('via');
+// how an owner reads: the main name of whoever it is ("written as Vinay" on hover), "(left)", addresses as teams
+function ownerShown(written){
+  const p = personOf(written), main = p ? p.name : written;
+  return { text: owner(main) + (p && p.left ? ' (left)' : ''), title: main !== written ? `written as ${written}` : '' };
+}
+const ownerWhat = (kind, name) => kind === 'metric' ? labelOf(name) : kind === 'function' ? labelOf(name) : name;
+const ownerSlug = (key) => 'ow-' + key.replace(/[^\w-]/g, '_');
+// The owner line: "Owner Vinay Karode · Change", or "no one named yet [Name an owner ▾]". mode 'review' and
+// 'batch' pick without saving (the choice goes with Accept, or with "Save N owners").
+function ownerPicker(kind, name, written, mode, idx){
+  const key = kind + ':' + name, id = ownerSlug(key + (mode ? ':' + mode : ''));
+  const open = ui.pick && ui.pick.id === id;
+  if (open) return `<div class="ownerl" id="${id}">${pickerInner()}</div>`;
+  const sh = written ? ownerShown(written) : null;
+  if (ro() || shipped()) return `<span class="ownerl" id="${id}"><span class="hint">Owner</span> ${sh ? `<b title="${esc(sh.title)}">${esc(sh.text)}</b>` : 'no one named yet'}</span>`;
+  const args = `${jq(kind)},${jq(name)},${jq(written || '')},${jq(mode || '')},${idx === undefined ? 'null' : Number(idx)}`;
+  return `<span class="ownerl" id="${id}"><span class="hint">Owner</span> ${sh ? `<b title="${esc(sh.title)}">${esc(sh.text)}</b> · <button type="button" class="lnk" onclick="openPick(${args})">Change</button>` : `no one named yet <button class="small" onclick="openPick(${args})">Name an owner ▾</button>`}</span>`;
+}
+async function openPick(kind, name, written, mode, idx){
+  const id = ownerSlug(kind + ':' + name + (mode ? ':' + mode : ''));
+  ui.pick = { id, kind, name, written, mode, idx, q: '', chosen: null, adding: false, removing: false, hi: 0 };
+  rePick(); await loadPeople(); rePick(true);
+}
+function closePick(){ const p = ui.pick; ui.pick = null; if (!p) return; const el = $(p.id); if (el) el.outerHTML = ownerPicker(p.kind, p.name, p.written, p.mode, p.idx); }
+function rePick(focus){ const p = ui.pick; if (!p) return; const el = $(p.id); if (!el) return; el.innerHTML = pickerInner(); el.className = 'ownerl'; if (focus !== false) { const f = el.querySelector('input.pk-find, input.pk-new, button.pk-go'); if (f) f.focus(); } }
+// the choices, in order: You, people here, teams here, other spaces, someone new
+function pickChoices(){
+  const p = ui.pick, q = foldName(p.q), all = (PEOPLE && PEOPLE.people) || [];
+  const meP = nameReady() ? personOf(ME()) : null, me = meP ? meP.name : (nameReady() ? ME() : '');
+  const hit = (n) => !q || foldName(n).includes(q);
+  const groups = [];
+  if (me && !(meP && meP.kind === 'team') && hit(me)) groups.push(['You', [{ name: me, sub: '(you)' }]]);
+  const persons = all.filter(x => x.kind === 'person' && x.name !== me && (!x.left || q) && hit(x.name)).sort((a, b) => (b.owns_count || 0) - (a.owns_count || 0) || a.name.localeCompare(b.name));
+  if (persons.length) groups.push(['People here', persons.slice(0, 30).map(x => ({ name: x.name, sub: x.left ? '(left)' : (x.owns_count ? 'owns ' + x.owns_words : '') }))]);
+  const teams = all.filter(x => x.kind === 'team' && hit(x.name) && hit(x.name)).sort((a, b) => (b.owns_count || 0) - (a.owns_count || 0) || a.name.localeCompare(b.name));
+  if (teams.length) groups.push(['Teams here', teams.slice(0, 30).map(x => ({ name: x.name, label: x.shown, sub: x.owns_count ? 'owns ' + x.owns_words : '' }))]);
+  const other = ((PEOPLE && PEOPLE.other_spaces) || []).filter(hit);
+  if (other.length) groups.push(['From your other spaces', other.slice(0, 30).map(n => ({ name: n, sub: '' }))]);
+  return groups;
+}
+function pickerInner(){
+  const p = ui.pick, what = ownerWhat(p.kind, p.name);
+  if (p.chosen !== null || p.removing) {
+    const graded = p.kind === 'metric' || p.kind === 'guardrail';
+    const t = graded ? TR(p.kind, p.name) : null;
+    const accepts = t && (t.grade === 'proposed' || !!t.changed_since || t.grade === 'ungraded');
+    const noun = p.kind === 'metric' ? 'metric' : 'guardrail';
+    const q = p.removing ? `Remove the owner of ${esc(what)}?` : `Make ${esc(owner(p.chosen))} the owner of ${esc(what)}?`;
+    if (p.mode === 'review' || p.mode === 'batch') return `<div class="pk-save"><div>${p.removing ? q : `${esc(owner(p.chosen))} will own ${esc(what)}.`}</div><div class="row"><button class="small primary pk-go" onclick="usePick()">Use ${esc(owner(p.chosen || ''))}</button><button class="small" onclick="ui.pick.chosen=null;rePick()">Back</button><button class="small" onclick="closePick()">Cancel</button></div></div>`;
+    return `<div class="pk-save"><div><b>${q}</b></div>${accepts ? `<div>Saving also accepts this ${noun} as it is now, in your name.</div>` : ''}${nameReady() ? '' : nameBoxHtml('pk-name')}<div class="row">${nameBtn(p.removing ? 'Remove as {n}' : 'Save as {n}', 'Type your name to save', 'savePick()', 'small primary pk-go')}<button class="small" onclick="closePick()">Cancel</button></div></div>`;
+  }
+  if (p.adding) {
+    return `<div class="picker"><label class="pk-g" for="pk-new">Someone new</label><input id="pk-new" class="pk-new" placeholder="A name, or a team (Growth team)" value="${esc(p.q)}" onkeydown="if(event.key==='Enter'){pickNew()}else if(event.key==='Escape'){closePick()}"><div class="hint">Names only: no emails, no logins. Up to 60 letters, digits, spaces and . - ' _ &amp; /.</div><div class="row"><button class="small primary" onclick="pickNew()">Use this name</button><button class="small" onclick="ui.pick.adding=false;rePick()">Back</button></div></div>`;
+  }
+  const groups = pickChoices();
+  let i = 0;
+  const opts = groups.map(([g, list]) => `<div class="pk-g">${esc(g)}</div>${list.map(o => { const n = i++; return `<button type="button" class="pk-o${n === p.hi ? ' on' : ''}" data-i="${n}" onclick="pickName(${jq(o.name)})"><span>${esc(o.label || owner(o.name))}${o.label && o.label !== o.name ? ` <span class="hint mono">${esc(o.name)}</span>` : ''}</span>${o.sub ? `<small>${esc(o.sub)}</small>` : ''}</button>`; }).join('')}`).join('');
+  const typed = p.q.trim(), known = groups.some(([, l]) => l.some(o => foldName(o.name) === foldName(typed)));
+  const add = typed && !known ? `<button type="button" class="pk-o" onclick="pickNew()">+ Add “${esc(typed)}”</button>` : `<button type="button" class="pk-o" onclick="ui.pick.adding=true;rePick()">+ Someone new…</button>`;
+  return `<div class="picker" role="dialog" aria-label="Pick the owner of ${esc(what)}"><input class="pk-find" placeholder="Find a person or team…" aria-label="Find a person or team" value="${esc(p.q)}" oninput="ui.pick.q=this.value;ui.pick.hi=0;const s=this.selectionStart;rePick();const f=document.querySelector('.pk-find');if(f){f.setSelectionRange(s,s)}" onkeydown="pickKeys(event)">${opts || (typed ? '' : '<div class="hint" style="padding:6px">Nobody here owns anything yet.</div>')}${add}${p.written ? `<button type="button" class="pk-o" onclick="ui.pick.removing=true;rePick()"><span class="warnc">Remove owner</span></button>` : ''}<div class="row"><button class="small" onclick="closePick()">Cancel</button></div></div>`;
+}
+function pickKeys(ev){
+  const p = ui.pick; if (!p) return;
+  const n = document.querySelectorAll(`#${p.id} .pk-o[data-i]`).length;
+  if (ev.key === 'ArrowDown') { p.hi = Math.min(n - 1, p.hi + 1); rePick(); ev.preventDefault(); }
+  else if (ev.key === 'ArrowUp') { p.hi = Math.max(0, p.hi - 1); rePick(); ev.preventDefault(); }
+  else if (ev.key === 'Enter') { const b = document.querySelector(`#${p.id} .pk-o[data-i="${p.hi}"]`); if (b) b.click(); else if (p.q.trim()) pickNew(); ev.preventDefault(); }
+  else if (ev.key === 'Escape') { closePick(); ev.preventDefault(); }
+}
+function pickName(n){ ui.pick.chosen = n; ui.pick.removing = false; rePick(); }
+function pickNew(){
+  const box = document.querySelector('.pk-new') || document.querySelector('.pk-find'); const v = ((box && box.value) || ui.pick.q || '').trim().replace(/\s+/g, ' ');
+  if (!v) return;
+  if (v.includes('@')) { note('Owners are names, not addresses: write "Finance team", not finance@…', true); return; }
+  if (!ownerOk(v)) { note('That name cannot be used: up to 60 letters, digits, spaces and . - \' _ & / (no "agent" or "via").', true); return; }
+  pickName(v);
+}
+function usePick(){
+  const p = ui.pick; if (!p) return; const v = p.removing ? '' : p.chosen;
+  if (p.mode === 'review') { setFix(p.idx, 'text', v); ui.pick = null; renderReviewAgain(); return; }
+  if (p.mode === 'batch') { ui.pp.choices[p.kind + ':' + p.name] = v; ui.pick = null; renderPeopleAgain(); return; }
+}
+async function savePick(){
+  const p = ui.pick; if (!p || !decideName()) return;
+  // closed first: the save draws the screen again, and it should show the new owner
+  ui.pick = null; PEOPLE_AT = 0;
+  const r = await patch({ op: 'set_owner', kind: p.kind, name: p.name, owner: p.removing ? '' : p.chosen });
+  if (!r || !r.written) { ui.pick = p; rePick(); }
+}
+
+// ---------- the People screen ----------
+ui.pp = { q: '', open: null, renaming: null, to: '', plan: null, page: 0, give: false, choices: {}, sees: {} };
+async function renderPeople(v){
+  v.innerHTML = main('<div class="empty">Working out who is who…</div>');
+  await loadPeople(true);
+  if (route.screen === 'people') v.innerHTML = main(peopleHtml());
+}
+function renderPeopleAgain(){ if (route.screen === 'people') { const f = document.activeElement && document.activeElement.id; $('view').innerHTML = main(peopleHtml()); if (f && $(f)) { const el = $(f); el.focus(); if (el.setSelectionRange && el.value !== undefined) el.setSelectionRange(el.value.length, el.value.length); } } }
+async function peopleDo(body){
+  const r = await post(B + '/api/people', body);
+  toast(r);
+  if (r.written) { ui.pp.renaming = null; ui.pp.open = null; ui.pp.plan = null; PEOPLE_AT = 0; await loadSummary(); await loadPeople(true); renderPeopleAgain(); }
+  return r;
+}
+let PP_TIMER = null;
+function planRename(from, to){
+  ui.pp.to = to; ui.pp.plan = null; clearTimeout(PP_TIMER);
+  if (!to.trim()) { renderPeopleAgain(); return; }
+  PP_TIMER = setTimeout(async () => { const r = await api(B + '/api/people/plan?from=' + encodeURIComponent(from) + '&to=' + encodeURIComponent(to.trim())); if (ui.pp.renaming === from && ui.pp.to === to) { ui.pp.plan = r; renderPeopleAgain(); } }, 250);
+}
+function peopleHtml(){
+  const P = PEOPLE || { people: [] }, editable = !!P.editable && !ro();
+  const q = foldName(ui.pp.q);
+  const list = P.people.filter(p => !q || foldName(p.name).includes(q) || (p.also || []).some(a => foldName(a).includes(q)));
+  const page = list.slice(ui.pp.page * 100, ui.pp.page * 100 + 100);
+  const kinds = { metric: ['metric', 'logic'], guardrail: ['guardrail', 'rules'], entity: ['entity', 'entities'], function: ['function', 'logic'] };
+  const ownsList = (p) => Object.entries(p.owns || {}).flatMap(([k, items]) => items.map(n => `<button type="button" class="lnk" onclick="${k === 'entity' ? `go('entities',${jq(n)})` : k === 'guardrail' ? `go('rules',${jq(n)})` : `go('logic')`}">${esc(k === 'metric' || k === 'function' ? labelOf(n) : n)}</button> <span class="hint">${kinds[k][0]}</span>`)).join(' · ');
+  const rows = page.map(p => {
+    const menu = editable && ui.pp.open === p.name ? `<div class="pp-menu">
+        <button class="small" onclick="ui.pp.renaming=${jq(p.name)};ui.pp.to='';ui.pp.plan=null;ui.pp.open=null;renderPeopleAgain()">Rename or merge…</button>
+        <button class="small" onclick="peopleDo({op:${jq(p.kind === 'team' ? 'person' : 'team')},name:${jq(p.name)}})">${p.kind === 'team' ? 'This is a person' : 'This is a team'}</button>
+        <button class="small" onclick="peopleDo({op:${jq(p.left ? 'back' : 'left')},name:${jq(p.name)}})">${p.left ? 'Back' : 'Left'}</button>
+        <button class="small" onclick="ui.pp.sees[${jq(p.name)}]=!ui.pp.sees[${jq(p.name)}];ui.pp.open=null;renderPeopleAgain()">See what they own</button></div>` : '';
+    const ren = ui.pp.renaming === p.name ? `<div class="also"><div class="row"><label for="pp-to">Rename ${esc(p.name)} to</label><input id="pp-to" value="${esc(ui.pp.to)}" placeholder="e.g. Vinay Karode" oninput="planRename(${jq(p.name)}, this.value)" style="max-width:240px"><button class="small" onclick="ui.pp.renaming=null;renderPeopleAgain()">Cancel</button></div>${ui.pp.plan ? (ui.pp.plan.error ? `<div class="d error">✗ ${esc(ui.pp.plan.error)}</div>` : `<div>${ui.pp.plan.merge ? `Merge ${esc(ui.pp.plan.from)} into ${esc(ui.pp.plan.to)}` : `Rename ${esc(ui.pp.plan.from)} to ${esc(ui.pp.plan.to)}`}: ${esc(ui.pp.plan.counts_words)}. History and trust.yaml stay as written.</div>${(ui.pp.plan.lossy || []).length ? `<div class="hint">${esc(ui.pp.plan.lossy.join(', '))} ${ui.pp.plan.lossy.length === 1 ? 'is' : 'are'} rewritten whole and will lose ${ui.pp.plan.lossy.length === 1 ? 'its' : 'their'} comments (owners written inside { … }).</div>` : ''}<div><button class="small primary" onclick="peopleDo({op:'rename',from:${jq(ui.pp.plan.from)},to:${jq(ui.pp.to.trim())}})">${ui.pp.plan.merge ? 'Merge' : 'Rename'}</button></div>`) : ''}</div>` : '';
+    const notes = (p.notes || []).map(n => `<div class="hint warnc">${esc(n)}</div>`).join('');
+    const seen = [p.decided ? `decided ${p.decided}` : '', p.last_seen ? `last ${shortDate(p.last_seen)}` : ''].filter(Boolean).join(' · ');
+    return `<div class="pp-row"><div><b>${esc(p.shown || p.name)}${p.left ? ' (left)' : ''}</b>${p.shown && p.shown !== p.name ? `<div class="hint mono">written ${esc(p.name)}</div>` : ''}${notes}</div><div><span class="chip">${esc(p.kind)}</span></div><div>${p.owns_count ? 'owns ' + esc(p.owns_words) : '<span class="hint">owns nothing</span>'}</div><div class="hint">${esc(seen)}</div><div>${editable ? `<button class="small" aria-expanded="${ui.pp.open === p.name}" aria-label="More for ${esc(p.name)}" onclick="ui.pp.open=ui.pp.open===${jq(p.name)}?null:${jq(p.name)};renderPeopleAgain()">⋯</button>` : ''}</div>${(p.also || []).length ? `<div class="also">also written: ${esc(p.also.join(', '))}</div>` : ''}${menu ? `<div class="also">${menu}</div>` : ''}${ui.pp.sees[p.name] ? `<div class="also">${ownsList(p) || 'Nothing yet.'}</div>` : ''}${ren}</div>`;
+  }).join('');
+  const same = (P.same_person || []).map(([a, b]) => `<div class="card" style="flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px"><span>Same person? “${esc(a)}” and “${esc(b)}”</span>${editable ? `<button class="small" onclick="peopleDo({op:'rename',from:${jq(a)},to:${jq(b)}})">Yes, merge</button><button class="small" onclick="peopleDo({op:'not_same',name:${jq(a)},other:${jq(b)}})">No, two people</button>` : ''}</div>`).join('');
+  const un = P.unowned || {}, unM = (un.metric || []).length, unG = (un.guardrail || []).length;
+  const unLine = unM + unG ? `<div class="card"><div class="row"><span>Nobody owns ${[unM ? plural(unM, 'metric') : '', unG ? plural(unG, 'guardrail') : ''].filter(Boolean).join(' and ')}.</span>${editable ? `<button class="small" onclick="ui.pp.give=!ui.pp.give;renderPeopleAgain()">${ui.pp.give ? 'Hide' : 'Give them owners'}</button>` : ''}</div>${ui.pp.give ? giveHtml(un) : ''}</div>` : '';
+  const spell = (O.diagnostics || []).filter(d => d.code === 'W119').map(d => { const m = /^(\w+) (.+): owner `(.+)` is another spelling of (.+) \(people\.yaml\)$/.exec(d.message || ''); return m ? `<div class="gline"><span class="gl-i warn">!</span><span>${esc(d.message)}${editable ? ` <button class="small" onclick="patch({op:'set_owner',kind:${jq(m[1])},name:${jq(m[2])},owner:${jq(m[4])}}).then(()=>loadPeople(true)).then(renderPeopleAgain)">Use ${esc(m[4])}</button>` : ''}</span></div>` : ''; }).join('');
+  const pager = list.length > 100 ? `<div class="row"><button class="small" ${ui.pp.page ? '' : 'disabled'} onclick="ui.pp.page--;renderPeopleAgain()">‹ Previous</button><span class="hint">${ui.pp.page * 100 + 1}–${Math.min(list.length, ui.pp.page * 100 + 100)} of ${list.length}</span><button class="small" ${(ui.pp.page + 1) * 100 < list.length ? '' : 'disabled'} onclick="ui.pp.page++;renderPeopleAgain()">Next ›</button></div>` : '';
+  return roBanner() + `<div class="row"><h1>People</h1><span style="flex:1"></span><input id="pp-find" placeholder="Find a person…" aria-label="Find a person" value="${esc(ui.pp.q)}" oninput="ui.pp.q=this.value;ui.pp.page=0;renderPeopleAgain()" style="max-width:220px"></div>
+    <div class="desc">Who owns and decides things in ${esc(O.manifest.name)}. Names only: Lorefile never asks for emails or logins. This list fills itself from owners, grades and history.</div>
+    ${spell}${rows ? `<div>${rows}</div>` : `<div class="empty">${q ? 'Nobody by that name.' : 'Nobody owns or has decided anything here yet. Name an owner on a metric, a guardrail or an entity, and they show here.'}</div>`}${pager}${same}${unLine}`;
+}
+function giveHtml(un){
+  const items = [...(un.metric || []).map(n => ['metric', n]), ...(un.guardrail || []).map(n => ['guardrail', n])].slice(0, 40);
+  const chosen = Object.entries(ui.pp.choices).filter(([, v]) => v);
+  return `<div class="col">${items.map(([k, n]) => `<div class="row" style="gap:8px"><span style="min-width:180px">${esc(k === 'metric' ? labelOf(n) : n)} <span class="hint">${k}</span></span>${ui.pp.choices[k + ':' + n] ? `<b>${esc(owner(ui.pp.choices[k + ':' + n]))}</b> <button type="button" class="lnk" onclick="delete ui.pp.choices[${jq(k + ':' + n)}];renderPeopleAgain()">Change</button>` : ownerPicker(k, n, '', 'batch')}</div>`).join('')}<div class="row">${nameBtn(`Save ${plural(chosen.length, 'owner')} as {n}`, 'Type your name to save', 'giveOwners()', 'small primary', !chosen.length)}</div>${nameReady() ? '' : nameBoxHtml('pp-name')}</div>`;
+}
+async function giveOwners(){
+  if (!decideName()) return;
+  const ops = Object.entries(ui.pp.choices).filter(([, v]) => v).slice(0, 40).map(([k, v]) => { const i = k.indexOf(':'); return { op: 'set_owner', kind: k.slice(0, i), name: k.slice(i + 1), owner: v }; });
+  if (!ops.length) return;
+  const r = await post(B + '/api/patch', { ops }); toast(r);
+  if (r.written) { ui.pp.choices = {}; ui.pp.give = false; PEOPLE_AT = 0; await loadSummary(); await loadPeople(true); renderPeopleAgain(); }
+}
+
+// ---------- areas: the card on Overview, the entity's "Move…", the new-entity form's "+ New area" (Part 3) ----------
+const areaEntities = (name) => PL ? PL.entities.filter(e => e.area === name) : [];
+async function areaOp(body, then){ const r = await patch(body); if (r && r.written) { ui.area = null; await loadPlane(true); if (then) then(r); else renderPlaneScreen(); } return r; }
+function areaCardHtml(name, editable){
+  const a = (PL.areas || []).find(x => x.name === name) || { name, entities: 0, lights: {} };
+  const listed = !!a.listed, ents = areaEntities(name), col = domainColor(name);
+  const named = (O.domains || []).find(x => x.name === name), colourName = named && named.color && AREA_COLORS[named.color] ? named.color : '';
+  const order = (O.manifest.domains || []).map(d => d.name), at = order.indexOf(name);
+  const w120 = (O.diagnostics || []).filter(d => d.code === 'W120' && (d.message || '').includes(name));
+  const move = ui.area && ui.area.moving === name;
+  const others = PL.entities.filter(e => e.area !== name);
+  const close = `<button class="small pl-close" onclick="pl.sel=null;ui.area=null;drawPlane(true)" aria-label="Close the card">Close</button>`;
+  const ed = editable && listed;
+  return `<div class="pl-card"><div class="row" style="gap:8px"><span class="swatch" style="background:${col}" aria-hidden="true"></span><h2 style="font-size:17px">${esc(name)}</h2><span class="hint">area${listed ? '' : ' · not in ontology.yaml'}</span></div>
+    ${ed ? `<div class="row" style="gap:6px"><label class="sr" for="ar-name">Area name</label><input id="ar-name" value="${esc(name)}" style="flex:1 1 140px;min-width:0"><button class="small" onclick="const v=$('ar-name').value.trim();if(v&&v!==${jq(name)})areaOp({op:'rename_area',area:${jq(name)},to:v},()=>{pl.sel='area:'+v;renderPlaneScreen()})">Rename</button></div>${O.manifest.namespace ? `<div class="hint">This space sets its own namespace, so a rename changes the area's IRI (…/domain.<i>new-name</i>).</div>` : ''}
+      <label class="sr" for="ar-desc">What the area holds</label><textarea id="ar-desc" rows="2" placeholder="What belongs here, in plain words">${esc(a.description || '')}</textarea><div><button class="small" onclick="areaOp({op:'describe_area',area:${jq(name)},text:$('ar-desc').value},()=>{pl.sel='area:'+${jq(name)};renderPlaneScreen()})">Save the words</button></div>` : (a.description ? `<div style="font-size:13.5px">${esc(a.description)}</div>` : '')}
+    <div class="hint">Colour: ${colourName ? esc(colourName) : 'the colour of its place in the list'}</div>
+    <div class="drow"><span class="hint">Entities</span><span>${ents.length ? ents.slice(0, 20).map(e => `<button type="button" class="lnk" onclick="selectItem('e:'+${jq(e.name)},{fly:true})">${esc(e.label)}</button>`).join(', ') + (ents.length > 20 ? ` <span class="hint">+${ents.length - 20} more</span>` : '') : 'no entities yet'}</span></div>
+    ${ed ? (move ? `<div class="hint">Move here: pick up to 40.</div><div class="movelist">${others.length ? others.map(e => `<label class="chk"><input type="checkbox" ${ui.area.pick && ui.area.pick[e.name] ? 'checked' : ''} onchange="ui.area.pick[${jq(e.name)}]=this.checked"> ${esc(e.label)} <span class="hint">${esc(e.area)}</span></label>`).join('') : '<div class="hint">Every entity is here already.</div>'}</div><div class="row"><button class="small primary" onclick="moveHere(${jq(name)})">Move them here</button><button class="small" onclick="ui.area=null;planeAside()">Cancel</button></div>` : `<div class="row"><button class="small" onclick="ui.area={moving:${jq(name)},pick:{}};planeAside()">Move here…</button>
+      <button class="small" ${at > 0 ? '' : 'disabled'} aria-label="Move ${esc(name)} up" onclick="reorderArea(${jq(name)},-1)">↑</button><button class="small" ${at >= 0 && at < order.length - 1 ? '' : 'disabled'} aria-label="Move ${esc(name)} down" onclick="reorderArea(${jq(name)},1)">↓</button>
+      <button class="small danger" ${ents.length ? 'disabled' : ''} onclick="if(confirm('Delete the empty area '+${jq(name)}+'?'))areaOp({op:'delete_area',area:${jq(name)}},()=>{pl.sel=null;renderPlaneScreen()})">Delete area</button></div>${ents.length ? `<div class="hint">Delete is for an empty area: move its ${plural(ents.length, 'entity', 'entities')} to another area first.</div>` : ''}`) : ''}
+    ${w120.map(d => `<div class="gline"><span class="gl-i warn">!</span><span>${esc(d.message)}</span></div>`).join('')}
+    <div class="row">${close}</div></div>`;
+}
+async function moveHere(area){
+  const names = Object.entries((ui.area && ui.area.pick) || {}).filter(([, v]) => v).map(([k]) => k).slice(0, 40);
+  if (!names.length) { note('Pick at least one entity.', true); return; }
+  await areaOp({ ops: names.map(n => ({ op: 'move_to_area', type: n, area })) }, () => { pl.sel = 'area:' + area; renderPlaneScreen(); });
+}
+async function reorderArea(name, by){
+  const order = (O.manifest.domains || []).map(d => d.name), i = order.indexOf(name), j = i + by;
+  if (i < 0 || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  await areaOp({ op: 'order_areas', order }, () => { pl.sel = 'area:' + name; renderPlaneScreen(); });
+}
+function newAreaCardHtml(){
+  const a = ui.area || { name: '', description: '' };
+  return `<div class="pl-card"><h2 style="font-size:17px">A new area</h2><div class="hint">Areas group entities on Home and in the summary agents read. Move entities into it afterwards.</div><label for="na-name">Call it</label><input id="na-name" value="${esc(a.name || '')}" placeholder="e.g. Sales" oninput="ui.area.name=this.value"><label for="na-desc">What belongs here</label><textarea id="na-desc" rows="2" oninput="ui.area.description=this.value">${esc(a.description || '')}</textarea><div class="row"><button class="small primary" onclick="addArea()">Add the area</button><button class="small" onclick="pl.sel=null;ui.area=null;drawPlane(true)">Cancel</button></div></div>`;
+}
+async function addArea(){
+  const n = ((ui.area && ui.area.name) || '').trim(); if (!n) { note('Give it a name first.', true); return; }
+  await areaOp({ op: 'add_area', name: n, description: ((ui.area && ui.area.description) || '').trim() }, () => { pl.sel = 'area:' + n; renderPlaneScreen(); });
+}
+// "Area: Pipeline · Move…" on the entity's card and page; a kind that follows its parent says so
+function areaLine(name, area, follows, parent, where){
+  const editable = !ro() && !shipped();
+  const open = ui.moveFor === name;
+  const choices = open ? `<div class="row" style="gap:4px;margin-top:4px">${(O.manifest.domains || []).map(d => d.name).filter(n => n !== area).map(n => `<button class="chip pick" onclick="moveTo(${jq(name)},${jq(n)},${jq(where || '')})">${esc(n)}</button>`).join('')}${ui.moveNew === name ? `<input id="mv-new" placeholder="New area's name" style="max-width:160px" onkeydown="if(event.key==='Enter')moveToNew(${jq(name)},${jq(where || '')})"><button class="small" onclick="moveToNew(${jq(name)},${jq(where || '')})">Add and move</button>` : `<button class="chip pick" onclick="ui.moveNew=${jq(name)};${where === 'page' ? 'render()' : 'planeAside()'}">+ New area…</button>`}<button type="button" class="lnk" onclick="ui.moveFor=null;ui.moveNew=null;${where === 'page' ? 'render()' : 'planeAside()'}">Cancel</button></div>${follows && parent ? `<div class="hint">Moving ${esc(name)} on its own gives it its own area: it stops following ${esc(parent)}.</div>` : ''}` : '';
+  return `<div class="ownerl"><span class="hint">Area</span> <b>${esc(area || 'Other')}</b>${follows && parent ? ` <span class="hint">(follows ${esc(parent)})</span>` : ''}${editable && !open ? ` · <button type="button" class="lnk" onclick="ui.moveFor=${jq(name)};ui.moveNew=null;${where === 'page' ? 'render()' : 'planeAside()'}">Move…</button>` : ''}</div>${choices}`;
+}
+async function moveTo(name, area, where){
+  const kinds = PL ? PL.entities.filter(e => e.extends === name && e.area_follows).map(e => e.name) : [];
+  if (kinds.length && !confirm(`${kinds.join(', ')} ${kinds.length === 1 ? 'follows' : 'follow'} ${name} and ${kinds.length === 1 ? 'moves' : 'move'} too. Move ${name} to ${area}?`)) return;
+  const r = await patch({ op: 'move_to_area', type: name, area });
+  if (r && r.written) { ui.moveFor = null; ui.moveNew = null; if (PL) await loadPlane(true); if (HOME_SCREENS.includes(route.screen)) renderPlaneScreen(); }
+}
+async function moveToNew(name, where){
+  const v = (($('mv-new') || {}).value || '').trim(); if (!v) { note('Give the new area a name.', true); return; }
+  const r = await patch({ ops: [{ op: 'add_area', name: v }, { op: 'move_to_area', type: name, area: v }] });
+  if (r && r.written) { ui.moveFor = null; ui.moveNew = null; if (PL) await loadPlane(true); if (HOME_SCREENS.includes(route.screen)) renderPlaneScreen(); }
+}
 
 
 // --- spaces ---
@@ -1266,7 +1658,7 @@ async function createSpace(){
   const r = await post(B + '/api/spaces', { name, from: ns.from });
   if (!r.space) { toast(r); return; }
   try { sessionStorage.setItem('lorefile-note', `✓ Created ${r.space.id} · ${historyWords(r.history)}`); } catch (e) {}
-  location.href = spaceUrl(r.space.id, '#map');
+  location.href = spaceUrl(r.space.id, '#home');
 }
 
 // --- sources ---
@@ -1285,12 +1677,12 @@ async function renderThings(v){
   // kinds sit right under their parent, indented
   const chainOf = (n) => { const out = [n]; let cur = (f.types.find(x => x.name === n) || {}).extends; while (cur && out.length < 8) { out.unshift(cur); cur = (f.types.find(x => x.name === cur) || {}).extends; } return out; };
   for (const d of O.domains) { const sorted = d.types.slice().sort((a, b) => chainOf(a.name).join('/').localeCompare(chainOf(b.name).join('/'))); list += `<h4>${esc(d.name)}</h4>` + sorted.map(t => { const ft = f.types.find(x => x.name === t.name) || {}; const gap = (ft.fields||0) - (ft.described||0); const depth = chainOf(t.name).length - 1; return `<button class="item ${route.arg===t.name?'active':''}" style="${depth ? `padding-left:${8 + depth * 14}px` : ''}" title="${ft.extends ? esc('a kind of ' + ft.extends) : ''}" onclick="go('entities',${jq(t.name)})"><span>${depth ? '↳ ' : ''}${esc(t.name)}</span>${gap?`<span class="gap">${gap}</span>`:''}</button>`; }).join(''); }
-  if (ui.newType) { v.innerHTML = `<div class="list">${list}</div>` + main(newTypeHtml()); return; }
+  if (ui.newType) { v.innerHTML = listCol(list) + main(newTypeHtml()); return; }
   const name = route.arg || (f.types[0] && f.types[0].name);
-  if (!name) { v.innerHTML = `<div class="list">${list}</div>` + main('<div class="empty">No entities yet. Create one on the left.</div>'); return; }
+  if (!name) { v.innerHTML = listCol(list) + main('<div class="empty">No entities yet. Create one on the left.</div>'); return; }
   const d = await describe(name);
-  if (d.error) { v.innerHTML = `<div class="list">${list}</div>` + main(`<div class="empty">${esc(d.error)}</div>`); return; }
-  if (ui.editor && ui.editor.file === d.file) { v.innerHTML = `<div class="list">${list}</div>` + main(editorHtml()); wireEditor(); return; }
+  if (d.error) { v.innerHTML = listCol(list) + main(`<div class="empty">${esc(d.error)}</div>`); return; }
+  if (ui.editor && ui.editor.file === d.file) { v.innerHTML = listCol(list) + main(editorHtml()); wireEditor(); return; }
   const tabs = [['fields','Fields'],['links','Links'],['rules','Guardrails'],['data','Data'],['yaml','YAML']].map(([k, l]) => `<button class="${ui.typeTab===k?'on':''}" onclick="ui.typeTab='${k}';render()">${l}</button>`).join('');
   let body = '';
   if (ui.typeTab === 'fields') {
@@ -1318,10 +1710,11 @@ async function renderThings(v){
     <textarea rows="2" class="${d.description?'':'need'}" style="max-width:820px" placeholder="What is a ${esc(d.name)}, in plain words?" ${ro()?'disabled':''} onchange="patch({op:'set_type_description',type:${jq(d.name)},text:this.value})">${esc(d.description)}</textarea>
     ${(O.glossary || []).filter(g => g.means === d.name).length ? `<div class="row" style="gap:6px"><span class="hint">People also say</span>${(O.glossary || []).filter(g => g.means === d.name).map(g => `<span class="chip" style="margin:0">“${esc(g.term)}”</span>${gradeChip('term', g.term)}${gradeButtons('term', g.term)}`).join('')}</div>` : ''}
     ${d.iri ? `<div class="hint" title="The standard identity other tools (OWL, SKOS, SHACL, Apache Ossie) know this entity by. Set it with iri: in the YAML.">IRI <span class="mono">${esc(d.iri)}</span></div>` : ''}
+    <div class="row" style="gap:18px">${areaLine(d.name, d.domain, !!d.domain_follows, d.extends, 'page')}${ownerPicker('entity', d.name, d.owner || '')}</div>
     ${kindsLine}
     ${adviceFor(d.name)}
     <div class="tabs">${tabs}</div>${body}`;
-  v.innerHTML = `<div class="list">${list}</div>` + main(inner);
+  v.innerHTML = listCol(list) + main(inner);
 }
 function linkRow(from, name, to, card, desc, incoming){
   return `<div class="card ${desc?'':'need'}" style="flex-direction:row;align-items:center;gap:12px;flex-wrap:wrap"><span><b>${esc(from)}</b> <span class="mono" style="color:var(--muted)">${esc(name)}</span> <b>${esc(to)}</b></span><span class="mono" style="color:var(--muted)">${esc(card)}</span><input style="flex:1 1 240px" value="${esc(desc||'')}" placeholder="Add one sentence: what does this mean?" ${ro()?'disabled':''} onchange="patch({op:'set_relationship_description',type:${jq(from)},relationship:${jq(name)},text:this.value})"></div>`;
@@ -1342,13 +1735,13 @@ async function dataTab(d){
   h += `<h4 style="padding:0">${w.connection ? 'Change the binding' : 'Bind a table'}</h4><div class="form"><label>Connection</label><select id="bind-conn" ${ro()?'disabled':''}>${(O.sources||[]).map(s => `<option value="${esc(s.connection)}" ${w.connection===s.connection?'selected':''}>${esc(s.connection)} (${esc(s.kind)})</option>`).join('')}</select><label>Table</label><input id="bind-table" class="mono" value="${esc(w.table||'')}" placeholder="e.g. ${esc(snake(d.name))}s" ${ro()?'disabled':''}><label>Identified by</label><select id="bind-key" ${ro()?'disabled':''}>${d.properties.map(p => `<option value="${esc(p.name)}" ${(d.key===p.name)?'selected':''}>${esc(p.name)}</option>`).join('')}</select><span></span><div><button class="primary small" ${ro()?'disabled':''} onclick="patch({op:'set_source',type:${jq(d.name)},connection:$('bind-conn').value,table:$('bind-table').value,key:$('bind-key').value})">Save binding</button></div></div>`;
   return h;
 }
-function newTypeForm(extendsName){ const p = extendsName && (O.types || []).find(t => t.name === extendsName); ui.newType = { name: '', domain: (p && p.domain) || (O.domains[0] || {}).name || '', desc: '', extends: extendsName || '' }; if (route.screen !== 'entities') go('entities'); render(); }
+function newTypeForm(extendsName){ const p = extendsName && (O.types || []).find(t => t.name === extendsName); ui.newType = { name: '', domain: (p && p.domain) || ((O.manifest.domains || [])[0] || {}).name || '', desc: '', extends: extendsName || '', newArea: (O.manifest.domains || []).length ? null : '' }; if (route.screen !== 'entities') go('entities'); render(); }
 function newTypeHtml(){
   const n = ui.newType;
-  return `<h1>${n.extends ? `A new kind of ${esc(n.extends)}` : 'A new entity'}</h1>${n.extends ? `<div class="desc">It gets every field, link and guardrail of ${esc(n.extends)}; add only what is its own. Its rows: give it a source of its own, or say which of ${esc(n.extends)}'s rows are its (\`where:\` in the YAML).</div>` : ''}<div class="form"><label>Call it</label><input id="nt-name" value="${esc(n.name)}" placeholder="e.g. GiftCard" oninput="ui.newType.name=this.value"><label>Which area</label><div>${O.domains.map(d => `<span class="chip pick ${n.domain===d.name?'on':''}" onclick="ui.newType.domain=${jq(d.name)};render()">${esc(d.name)}</span>`).join('')}</div><label>In plain words</label><textarea id="nt-desc" rows="3" placeholder="What is it, who owns it, what matters about it" oninput="ui.newType.desc=this.value">${esc(n.desc)}</textarea><span></span><div class="row"><button class="primary" onclick="saveNewType()">Create it</button><button onclick="ui.newType=null;render()">Cancel</button><span style="font-size:12.5px;color:var(--muted)">Fields, links and guardrails come next, on its own page.</span></div></div>
+  return `<h1>${n.extends ? `A new kind of ${esc(n.extends)}` : 'A new entity'}</h1>${n.extends ? `<div class="desc">It gets every field, link and guardrail of ${esc(n.extends)}; add only what is its own. Its rows: give it a source of its own, or say which of ${esc(n.extends)}'s rows are its (\`where:\` in the YAML).</div>` : ''}<div class="form"><label>Call it</label><input id="nt-name" value="${esc(n.name)}" placeholder="e.g. GiftCard" oninput="ui.newType.name=this.value"><label>Which area</label><div>${(O.manifest.domains || []).map(d => `<span class="chip pick ${n.domain===d.name && !n.newArea?'on':''}" onclick="ui.newType.domain=${jq(d.name)};ui.newType.newArea=null;render()">${esc(d.name)}</span>`).join('')}${n.newArea !== null && n.newArea !== undefined ? `<input id="nt-area" value="${esc(n.newArea)}" placeholder="The new area's name" style="max-width:200px" oninput="ui.newType.newArea=this.value">` : `<span class="chip pick" onclick="ui.newType.newArea='';render();setTimeout(()=>{const i=$('nt-area');if(i)i.focus()},30)">+ New area</span>`}</div><label>In plain words</label><textarea id="nt-desc" rows="3" placeholder="What is it, who owns it, what matters about it" oninput="ui.newType.desc=this.value">${esc(n.desc)}</textarea><span></span><div class="row"><button class="primary" onclick="saveNewType()">Create it</button><button onclick="ui.newType=null;render()">Cancel</button><span style="font-size:12.5px;color:var(--muted)">Fields, links and guardrails come next, on its own page.</span></div></div>
   <div class="desc" style="margin-top:14px">Prefer the raw file? <a onclick="ui.newType=null;startNew('type')">Create from the YAML template</a>.</div>`;
 }
-async function saveNewType(){ const n = ui.newType; if (!n.name.trim()) { toast({ error: 'Give it a name first.' }); return; } const r = await patch(Object.assign({ op: 'add_type', name: n.name.trim(), domain: n.domain, description: n.desc }, n.extends ? { extends: n.extends } : {})); if (r && r.written) { ui.newType = null; ui.typeTab = 'fields'; go('entities', r.name || n.name.trim()); } }
+async function saveNewType(){ const n = ui.newType; if (!n.name.trim()) { toast({ error: 'Give it a name first.' }); return; } const area = (n.newArea || '').trim(); const add = Object.assign({ op: 'add_type', name: n.name.trim(), domain: area || n.domain, description: n.desc }, n.extends ? { extends: n.extends } : {}); const r = await patch(area ? { ops: [{ op: 'add_area', name: area }, add] } : add); if (r && r.written) { ui.newType = null; ui.typeTab = 'fields'; go('entities', area ? n.name.trim() : (r.name || n.name.trim())); } }
 
 // --- links ---
 function renderLinks(v){
@@ -1373,15 +1766,7 @@ const sourceWords = (conn) => { const s = (O.sources || []).find(x => x.connecti
 const BASIS_WORDS = { transactional: 'counted from records, not modelled', attributed: 'credited to channels by an attribution model', modelled: 'estimated by a model', experimental: 'measured by an experiment' };
 const formulaOf = (s) => s ? `${s.tool ? 'tool ' + s.tool + (s.params && Object.keys(s.params).length ? ' ' + JSON.stringify(s.params) : '') + ' · ' : ''}${s.measure || 'count(*)'}${s.filter ? ' where ' + s.filter : ''}` : '';
 // the owner of a metric, in a line: who decides what it means. Empty: a box to name one (set_metric).
-function ownerLine(m){
-  if (m.owner) return `<div class="gline"><span class="gl-i" aria-hidden="true">·</span><span>Owner: <b>${esc(owner(m.owner))}</b> <span class="hint">who decides what this metric means</span></span></div>`;
-  if (ro()) return `<div class="gline"><span class="gl-i warn" aria-hidden="true">!</span><span>Owner: no one named yet <span class="hint">who decides what this metric means</span></span></div>`;
-  const id = 'ow-' + m.name.replace(/[^\w-]/g, '_');
-  // a person's save through Lorefile counts as looking at it: an unverified or changed metric is accepted as it is now
-  const t = TR('metric', m.name), accepts = t.grade === 'proposed' || !!t.changed_since;
-  return `<div class="gline owner-fix"><span class="gl-i warn" aria-hidden="true">!</span><span class="row" style="gap:6px;flex-wrap:wrap"><label for="${id}">Owner:</label><input id="${id}" class="owner-box" value="${esc(ME())}" placeholder="a name or a team" style="max-width:220px"><button class="small" onclick="saveOwner(${jq(m.name)}, ${jq(id)})">Save</button><span class="hint">${accepts ? '<b>saving also accepts this metric as it is now</b> · ' : ''}who decides what this metric means</span></span></div>`;
-}
-async function saveOwner(metric, id){ const v = ($(id) || {}).value || ''; if (!v.trim()) { note('Type a name or a team first.', true); return; } await patch({ op: 'set_metric', metric, owner: v.trim() }); }
+function ownerLine(m){ return `<div class="gline owner-fix"><span class="gl-i ${m.owner ? '' : 'warn'}" aria-hidden="true">${m.owner ? '·' : '!'}</span><span>${ownerPicker('metric', m.name, m.owner || '')} <span class="hint">who decides what this metric means</span></span></div>`; }
 function renderLogic(v){
   const f = facts();
   ui.open = ui.open || {};
@@ -1402,14 +1787,14 @@ function renderLogic(v){
   const fcards = f.fns.map(fn => {
     const takes = `Takes ${esc(ioText(fn.inputs))}, gives ${esc(ioText(fn.outputs))}`;
     const details = det('f:' + fn.name, drow('In', `<span class="mono">${esc(ioText(fn.inputs))}</span>`) + drow('Out', `<span class="mono">${esc(ioText(fn.outputs))}</span>`) + drow('Runs', esc(runsText(fn.runs))) + ((fn.may_be_called_by||[]).length ? drow('Called by', esc(fn.may_be_called_by.join(', '))) : '') + drow('Name', `<span class="mono">${esc(fn.name)}</span> · <span class="mono hint">${esc(fn.file)}</span> ${yamlBtn(fn.file, fn.name, 'function')}`));
-    return `<div class="card ${fn.runs?'':'need'}"><div class="row"><b style="font-size:15px">${esc(labelOf(fn.name))}</b><span class="chip" style="margin-left:auto">${esc((fn.runs||{}).kind || 'runs where?')}</span></div><div style="font-size:14px">${esc(fn.description || 'No description yet.')}</div><div style="font-size:13px">${takes}</div><div style="font-size:12.5px;color:var(--muted)">Runs: ${esc(runsText(fn.runs))}</div>${fn.caveats ? `<div style="font-size:12.5px">Caveat: ${esc(fn.caveats)}</div>` : ''}<div class="gline"><span class="gl-i ${fn.owner ? '' : 'warn'}" aria-hidden="true">${fn.owner ? '·' : '!'}</span><span>Owner: ${fn.owner ? `<b>${esc(owner(fn.owner))}</b>` : 'no one named yet'}</span></div>${details}</div>`;
+    return `<div class="card ${fn.runs?'':'need'}"><div class="row"><b style="font-size:15px">${esc(labelOf(fn.name))}</b><span class="chip" style="margin-left:auto">${esc((fn.runs||{}).kind || 'runs where?')}</span></div><div style="font-size:14px">${esc(fn.description || 'No description yet.')}</div><div style="font-size:13px">${takes}</div><div style="font-size:12.5px;color:var(--muted)">Runs: ${esc(runsText(fn.runs))}</div>${fn.caveats ? `<div style="font-size:12.5px">Caveat: ${esc(fn.caveats)}</div>` : ''}<div class="gline"><span class="gl-i ${fn.owner ? '' : 'warn'}" aria-hidden="true">${fn.owner ? '·' : '!'}</span>${ownerPicker('function', fn.name, fn.owner || '')}</div>${details}</div>`;
   }).join('');
   const emptyM = f.metrics.length ? '' : `<div class="card need"><b>No metrics yet</b><div style="font-size:13px;color:var(--muted)">Start with <span class="mono">success</span>: the one number this business is run on, and where it comes from. The first time an agent does the reporting it can save this for you with <span class="mono">propose_patch</span>; you accept it under Agents.</div></div>`;
   const emptyF = f.fns.length ? '' : `<div class="card need"><b>No functions yet</b><div style="font-size:13px;color:var(--muted)">A function is a contract plus a pointer: inputs, outputs, and the MCP tool or endpoint that does the work. Forecasting, cancelling an order, moving a budget. Agents read it to know what to call.</div></div>`;
   v.innerHTML = main(roBanner() + stepHead(4, 'Logic', 'The metrics and the functions of this business, written down once so every agent uses the same ones.') + intro + nameBar()
     + `<h4 style="padding:0">Metrics · ${f.metrics.length}</h4>` + hintLine(['metric', 'function', 'source']) + (f.metrics.length ? gradeMeaning() : '') + emptyM + mcards + `<div><button class="small" ${ro()?'disabled':''} onclick="startNew('metric')">+ New metric</button></div>`
     + `<h4 style="padding:0">Functions · ${f.fns.length}</h4>` + emptyF + fcards + `<div><button class="small" ${ro()?'disabled':''} onclick="startNew('function')">+ New function</button></div>`);
-  if (ui.focusOwner) { ui.focusOwner = false; const b = document.querySelector('.owner-box'); if (b) { b.scrollIntoView({ block: 'center' }); b.focus(); } }
+  if (ui.focusOwner) { ui.focusOwner = false; const b = document.querySelector('.owner-fix button'); if (b) { b.scrollIntoView({ block: 'center' }); b.focus(); } }
 }
 
 // --- how to use it ---
@@ -1447,7 +1832,7 @@ async function renderFiles(v){
   for (const [g, fs] of Object.entries(groups)) list += `<h4>${esc(g)}</h4>` + fs.map(fp => `<button class="item ${ui.file===fp?'active':''}" onclick="ui.file=${jq(fp)};render()">${esc(fp.includes('/') ? fp.split('/').slice(1).join('/') : fp)}</button>`).join('');
   const g = ui.file && ui.file.includes('/') ? ui.file.split('/')[0] + '/' : '(root)';
   const isTrust = ui.file === 'trust.yaml';
-  v.innerHTML = `<div class="list">${list}</div>` + main(isTrust ? `<div><div class="step-label">Files</div><h1>trust.yaml</h1><div class="desc">Who stands behind what. Written by Lorefile when a person accepts or checks something, one line per graded thing; agents cannot change it, and the page does not edit it by hand. A line whose definition changed since stops counting until a person looks again.</div></div><pre id="file-view" class="yaml" style="min-height:200px">…</pre>` : `<div><div class="step-label">Files</div><h1>${esc(ui.file || 'No files')}</h1><div class="desc">${esc(FOLDER_NOTES[g] || '')} Everything the agent knows is in files like this one; the other pages are friendlier views of them. You rarely write one by hand: the builders and <span class="mono">propose_patch</span> do, and you read and accept.</div></div><pre id="file-view" class="yaml" style="min-height:200px">…</pre><div class="row">${ui.file ? yamlBtn(ui.file, ui.file, 'file', 'Edit this file') : ''}</div>`);
+  v.innerHTML = listCol(list) + main(isTrust ? `<div><div class="step-label">Files</div><h1>trust.yaml</h1><div class="desc">Who stands behind what. Written by Lorefile when a person accepts or checks something, one line per graded thing; agents cannot change it, and the page does not edit it by hand. A line whose definition changed since stops counting until a person looks again.</div></div><pre id="file-view" class="yaml" style="min-height:200px">…</pre>` : `<div><div class="step-label">Files</div><h1>${esc(ui.file || 'No files')}</h1><div class="desc">${esc(FOLDER_NOTES[g] || '')} Everything the agent knows is in files like this one; the other pages are friendlier views of them. You rarely write one by hand: the builders and <span class="mono">propose_patch</span> do, and you read and accept.</div></div><pre id="file-view" class="yaml" style="min-height:200px">…</pre><div class="row">${ui.file ? yamlBtn(ui.file, ui.file, 'file', 'Edit this file') : ''}</div>`);
   if (ui.file) { const y = await fetch(B + '/api/yaml?file=' + encodeURIComponent(ui.file)).then(r => r.text()); const el = $('file-view'); if (el) el.textContent = y; }
 }
 
@@ -1535,13 +1920,14 @@ function connectorRecipes(){
 // --- settings ---
 function saveMe(){ const v = $('me-name').value.trim(); if (v && !nameOk(v)) { note('That name cannot be used. ' + NAME_RULE, true); return; } setMe(v); note(v ? `Saved: what you accept and check here says ${v}` : 'Name cleared: decisions here wait until you type one'); }
 async function renderSettings(v){
+  await loadPeople();
   const g = await api(B + '/api/git');
   await loadOAuth();
   const vc = historyCard(g);
   const row = (k, val) => `<tr><th style="width:200px">${k}</th><td>${val}</td></tr>`;
   const editRow = O.editable ? 'on' + (O.commit_edits ? ', each change is saved to history' : (nested() ? ', changes stay uncommitted until you commit above' : ', history is off')) : 'off · start with <code>--allow-edit</code>';
   const server = `<div class="card"><b>This server</b><table>${row('Version', esc(O.version || ''))}${row('Folder of spaces', `<code>${esc(O.root)}</code>${O.single ? ' (one ontology folder)' : ''}`)}${row('This space', `<code>${esc(O.dir)}</code>`)}${row('Edit mode', editRow)}${row('Shipped examples', (SPACES && SPACES.spaces.some(s => s.builtin)) ? 'shown in the picker, read-only · hide with <code>--no-examples</code>' : 'hidden')}${row('MCP for agents', `<div class="col"><div class="hint">On this machine (stdio: Claude Desktop, Cursor, or a <code>.mcp.json</code> next to the code for Claude Code)</div>${cmdRow(stdioCmd(), 'stdio')}<div class="hint">From a container or another machine (HTTP: Claude Code)</div>${cmdRow(httpCmd(MASK), 'http')}${connectorRow()}<div class="hint">${loginOn() ? 'The copy button copies the real token. ' : ''}${esc(DESKTOP_HTTPS)}${O.single ? '' : ` Tool calls say <code>space: "${esc(O.space.id)}"</code>.`}</div></div>`)}${row('Sign in', loginOn() ? `with the token the server printed · <a onclick="signOut()">Sign out</a>` : 'off (<code>--no-auth</code>): anyone who can reach this address can open it')}${row('Export for other tools', `<div class="col"><div><b>Apache Ossie</b> · <a href="${B}/api/export?format=ossie" download>Download</a> (one JSON file)</div><div class="hint">The semantic model, ontology and mapping that Snowflake, dbt, Cube, Atlan, DataHub and NVIDIA's Auto Ontology read, in Apache Ossie's draft format. Guardrails, actions and sources ride along in a part those tools keep but do not use, so importing it back loses nothing. As YAML files: <code>lorefile export --ossie --dir ${esc(O.dir)} --out ossie</code></div>${O.rdf ? `<div><b>OWL, SKOS and SHACL</b> · <a href="${B}/api/export?format=turtle" download>Turtle</a> · <a href="${B}/api/export?format=jsonld" download>JSON-LD</a></div><div class="hint">One graph for Protégé, GraphDB, Stardog or TopBraid: entities as OWL classes, words as SKOS labels, guardrails as SHACL shapes. Actions, metrics and sources ride along as lorefile: statements, so importing it back loses nothing. Every IRI starts with <code>${esc(O.namespace || '')}</code> unless an entity sets its own. <code>lorefile export --rdf --dir ${esc(O.dir)} --out space.ttl</code></div>` : `<div class="hint">OWL, SKOS and SHACL export is not in this build (built without the <code>rdf</code> feature).</div>`}</div>`)}</table></div>`;
-  const me = `<div class="card"><b>Your name, shown on what you accept and check</b><div class="row"><input id="me-name" style="width:260px" value="${esc(ME())}" placeholder="e.g. Priya"><button class="small" onclick="saveMe()">Save</button></div><div class="hint">Kept in this browser only. It goes with every change you make here, so history and trust.yaml say "Priya via page" instead of "person via page". There are no accounts yet, so it is the name you typed, not a sign-in. Accepting, setting aside and checking on this page wait until there is one. ${esc(NAME_RULE)}</div></div>`;
+  const me = `<div class="card"><b>Your name, shown on what you accept and check</b><div class="row"><input id="me-name" style="width:260px" value="${esc(ME())}" placeholder="e.g. Priya" list="people-names" oninput="$('me-hint').innerHTML=spellingHint(this.value.trim())">${peopleDatalist()}<span id="me-hint"></span><button class="small" onclick="saveMe()">Save</button></div><div class="hint">Kept in this browser only. It goes with every change you make here, so history and trust.yaml say "Priya via page" instead of "person via page". There are no accounts yet, so it is the name you typed, not a sign-in. Accepting, setting aside and checking on this page wait until there is one. ${esc(NAME_RULE)}</div></div>`;
   const words = `<div class="card"><b>Words Lorefile uses</b><table>${Object.values(HINTS).map(([w, h]) => `<tr><td style="font-weight:600;white-space:nowrap;padding-right:14px">${esc(w)}</td><td>${esc(h)}</td></tr>`).join('')}</table><div class="hint">The sidebar, the review screen, the YAML keys and what agents say use these same words.</div></div>`;
   const who = `<div class="card"><b>Who writes the YAML</b><div style="font-size:13px">Agents and the builders on these pages, not people. An agent saves what it settles with <span class="mono">propose_patch</span>; the page turns a form into a file; the compiler checks both before anything is written. The YAML editor stays for the rare hand fix, and Files lets you read what the agent reads.</div></div>`;
   v.innerHTML = main(`<h1>Settings</h1><div class="desc">Where this space lives, how its history is kept and shared, and how agents connect.</div>` + vc + me + words + server + connectionsCard() + who);
@@ -1660,7 +2046,7 @@ async function renderRules(v){
   const groups = keys.map(k => { const rel = f.rels.find(r => r.name === k); const act = (O.actions||[]).find(a => a.action === k); const title = rel ? `When linking ${rel.from} to ${rel.to} (${k})` : (act ? `When running ${human(k).toLowerCase()}` : k); return `<h4 style="padding:0">${esc(title)}</h4>` + rules.filter(c => c.applies_to === k).map(c => `<button class="card ${selId===c.id?'sel':''}" style="width:100%;text-align:left;cursor:pointer" onclick="go('rules',${jq(c.id)})"><div class="row">${sev(c.severity)}<b>${esc(c.name)}</b><span class="mono" style="color:var(--faint)">${esc(c.id)}</span><span style="margin-left:auto"></span>${gradeChip('guardrail', c.id)}</div><div style="font-size:12.5px;color:var(--muted)">${esc(whenOf(c))} · ${esc(owner(c.owner))}</div></button>`).join(''); }).join('');
   const c = f.rules.find(x => x.id === selId);
   let side = '';
-  if (c) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row">${sev(c.severity)}<span class="mono" style="color:var(--faint)">${esc(c.id)}</span></div><b style="font-size:16px;line-height:1.3">${esc(c.name)}</b><div style="font-size:13px">${esc(c.rationale||'')}</div><div style="font-size:12.5px;color:var(--muted)">Checked ${esc(whenOf(c))} · sign-off: ${esc(owner(c.owner))}</div><div class="row">${gradeChip('guardrail', c.id)}</div>${gradeLine('guardrail', c.id)}${nameBar()}<h4 style="padding:0">How it is written</h4><code class="block">${esc(c.rule)}</code><div class="row">${yamlBtn(c.file, c.id, 'constraint', 'Edit in ' + c.file, 'View in ' + c.file)}</div></div>`;
+  if (c) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row">${sev(c.severity)}<span class="mono" style="color:var(--faint)">${esc(c.id)}</span></div><b style="font-size:16px;line-height:1.3">${esc(c.name)}</b><div style="font-size:13px">${esc(c.rationale||'')}</div><div style="font-size:12.5px;color:var(--muted)">Checked ${esc(whenOf(c))}</div><div>${ownerPicker('guardrail', c.id, c.owner || '')} <span class="hint">who signs off on it</span></div><div class="row">${gradeChip('guardrail', c.id)}</div>${gradeLine('guardrail', c.id)}${nameBar()}<h4 style="padding:0">How it is written</h4><code class="block">${esc(c.rule)}</code><div class="row">${yamlBtn(c.file, c.id, 'constraint', 'Edit in ' + c.file, 'View in ' + c.file)}</div></div>`;
   const things = f.types.map(t => t.name); const links = f.rels.map(r => r.name).filter((x, i, a) => a.indexOf(x) === i); const acts = (O.actions||[]).map(a => a.action);
   if (!ui.rf.applies) ui.rf.applies = things[0] || '';
   const isType = things.includes(ui.rf.applies);
@@ -1678,7 +2064,7 @@ async function renderRules(v){
     <label style="font-size:12px;color:var(--muted)">Why it exists</label><input value="${esc(ui.rf.why)}" placeholder="The policy or the incident behind it" ${ro()?'disabled':''} oninput="ui.rf.why=this.value">
     <label style="font-size:12px;color:var(--muted)">Who signs off (an email or a team)</label><input value="${esc(ui.rf.who)}" placeholder="e.g. payments@acme.example" ${ro()?'disabled':''} oninput="ui.rf.who=this.value">
     <div class="row"><button class="primary" ${ro()?'disabled':''} onclick="addRule()">Add guardrail</button><button class="small" ${ro()?'disabled':''} onclick="startNew('constraint')">YAML instead</button></div>`;
-  v.innerHTML = main(roBanner() + stepHead(5, 'Guardrails', 'What agents check before they act. Each one is a sentence first and an expression second.') + `<div class="row">${filters}<input style="margin-left:auto;width:240px" placeholder="Filter by entity or words…" value="${esc(ui.ruleQuery)}" oninput="ui.ruleQuery=this.value;render()"></div>` + (groups || '<div class="empty">No guardrails match.</div>'), `<div class="aside">${side}</div>`);
+  v.innerHTML = main(roBanner() + stepHead(5, 'Guardrails', 'What agents check before they act. Each one is a sentence first and an expression second.') + `<div class="row">${filters}<input style="margin-left:auto;width:240px" placeholder="Filter by entity or words…" value="${esc(ui.ruleQuery)}" oninput="ui.ruleQuery=this.value;render()"></div>` + (groups || '<div class="empty">No guardrails match.</div>'), `<div class="aside foldable">${asideHead()}${side}${asideStrip('shield', selId ? 'Guardrail ' + selId : 'Add a guardrail')}</div>`);
 }
 function composeRule(){ const v = ui.rf.value; const lit = v === '' ? '…' : (isNaN(Number(v)) && !['true','false'].includes(v) ? JSON.stringify(v) : v); return `${ui.rf.field} ${ui.rf.op} ${lit}`; }
 async function addRule(){
@@ -1693,16 +2079,16 @@ async function addRule(){
 async function renderActions(v){
   const acts = O.actions || []; const name = route.arg || (acts[0] && acts[0].action);
   const list = `<h4>What agents may do</h4>` + acts.map(a => `<button class="item ${name===a.action?'active':''}" onclick="go('actions',${jq(a.action)})"><span>${esc(human(a.action))}</span></button>`).join('') + `<button class="small" style="margin:8px 4px 0" ${ro()?'disabled':''} onclick="startNew('action')">+ New action</button>`;
-  if (!name) { v.innerHTML = `<div class="list">${list}</div>` + main('<div class="empty">No actions yet.</div>'); return; }
+  if (!name) { v.innerHTML = listCol(list) + main('<div class="empty">No actions yet.</div>'); return; }
   const d = await describe(name);
-  if (ui.editor && ui.editor.file === d.file) { v.innerHTML = `<div class="list">${list}</div>` + main(editorHtml()); wireEditor(); return; }
+  if (ui.editor && ui.editor.file === d.file) { v.innerHTML = listCol(list) + main(editorHtml()); wireEditor(); return; }
   const inputs = Object.entries(d.inputs || {});
   const checks = (d.checks || []).map(c => `<div class="row" style="font-size:13.5px">${sev(c.severity)}<span>${esc(c.name)}</span><a class="mono" style="color:var(--faint)" onclick="go('rules',${jq(c.id)})">${esc(c.id)}</a></div>`).join('');
   const form = inputs.map(([k, t]) => `<label><span class="mono">${esc(k)}</span> · ${esc(t)}</label><input id="try-${esc(k)}" class="mono" value="${esc(ui.tryInputs[name+'.'+k] || '')}" placeholder="${esc(t)} key, or inline JSON like {&quot;status&quot;:&quot;open&quot;}" oninput="ui.tryInputs['${esc(name)}.${esc(k)}']=this.value">`).join('');
   let result = '';
   const R = ui.tryResult && ui.tryResult.action === name ? ui.tryResult.rep : null;
   if (R) result = `<div class="verdict ${R.verdict}">${esc(R.summary)}</div>` + (R.results||[]).map(x => `<div class="res"><b style="width:14px;color:${x.passed?'var(--ok)':(x.severity==='block'?'var(--block)':'var(--warn)')}">${x.passed?'✓':(x.severity==='block'?'✕':'!')}</b><span><span class="mono" style="color:var(--faint)">${esc(x.id)}</span> ${esc(x.name)} <span style="color:var(--muted)">${esc(x.message)}${x.error?' · '+esc(x.error):''}</span></span></div>`).join('') + (R.suggestions && R.suggestions.length ? `<h4 style="padding:0">Would pass instead</h4>` + R.suggestions.map(s => `<div style="font-size:13px"><span class="mono">${esc(s.input)}</span> → ${esc(s.label)}</div>`).join('') : '') + (R.requires_approval_from ? `<div style="font-size:13px;margin-top:6px"><span style="color:var(--muted)">Sign-off:</span> ${esc(R.requires_approval_from)}</div>` : '') + (R.notes||[]).map(n => `<div style="font-size:12.5px;color:var(--muted)">${esc(n)}</div>`).join('');
-  v.innerHTML = `<div class="list">${list}</div>` + main(roBanner() + `<div class="row"><h1>${esc(human(d.name))}</h1><span class="mono" style="margin-left:auto;color:var(--faint)">${esc(d.file)}</span>${yamlBtn(d.file, d.name, 'action')}</div><div class="desc">${esc(d.description)}</div>
+  v.innerHTML = listCol(list) + main(roBanner() + `<div class="row"><h1>${esc(human(d.name))}</h1><span class="mono" style="margin-left:auto;color:var(--faint)">${esc(d.file)}</span>${yamlBtn(d.file, d.name, 'action')}</div><div class="desc">${esc(d.description)}</div>
     <div style="display:flex;gap:20px;flex-wrap:wrap"><div style="flex:1 1 320px;display:flex;flex-direction:column;gap:8px"><h4 style="padding:0">Checks before it happens</h4>${checks || '<div style="color:var(--muted)">None</div>'}<div style="font-size:13px;margin-top:6px"><span style="color:var(--muted)">Sign-off:</span> ${esc(d.requires_approval_from||'nobody named')}</div><div style="font-size:13px"><span style="color:var(--muted)">Then:</span> ${esc(d.side_effects||'')}</div>${(d.effects||[]).length?`<div style="font-size:13px"><span style="color:var(--muted)">Links it changes:</span> ${d.effects.map(e => e.create?`creates ${esc(e.create.relationship)}`:(e.remove?`removes ${esc(e.remove.relationship)}`:'')).join(', ')}</div>`:''}</div>
     <div class="card" style="flex:1 1 320px"><b>Try it, exactly as an agent would</b><div class="form" style="grid-template-columns:170px 1fr">${form}</div><div><button class="primary" onclick="runTry(${jq(name)})">Run the checks</button></div>${result}</div></div>`);
 }
@@ -1777,14 +2163,14 @@ const KIND_HINT = { entity: 'entity', metric: 'metric', source: 'source', link: 
 let RV = null;
 async function renderReview(v){
   const [id, sub] = route.arg.split('/');
-  if (sub === 'map') return renderReviewMap(v, id);
+  if (sub === 'graph' || sub === 'map') return renderReviewMap(v, id);
   v.innerHTML = main('<div class="empty">Loading the review…</div>');
   const r = await api(B + '/api/proposals/' + encodeURIComponent(id) + '/review');
   if (r.missing || r.error) { v.innerHTML = main(`<h1>Review</h1><div class="card"><b>${esc(r.error || ('There is no proposal ' + id))}</b><div class="hint">It may be in another space, or the link is wrong.</div><button class="small" style="align-self:flex-start" onclick="go('agents')">Go to Agents</button></div>`); return; }
   const fresh = !(ui.rv && ui.rv.id === r.id);
   RV = r; ui.rv = fresh ? { id: r.id, all: {}, files: false, why: null, fixes: {}, confirmRemove: false } : ui.rv;
-  // who owns a new metric: prefilled with your name, so it is hard to miss; clear it to leave it for later
-  if (fresh && r.status === 'pending') (r.questions || []).forEach((q, i) => { const f = q.fix || {}; if (q.ask && f.op === 'set_metric' && f.field === 'owner' && ME()) ui.rv.fixes[i] = { text: ME(), prefilled: true }; });
+  // who owns a new metric: a picker, never filled in for you (Part 1, decision 7)
+  if (fresh) loadPeople();
   v.innerHTML = main(reviewHtml(r));
 }
 function changeHtml(c){
@@ -1827,7 +2213,7 @@ function questionHtml(q, i, editable){
     return `<div class="rv-q"><label for="fx-${i}"><b>? ${esc(q.ask)}</b> <span class="hint">(optional)</span></label><div class="row"><select id="fx-${i}" ${editable ? '' : 'disabled'} onchange="setFix(${i},'pick',this.value)"><option value="">Leave it for later</option>${nums}${key}<option value="count:*" ${val.pick === 'count:*' ? 'selected' : ''}>count the rows</option></select>${flags ? `<label class="hint" for="fx-${i}-lo">leave out rows where</label><select id="fx-${i}-lo" ${editable ? '' : 'disabled'} onchange="setFix(${i},'leave_out',this.value)"><option value="">(nothing)</option>${flags}</select><span class="hint">is true</span>` : ''}</div></div>`;
   }
   const field = f.field === 'owner' ? 'a name or a team' : 'one sentence';
-  if (f.op === 'set_metric' && f.field === 'owner') return `<div class="rv-q"><label for="fx-${i}"><b>? Owner of ${esc(labelOf(f.metric))}: who decides what this metric means</b></label><input id="fx-${i}" ${editable ? '' : 'disabled'} placeholder="${esc(field)}" value="${esc(val.text || '')}" oninput="setFix(${i},'text',this.value)" style="max-width:420px"><div class="hint">${val.prefilled ? 'Prefilled with your name · clear it to leave it for later' : 'Optional · leave it empty to decide later'}</div></div>`;
+  if (f.op === 'set_metric' && f.field === 'owner') return `<div class="rv-q"><div><b>? Owner of ${esc(labelOf(f.metric))}: who decides what this metric means</b></div>${editable ? (val.text ? `<div class="ownerl"><span class="hint">Owner</span> <b>${esc(owner(val.text))}</b> · <button type="button" class="lnk" onclick="setFix(${i},'text','');renderReviewAgain()">Change</button></div>` : ownerPicker('metric', f.metric, '', 'review', i)) : '<span class="hint">no one named yet</span>'}<div class="hint">Optional · leave it for later if nobody is sure yet</div></div>`;
   return `<div class="rv-q"><label for="fx-${i}"><b>? ${esc(q.ask)}</b> <span class="hint">(optional)</span></label><input id="fx-${i}" ${editable ? '' : 'disabled'} placeholder="${esc(field)}" value="${esc(val.text || '')}" oninput="setFix(${i},'text',this.value)" style="max-width:420px"></div>`;
 }
 function setFix(i, k, v){ ui.rv.fixes[i] = Object.assign(ui.rv.fixes[i] || {}, { [k]: v }); }
@@ -1869,7 +2255,7 @@ function reviewHtml(r){
   if (r.status === 'pending') {
     const whyBox = ui.rv.why !== null ? `<div class="rv-q"><label for="rv-why"><b>Why?</b> <span class="hint">(optional; the agent sees this)</span></label><textarea id="rv-why" rows="2" style="max-width:520px" oninput="ui.rv.why=this.value">${esc(ui.rv.why || '')}</textarea><div class="row">${nameBtn('Set aside', 'Type your name to set aside', `dismissP(${jq(r.id)})`)}<button class="small" onclick="ui.rv.why=null;renderReviewAgain()">Cancel</button></div></div>` : '';
     const confirmRm = removes.length && ui.rv.confirmRemove ? `<div class="rv-note bad"><span aria-hidden="true">−</span> <span>Accepting removes ${removes.map(x => esc(x.label)).join(', ')}. Press again to confirm.</span></div>` : '';
-    actions = `${whyBox}${confirmRm}<div class="rv-actions">${nameBtn(removes.length && ui.rv.confirmRemove ? 'Yes, remove ' + removes.map(x => x.label).join(', ') : 'Accept as {n}', 'Type your name to accept', `acceptP(${jq(r.id)})`, 'primary', !can.accept)}<button ${can.dismiss && ui.rv.why === null ? '' : 'disabled'} onclick="ui.rv.why='';renderReviewAgain()">Not now</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>${can.why_not ? `<div class="hint">${esc(can.why_not)}</div>` : ''}`;
+    actions = `${whyBox}${confirmRm}<div class="rv-actions">${nameBtn(removes.length && ui.rv.confirmRemove ? 'Yes, remove ' + removes.map(x => x.label).join(', ') : 'Accept as {n}', 'Type your name to accept', `acceptP(${jq(r.id)})`, 'primary', !can.accept)}<button ${can.dismiss && ui.rv.why === null ? '' : 'disabled'} onclick="ui.rv.why='';renderReviewAgain()">Not now</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/graph')})">Show on the graph</button>` : ''}</div>${can.why_not ? `<div class="hint">${esc(can.why_not)}</div>` : ''}`;
   } else {
     actions = `<div class="rv-actions"><button type="button" class="lnk" onclick="go('agents')">Back to Agents</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>`;
   }

@@ -172,7 +172,13 @@ impl One {
 }
 
 pub fn plural(n: usize, word: &str) -> String {
-    format!("{} {}{}", n, word, if n == 1 { "" } else { "s" })
+    if n == 1 {
+        format!("1 {}", word)
+    } else if let Some(stem) = word.strip_suffix('y') {
+        format!("{} {}ies", n, stem)
+    } else {
+        format!("{} {}s", n, word)
+    }
 }
 
 /// Everything the People screen shows, worked out from the space.

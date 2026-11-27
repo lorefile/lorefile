@@ -1307,6 +1307,7 @@ impl Ontology {
                 "iri": self.iri_type(&t.name),
                 "description": t.description,
                 "domain": self.domain_of(&t.name),
+                "domain_follows": t.domain_follows,
                 "key": t.key_property(),
                 "properties": props,
                 "relationships": out,

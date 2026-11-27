@@ -54,6 +54,10 @@ pub struct Space {
     /// Set when the space was just created: `on`, or why history is off.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<String>,
+    /// The people its owner fields and grades name, worked out with the stats: the page's owner
+    /// picker suggests them in the other spaces (never shipped ones). Dropped with the stats.
+    #[serde(skip)]
+    pub owners: Option<Vec<String>>,
 }
 
 /// One compiled space plus its DuckDB, when that feature is on.
@@ -220,7 +224,7 @@ fn extract_builtin(dest: &Path) -> Result<Vec<Space>> {
     }
     Ok(seen
         .into_iter()
-        .map(|(name, group)| Space { id: format!("@{}", name), name: name.clone(), dir: dest.join(&name), builtin: true, group, stats: None, history: None })
+        .map(|(name, group)| Space { id: format!("@{}", name), name: name.clone(), dir: dest.join(&name), builtin: true, group, stats: None, history: None, owners: None })
         .collect())
 }
 
@@ -271,7 +275,7 @@ impl Registry {
         if self.single {
             let name = self.root.canonicalize().ok().and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string())).unwrap_or_else(|| "ontology".into());
             let id = { let s = slug(&name); if s.is_empty() { "ontology".to_string() } else { s } };
-            found.push(Space { id, name, dir: self.root.clone(), builtin: false, group: "space".into(), stats: None, history: None });
+            found.push(Space { id, name, dir: self.root.clone(), builtin: false, group: "space".into(), stats: None, history: None, owners: None });
         } else if let Ok(rd) = std::fs::read_dir(&self.root) {
             let mut dirs: Vec<PathBuf> = rd.filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.is_dir()).collect();
             dirs.sort();
@@ -280,7 +284,7 @@ impl Registry {
                 if name.starts_with('.') || !has_manifest(&d) {
                     continue;
                 }
-                found.push(Space { id: name.clone(), name, dir: d, builtin: false, group: "space".into(), stats: None, history: None });
+                found.push(Space { id: name.clone(), name, dir: d, builtin: false, group: "space".into(), stats: None, history: None, owners: None });
             }
         }
         // user spaces first, shipped ones after
@@ -346,6 +350,7 @@ impl Registry {
         if l.refresh() {
             if let Some(s) = self.spaces.get_mut(id) {
                 s.stats = None;
+                s.owners = None;
             }
         }
         Ok(l)
@@ -355,7 +360,31 @@ impl Registry {
     pub fn touched(&mut self, id: &str) {
         if let Some(s) = self.spaces.get_mut(id) {
             s.stats = None;
+            s.owners = None;
         }
+    }
+
+    /// Names from the other spaces of yours this server serves, for the page's owner picker: up
+    /// to 200, worked out once per space (with its stats) and kept until the space changes.
+    pub fn other_names(&mut self, except: &str) -> Vec<String> {
+        let ids: Vec<String> = self.spaces.values().filter(|s| !s.builtin && s.id != except).map(|s| s.id.clone()).collect();
+        let mut out: Vec<String> = Vec::new();
+        for id in ids {
+            if self.spaces[&id].owners.is_none() {
+                let names = match self.loaded.get(&id) {
+                    Some(l) => owner_names(&l.ont),
+                    None => load_ontology(&self.spaces[&id].dir).map(|(o, _)| owner_names(&o)).unwrap_or_default(),
+                };
+                self.spaces.get_mut(&id).unwrap().owners = Some(names);
+            }
+            // an address can't be a new owner anywhere else: names only
+            for n in self.spaces[&id].owners.clone().unwrap_or_default().into_iter().filter(|n| !n.contains('@')) {
+                if out.len() < 200 && !out.iter().any(|x| crate::people::fold(x) == crate::people::fold(&n)) {
+                    out.push(n);
+                }
+            }
+        }
+        out
     }
 
     /// Every space with its manifest title, counts and validity, for the picker.
@@ -364,14 +393,19 @@ impl Registry {
         let mut out = Vec::new();
         for id in ids {
             if self.spaces[&id].stats.is_none() {
-                let stats = match self.loaded.get(&id) {
-                    Some(l) => Some(stats_json(&l.ont, &l.report)),
+                let builtin = self.spaces[&id].builtin;
+                let (stats, names) = match self.loaded.get(&id) {
+                    Some(l) => (Some(stats_json(&l.ont, &l.report)), (!builtin).then(|| owner_names(&l.ont))),
                     None => match load_ontology(&self.spaces[&id].dir) {
-                        Ok((o, r)) => Some(stats_json(&o, &r)),
-                        Err(e) => Some(json!({ "title": self.spaces[&id].name, "description": "", "types": 0, "rules": 0, "ok": false, "error": e.to_string() })),
+                        Ok((o, r)) => (Some(stats_json(&o, &r)), (!builtin).then(|| owner_names(&o))),
+                        Err(e) => (Some(json!({ "title": self.spaces[&id].name, "description": "", "types": 0, "rules": 0, "ok": false, "error": e.to_string() })), None),
                     },
                 };
-                self.spaces.get_mut(&id).unwrap().stats = stats;
+                let sp = self.spaces.get_mut(&id).unwrap();
+                sp.stats = stats;
+                if names.is_some() {
+                    sp.owners = names;
+                }
             }
             let s = &self.spaces[&id];
             let mut j = json!({ "id": s.id, "name": s.name, "dir": s.dir.display().to_string(), "builtin": s.builtin, "group": s.group });
@@ -427,11 +461,16 @@ impl Registry {
         }
         // history starts with the space: its own git repository and a first commit
         let history = crate::edit::init_space(&dir, &self.root, crate::edit::PAGE);
-        let space = Space { id: id.clone(), name: id.clone(), dir, builtin: false, group: "space".into(), stats: None, history: Some(history) };
+        let space = Space { id: id.clone(), name: id.clone(), dir, builtin: false, group: "space".into(), stats: None, history: Some(history), owners: None };
         let at = self.user_spaces().len();
         self.spaces.shift_insert(at, id, space.clone());
         Ok(space)
     }
+}
+
+/// The names a space's owner fields and grades give: people and teams, never agents.
+fn owner_names(o: &crate::ontology::Ontology) -> Vec<String> {
+    crate::people::derive(o, &[]).people.into_iter().map(|p| p.name).collect()
 }
 
 fn stats_json(ont: &Ontology, report: &Report) -> Json {

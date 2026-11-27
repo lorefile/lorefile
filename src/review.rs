@@ -1337,6 +1337,19 @@ pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json 
         Some((a, r)) => questions(report, a, r, p),
         None => (vec![], vec![], report.diags.iter().filter(|d| d.level == Level::Warning).count()),
     };
+    // a grade an owner-only change keeps (decision 9) isn't "changed since" after Accept: no W113 for it
+    if let Some((a, _)) = &after_pair {
+        let mut kept: Vec<String> = Vec::new();
+        for k in crate::trust::Kind::ALL {
+            let now = crate::trust::things(a, k);
+            for (name, old) in crate::trust::things(ont, k) {
+                if ont.graded.get(k, &name).grade.map(|g| g >= Grade::Accepted).unwrap_or(false) && now.get(&name).map(|v| crate::trust::fingerprint(v) != crate::trust::fingerprint(&old) && crate::trust::owner_only(&old, v)).unwrap_or(false) {
+                    kept.push(k.name_words(&name));
+                }
+            }
+        }
+        qs.retain(|q| !(q["code"] == "W113" && kept.iter().any(|w| q["text"].as_str().unwrap_or("").starts_with(w.as_str()))));
+    }
     // the rule of three: a suggestion, not a problem, when this proposal makes the third
     if let Some((a, _)) = &after_pair {
         let added: Vec<&str> = changes.iter().filter(|c| c["kind"] == "entity" && c["op"] == "add").filter_map(|c| c["name"].as_str()).collect();

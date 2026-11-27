@@ -162,6 +162,11 @@ fn naming_an_owner_keeps_a_grade_a_person_gave_and_accepts_the_rest() {
     let a = post(port, "/api/tool", json!({ "name": "propose_patch", "arguments": { "op": "set_owner", "kind": "metric", "name": "m_accepted", "owner": "Priya", "reason": "Priya runs it now" } }));
     let text = a["content"][0]["text"].as_str().unwrap_or("").to_string();
     assert!(text.contains("queued"), "{}", text);
+    // its review: the grade stays (only the owner changes), so no "changed since" question for it
+    let id = get(port, "/api/proposals")["proposals"].as_array().unwrap().iter().rev().find(|p| p["status"] == "pending").unwrap()["id"].as_str().unwrap().to_string();
+    let rv = get(port, &format!("/api/proposals/{}/review", id));
+    assert!(rv["notes"].to_string().contains("M accepted is accepted by Priya and stays so: only its owner changes."), "{}", rv["notes"]);
+    assert!(!rv["questions"].to_string().contains("W113"), "{}", rv["questions"]);
     assert!(d.read("logic/metrics.yaml").contains("owner: Sam\n  - metric: m_changed") || !d.read("logic/metrics.yaml").contains("owner: Priya"), "nothing written");
     // a batch from the page: "Give them owners"
     let b = post(port, "/api/patch", json!({ "by": "Vinay", "ops": [
