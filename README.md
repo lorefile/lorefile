@@ -4,7 +4,7 @@ Your business, written down once, so every AI agent reads the same thing and act
 
 **Lore** is what a team knows and newcomers have to be told: what counts as a sale, where the orders live, which number the business is run on, what an agent may never do. A **Lorefile** is that lore written down in plain files that agents read.
 
-> Status, 2026-11-27: version 0.1.0 is out, open source under Apache-2.0. Built and tested: the format and its strict compiler (an unknown key in any file is an error), the web page, the MCP server over stdio and over HTTP, a login token, spaces, the save-what-you-learned loop, metrics and functions, evidence grades (proposed, accepted, checked, kept in `trust.yaml`; the gate, the API, the CLI and the exports are covered by tests, the page's grade buttons were checked by hand in a browser), local git history from day one (every change a commit, History with Undo, Share / Push / Pull to any git address), Apache Ossie import and export, OWL, SKOS and SHACL import and export with an IRI on everything, tests and CI. Install it with `npx lorefile`, the Docker image `ghcr.io/lorefile/lorefile`, `cargo install lorefile` or the install script ([Install](#install)); binaries for macOS, Linux and Windows are on the [releases page](https://github.com/lorefile/lorefile/releases). Not yet: accounts and single sign-on (one shared token for now), OAuth for Claude Desktop's and ChatGPT's connectors. A hosted version may come later. [BACKLOG.md](BACKLOG.md) has the honest list; [PRODUCTION.md](PRODUCTION.md) has what a team server still needs. This file is also a web page: `python3 scripts/build-tutorial.py` writes [docs/tutorial.html](docs/tutorial.html).
+> Status, 2026-11-27: version 0.1.0 is out, open source under Apache-2.0. Built and tested: the format and its strict compiler (an unknown key in any file is an error), the web page, the MCP server over stdio and over HTTP, a login token, spaces, the save-what-you-learned loop, metrics and functions, evidence grades (proposed, accepted, checked, kept in `trust.yaml`; the gate, the API, the CLI and the exports are covered by tests, the page's grade buttons were checked by hand in a browser), local git history from day one (every change a commit, History with Undo, Share / Push / Pull to any git address), Apache Ossie import and export, OWL, SKOS and SHACL import and export with an IRI on everything, tests and CI. Install it with `npx lorefile`, the Docker image `ghcr.io/lorefile/lorefile`, `cargo install lorefile` or the install script ([Install](#install)); binaries for macOS, Linux and Windows are on the [releases page](https://github.com/lorefile/lorefile/releases). New since 0.1.0, not in a release yet: an OAuth sign-in so ChatGPT's and Claude's connectors (claude.ai, Desktop, mobile) can connect through any HTTPS tunnel; it is covered by tests that script the whole flow, but not yet tried with real ChatGPT and Claude accounts or with each tunnel service ([§4](#4-connect-your-ai-tool)). Not yet: accounts and single sign-on (one shared token for now). A hosted version may come later. [BACKLOG.md](BACKLOG.md) has the honest list; [PRODUCTION.md](PRODUCTION.md) has what a team server still needs. This file is also a web page: `python3 scripts/build-tutorial.py` writes [docs/tutorial.html](docs/tutorial.html).
 
 ## The problem, in one Monday
 
@@ -39,8 +39,9 @@ A folder of small YAML files describes the business. One Rust binary compiles th
                                               Meta Ads, Shopify…) with their own logins, and run functions
                                               on YOUR tools (a model's MCP, an endpoint). The ontology
                                               only says what things mean, where they are, and what may be done.
- * ChatGPT's connectors reach a server from OpenAI's cloud, so they need a public HTTPS address
-   and OAuth sign-in, which is not built yet. Claude Code connects over HTTP with the token today.
+ * ChatGPT's and Claude's connectors reach a server from their vendor's cloud, so they need a public
+   HTTPS address: put any HTTPS tunnel in front and they sign in with OAuth (§4). Claude Code
+   connects over stdio, or over HTTP with the token.
 ```
 
 ## The words
@@ -187,7 +188,52 @@ Claude Desktop, in `claude_desktop_config.json`, with absolute paths:
 }
 ```
 
-One server holds every space. With one space of your own the tools use it; with several, every tool takes `space: "brand-one"` and the tool list names the choices. Leave out `--allow-edit` and every save from an agent waits for a person in the page instead of being written. A `.mcp.json` in this repository does the same for any Claude Code session opened here. Claude Desktop's custom connectors and ChatGPT's connect from their vendor's cloud and need public HTTPS with OAuth, which is not built yet: on a laptop, Desktop uses the stdio config above.
+One server holds every space. With one space of your own the tools use it; with several, every tool takes `space: "brand-one"` and the tool list names the choices. Leave out `--allow-edit` and every save from an agent waits for a person in the page instead of being written. A `.mcp.json` in this repository does the same for any Claude Code session opened here.
+
+**ChatGPT and Claude (claude.ai, Desktop, mobile), from their cloud.** Their connectors reach your server from OpenAI's or Anthropic's servers, not from your laptop, so the server needs a public HTTPS address, and they sign in with OAuth. The sign-in is built into Lorefile. Before, the only way in was `--no-auth` behind a tunnel, so anyone with the URL could read everything. Now the login stays on and any HTTPS tunnel works, with no extra flag:
+
+```bash
+lorefile serve --dir ./spaces          # the login stays on
+ngrok http 7070                        # or: cloudflared tunnel --url http://localhost:7070, or any other HTTPS tunnel
+```
+
+The first request that comes through the tunnel prints the address to give them:
+
+```
+Seen    https://quiet-otter.ngrok-free.app   connectors: https://quiet-otter.ngrok-free.app/mcp (choose OAuth, leave the client ID empty)
+        sign in there: https://quiet-otter.ngrok-free.app/?token=k3f9…
+```
+
+- **ChatGPT**: Settings › Apps › Developer mode › Create. MCP server URL: that address with `/mcp`. Authentication: OAuth. Which ChatGPT plans can add a connector differs between OpenAI's own pages; check on the account you will use.
+- **Claude**: Settings › Connectors › Add custom connector, with the same URL; leave the OAuth client ID empty. On Team and Enterprise an owner adds it under Organization settings › Connectors and each member connects.
+- **Claude Code without the token**: `claude mcp add --transport http lorefile https://quiet-otter.ngrok-free.app/mcp`, then `/mcp` and Authenticate. (The `--header` command above keeps working too.)
+
+A window opens on your own server:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│  Connect "ChatGPT" to Lorefile?                            │
+│  It asks to:                                               │
+│    ✓ read every space on this server                       │
+│    ☑ suggest changes (they wait for a person to accept)    │
+│  After you allow it, you go back to  chatgpt.com           │
+│  Asked just now. Only allow it if you pressed Connect      │
+│  yourself just now.                                        │
+│  Login token  [·································]           │
+│                                     [ Deny ]   [ Allow ]   │
+└────────────────────────────────────────────────────────────┘
+```
+
+Paste the login token and press Allow; a browser already signed in to the page on that address (open the `sign in there` link once) needs one click. Untick "suggest changes" for a connection that may only read. Someone who only has the URL gets a 401 from `/mcp` and a page that asks for the token. Settings › Connections lists every connection (which address, what it may do, when it was approved and last used) with Disconnect, and a change it suggests is logged as `agent via MCP (connection "ChatGPT", approved 27 Nov)`. Changing the login token disconnects them all.
+
+Good to know:
+
+- `https://…/s/<space>/mcp` connects to one space only; its token opens nothing else.
+- A free tunnel that changes its address on every start means adding the connector again. A fixed name saves that (ngrok gives free accounts one; Cloudflare named tunnels have one).
+- Behind your own nginx, have it pass the name and HTTPS: `proxy_set_header Host $host; proxy_set_header X-Forwarded-Proto $scheme;`. Or start with `--public-url https://your.name`, which also limits sign-ins to that one address. Lorefile has to sit at the root of its address (a subdomain, not `example.com/lorefile/`). `--no-oauth` turns the sign-in off.
+- Plain `http://127.0.0.1` sees no change: OAuth answers only on HTTPS addresses. It stays off with `--no-auth`, and with a login token shorter than 32 characters (the start-up line says why).
+- What connecting shares: the definitions, rules and metric logic go to OpenAI or Anthropic under their terms. The rows stay in your data MCPs, as before. Lorefile makes no outbound request and stores no OpenAI or Anthropic credential; the tokens it issues are keys to itself, kept only as hashes in `.lorefile/oauth.json`.
+- Status: built, and covered by tests that run the whole flow through the real binary with tunnel-style headers. Not yet tried with real ChatGPT and Claude accounts, or through each tunnel service ([DEPLOY.md §8](DEPLOY.md#8-status-of-each-path)).
 
 ### 5. Teach it by using it
 
@@ -662,7 +708,9 @@ lorefile query "<sql>"         one read-only SELECT/WITH via DuckDB (--limit, ma
 lorefile tables                what SQL can see: ontology tables, data views, bindings not attached
 lorefile mcp [--allow-edit]    MCP server on stdio; --allow-edit lets propose_patch and propose_change write
 lorefile serve --port 7070 [--allow-edit] [--commit-edits | --no-commit-edits] [--token T | --no-auth]
-                               web page, JSON API and MCP over HTTP at /mcp, behind the login token
+               [--no-oauth] [--public-url URL] [--oauth-redirect URL]
+                               web page, JSON API and MCP over HTTP at /mcp, behind the login token;
+                               OAuth for ChatGPT's and Claude's connectors on any HTTPS address
 lorefile init [path]           starter ontology, with its own git history when it is not inside a repository
 lorefile trust                 every metric, data binding, word and guardrail, grouped by grade
 lorefile trust accept <name> [--all] [--by NAME]                   a person stands behind it (--all: every ungraded one)
@@ -677,7 +725,7 @@ lorefile import --from-rdf <file> [--into <folder>] [--only A,B] [--depth N] [--
 
 ## Tests
 
-`cargo test` runs 95 tests in these layers: unit tests inside the modules (paths that cannot escape the folder, the save gate, the DuckDB fence, spaces, patch operations, history, IRI resolution, CEL to SHACL, and grades: proposed, accepted and checked through the gate, a hand edit giving W113, Undo taking a grade back, two saves at once both landing their grade), `tests/mcp_loop.rs` (the real binary over stdio: an agent lists tools, reads the summary, saves a metric with `propose_patch`, and the save is queued in words, or written and committed when edits are allowed), `tests/mcp_http.rs` (the same over HTTP with the token, and 401 without it), `tests/http.rs` (the server: the login, write headers, a stale proposal, read-only examples, and History, Undo, Share, Push and Pull against a bare repository, no network), `tests/cli.rs` (every example and pack compiles with no errors and no warnings, and the documented commands answer), `tests/ossie.rs` (every example and pack through Ossie and back, unchanged; Ossie's own example files import) and `tests/rdf.rs` (every example and pack through Turtle and back, unchanged; JSON-LD, N-Triples and RDF/XML carry the same graph; a slice of schema.org imports; a SHACL shape becomes a guardrail that `check` enforces; one IRI on two things is an error), and for grades: an agent can neither write `trust.yaml` nor overwrite an accepted binding, a reported check waits for a person's click, and grades travel in Turtle (as PROV-O) and Ossie and come back only with `--keep-grades`. `.github/workflows/ci.yml` runs the same on every push, then `cargo clippy -- -D warnings`. A `.mcp.json` in the repository gives any Claude Code session opened here the ontology MCP server, pointed at `spaces/`.
+`cargo test` runs 114 tests in these layers: unit tests inside the modules (paths that cannot escape the folder, the save gate, the DuckDB fence, spaces, patch operations, history, IRI resolution, CEL to SHACL, and grades: proposed, accepted and checked through the gate, a hand edit giving W113, Undo taking a grade back, two saves at once both landing their grade), `tests/mcp_loop.rs` (the real binary over stdio: an agent lists tools, reads the summary, saves a metric with `propose_patch`, and the save is queued in words, or written and committed when edits are allowed), `tests/mcp_http.rs` (the same over HTTP with the token, and 401 without it), `tests/oauth_http.rs` (OAuth through the real binary with tunnel-style headers and no network: the address rule, register, approve, token, `tools/list`, refresh, revoke, the refusals, one-space tokens, read-only scopes, restarts and a changed login token, and plain `http://127.0.0.1` unchanged; unit tests in `src/oauth.rs` cover PKCE, return addresses, resources, the store and the lifetimes on a fake clock), `tests/http.rs` (the server: the login, write headers, a stale proposal, read-only examples, and History, Undo, Share, Push and Pull against a bare repository, no network), `tests/cli.rs` (every example and pack compiles with no errors and no warnings, and the documented commands answer), `tests/ossie.rs` (every example and pack through Ossie and back, unchanged; Ossie's own example files import) and `tests/rdf.rs` (every example and pack through Turtle and back, unchanged; JSON-LD, N-Triples and RDF/XML carry the same graph; a slice of schema.org imports; a SHACL shape becomes a guardrail that `check` enforces; one IRI on two things is an error), and for grades: an agent can neither write `trust.yaml` nor overwrite an accepted binding, a reported check waits for a person's click, and grades travel in Turtle (as PROV-O) and Ossie and come back only with `--keep-grades`. `.github/workflows/ci.yml` runs the same on every push, then `cargo clippy -- -D warnings`. A `.mcp.json` in the repository gives any Claude Code session opened here the ontology MCP server, pointed at `spaces/`.
 
 ## Validation codes
 

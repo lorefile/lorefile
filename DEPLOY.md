@@ -42,6 +42,8 @@ lorefile mcp --dir ./spaces                  # agents pass space: "brand-two" in
 
 The first `serve` makes a login token, saves it to `<dir>/.lorefile/auth.toml` and prints a link that signs the page in (`http://127.0.0.1:7070/?token=…`), plus the command that connects Claude Code over HTTP. Open the link once and the page remembers it. `--no-auth` turns the login off on a laptop. Details in [PRODUCTION.md](PRODUCTION.md#signing-in-and-mcp-over-http).
 
+**A laptop behind a tunnel.** Any HTTPS tunnel in front of `lorefile serve` (ngrok, Cloudflare Tunnel, Tailscale Funnel, localtunnel, …) gives ChatGPT and Claude an address to reach, and Lorefile works the address out from each request, so nothing needs configuring. Keep the default `--host 127.0.0.1`: the tunnel connects locally. The first request through the tunnel prints a `Seen` line with the connector URL and a sign-in link on that address. A tunnel that changes its address on every start means adding the connector again; a fixed name (ngrok gives free accounts one, Cloudflare named tunnels have one) saves that. TCP-only forwarders give no HTTPS, so they work for Claude Code with the header but not for ChatGPT or Claude. Details in [PRODUCTION.md](PRODUCTION.md#connectors-with-oauth).
+
 The folder is the deployment. Copy it, zip it, `git clone` it. Nothing else to install. The examples and packs ship inside the binary and show up in the page's picker as read-only spaces (`@ecommerce`, `@meta-ads`), so a new team can look at how it is done and copy one. Spaces, storage and the production checklist are in [PRODUCTION.md](PRODUCTION.md).
 
 ### B. In your own cloud (today, works; Docker image untested on our side)
@@ -68,7 +70,8 @@ Runs anywhere a container runs: Cloud Run, Fly.io, ECS, Kubernetes, a $5 VPS (Fl
 For a real cloud deployment:
 
 - **HTTPS in front.** The token travels in a header or a cookie, so anything past `127.0.0.1` goes over HTTPS: Caddy, or the platform's own proxy (Fly, Cloud Run and Render give you one).
-- **MCP over HTTP.** Built: `POST /mcp` speaks MCP's Streamable HTTP transport behind the same token, so Claude Code, and any agent that can send a header, reaches the container. Claude Desktop's custom connectors and ChatGPT connect from their vendor's cloud and sign in with OAuth, which Lorefile does not offer yet (backlog); on a laptop, Desktop keeps using stdio.
+- **MCP over HTTP.** Built: `POST /mcp` speaks MCP's Streamable HTTP transport behind the same token, so Claude Code, and any agent that can send a header, reaches the container.
+- **ChatGPT and Claude connectors.** They connect from their vendor's cloud and sign in with OAuth, which Lorefile now runs itself. Behind the platform's HTTPS it is on with no flag: give them `https://<your address>/mcp` and choose OAuth. Add `--public-url https://<your address>` to answer sign-ins on that one name only. Behind your own nginx, pass the name and HTTPS (`proxy_set_header Host $host; proxy_set_header X-Forwarded-Proto $scheme;`) or use `--public-url`. The login token must be 32 characters or more (`openssl rand -hex 32` makes 64), or OAuth stays off. Details in [PRODUCTION.md](PRODUCTION.md#connectors-with-oauth); real-account checks are still to do (§8).
 - **One login for everyone.** The token is shared. For a login per person, put an SSO proxy in front (Cloudflare Access, IAP, Tailscale); accounts and SSO in Lorefile itself are backlog.
 
 ### C. Hosted, later
@@ -116,6 +119,7 @@ Before pointing anyone at it:
 - **It is public; the token is the lock.** `https://<app>.fly.dev` is on the internet as soon as it deploys. Set the token before the first deploy with `fly secrets set LOREFILE_TOKEN=$(openssl rand -hex 32)` (Fly passes secrets in as environment variables); without it the server makes one and prints it in `fly logs`. Anyone with the token can read, and write when `--allow-edit` is on. For a login per person, an SSO proxy (Cloudflare Access) in front, and note that the `fly.dev` address goes around a proxy set up on your own domain.
 - **The health check.** Every route but `/healthz` now needs the token, so fly.toml's check must ask `/healthz`; it still asks `/api/spaces`, which answers 401 (see the status table).
 - **MCP over HTTP.** Fly terminates HTTPS, so Claude Code connects with `claude mcp add --transport http lorefile https://<app>.fly.dev/mcp --header "Authorization: Bearer <token>"`.
+- **ChatGPT and Claude.** Fly's proxy marks requests as HTTPS and passes the name, so OAuth works as fly.toml stands: give them `https://<app>.fly.dev/mcp` and choose OAuth. To answer sign-ins on one name only, add `--public-url https://<app>.fly.dev` to the command in fly.toml. The token from `openssl rand -hex 32` is long enough (OAuth needs 32 characters or more). Not yet tried on Fly.
 - **One machine per volume.** Two servers must never share a spaces folder; `--ha=false` stops Fly starting a spare. Fly warns that a single volume has no standby; that is the trade-off for now, and git as the home ([PRODUCTION.md §2](PRODUCTION.md#2-where-the-files-live-disk-git-or-a-bucket), answer B) makes the disk disposable.
 
 **Railway, Render, a VM.** The same image runs anywhere that gives a container a persistent disk: mount it at `/spaces`, expose port 7070, keep the command above. Cloud Run is the same image but stateless; its bucket mount is the FUSE case in [PRODUCTION.md §2](PRODUCTION.md#2-where-the-files-live-disk-git-or-a-bucket).
@@ -130,7 +134,7 @@ Say you have just started an app business and want agents to understand it.
 2. Open the folder in Claude Code and say: *"This is a subscription app. Add Customer, Plan, Subscription, Invoice. A customer on a trial cannot be invoiced. Refunds over $500 need Finance."* Claude edits the YAML files directly, because they are just files. `lorefile validate` catches anything misspelled.
 3. Point the data bindings at where the rows live: a Postgres `source:` for customers, a Stripe export in Parquet, a BigQuery table for events.
 4. Register the MCP server with Claude Desktop or Claude Code (one command, in [README.md](README.md)). From now on, every conversation starts with the same understanding of the business.
-5. Later, with MCP over HTTP, the same folder gets a URL that ChatGPT and hosted agents can use too. Everyone reads from one place.
+5. With MCP over HTTP and an HTTPS address in front, the same folder gets a URL that ChatGPT, claude.ai and hosted agents can use too, signing in with OAuth. Everyone reads from one place.
 
 What the ontology **ingests** is structure and meaning, not rows. Phase 3 adds `init --from postgres://…` to draft types from an existing database schema so step 2 starts from a filled-in list instead of a blank page.
 
@@ -179,7 +183,14 @@ Meta Ads, Google Ads, Shopify, Stripe, HubSpot and similar MCP servers return da
 | App on Vercel | Binned (§3): no disk that survives, no long-running process |
 | `propose_change` through MCP, with a review inbox | Built, verified |
 | Clone-at-boot and push to a git remote | Not built; an entrypoint loop does it (PRODUCTION.md) |
-| MCP over HTTP (`POST /mcp`, Streamable HTTP, bearer token) | Built, tested end to end with a scripted client; OAuth for Desktop's and ChatGPT's connectors is backlog |
+| MCP over HTTP (`POST /mcp`, Streamable HTTP, bearer token) | Built, tested end to end with a scripted client |
+| OAuth for ChatGPT's and Claude's connectors (address from each request, DCR, approval page, tokens, Settings › Connections) | Built, tested end to end with a scripted client and tunnel-style headers, no network; the approval page and Settings › Connections checked by hand in a browser on `127.0.0.1` |
+| OAuth with a real ChatGPT account (developer mode connector) | Untested: needs a real account and a tunnel. To record: which `resource` and `token_endpoint_auth_method` ChatGPT sends, and whether it uses the stable return address |
+| OAuth with real Claude (claude.ai, Desktop, mobile; a `/s/<id>/mcp` connection) | Untested |
+| OAuth with Claude Code and no header (`/mcp` › Authenticate) | Untested |
+| OAuth through ngrok, Cloudflare Tunnel (quick and named), Tailscale Funnel, localtunnel | Untested: which header each passes the name and HTTPS in is still to record |
+| OAuth behind Caddy, and behind nginx with the two `proxy_set_header` lines | Untested |
+| OAuth on Fly.io (`https://<app>.fly.dev/mcp`) | Untested |
 | Login: one token for the page, the API and MCP (`LOREFILE_TOKEN`, or made on the first run) | Built, tested; accounts and SSO are backlog |
 | `GET /healthz` for load balancers, no token needed | Built |
 | `init --from <database>` | Not built (Phase 3) |

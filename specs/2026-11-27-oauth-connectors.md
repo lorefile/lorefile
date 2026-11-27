@@ -1,6 +1,6 @@
 # Spec: OAuth sign-in, so ChatGPT's and Claude's connectors can reach Lorefile
 
-Written 2026-11-27 for Vinay to decide on. **Status: not built.** Nothing in the code changes until the decisions below are approved. Revised the same day after Vinay's review: Lorefile now works out its public address from each request, so it works with any tunnel and needs no flag (decision 2, 2.1, Part 3).
+Written 2026-11-27 for Vinay to decide on. Revised the same day after Vinay's review: Lorefile now works out its public address from each request, so it works with any tunnel and needs no flag (decision 2, 2.1, Part 3). **Status: built 2026-11-27**, option B with every decision line as recommended, including that revision. Tested through the real binary with a scripted client and tunnel-style headers, and the approval page and Settings › Connections checked by hand in a browser. **Not yet tried with real ChatGPT, claude.ai or Claude Code accounts, or through a real tunnel or proxy.** What differs from the text below is listed at the end, under "What changed during the build".
 
 Today the only way to use Lorefile from ChatGPT is to switch the login off and put a public tunnel in front, so anyone with the URL can read the whole server. This spec adds a real sign-in for the two connectors that need one: ChatGPT's custom connectors (apps in developer mode) and Claude's custom connectors (claude.ai, Claude Desktop, mobile). Claude Code keeps its bearer header, unchanged.
 
@@ -399,7 +399,7 @@ All tokens are 32 random bytes from the operating system in base64url (`new_toke
 ## Tests
 
 **Unit (in `oauth.rs`):**
-- PKCE: the RFC 7636 test vector (verifier `dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` gives challenge `E9Melhoa2OwvFrEMTJguCHaoeK1t2URWbuGJSstw-cM`). `plain` is refused, and so is a missing challenge.
+- PKCE: the RFC 7636 test vector (verifier `dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` gives challenge `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`). `plain` is refused, and so is a missing challenge.
 - Return addresses: the exact ChatGPT, Claude and loopback forms pass (loopback on any port, `localhost`, `127.0.0.1`, `[::1]`). These are refused: `https://chatgpt.com.evil.example/…`, `https://chatgpt.com@evil.example/…`, `http://chatgpt.com/…`, a `#fragment`, `https://evil.example/?u=https://chatgpt.com`, and `http://192.168.1.5:3000/callback`.
 - Resources: `/mcp`, `/mcp/`, `/s/brand-two/mcp`, a bare origin (which means `/mcp`), another host, and `/s/../mcp` are each mapped or refused correctly.
 - Store: tokens never appear in the file, only hashes. Saving is atomic. Pruning works. A changed login fingerprint drops grants.
@@ -437,3 +437,36 @@ Checked 2026-11-27. The vendor pages carry no dates.
 - OpenAI: [Apps SDK authentication](https://developers.openai.com/apps-sdk/build/auth) (the same page as [plugins/build/auth](https://developers.openai.com/plugins/build/auth)), [developer mode](https://developers.openai.com/api/docs/guides/developer-mode), [Connectors in ChatGPT](https://help.openai.com/en/articles/12584461-connectors-in-chatgpt)
 - Anthropic: [connector authentication](https://claude.com/docs/connectors/building/authentication), [adding an unlisted connector](https://claude.com/docs/connectors/custom/add-unlisted), [MCP tunnels](https://claude.com/docs/connectors/mcp-tunnels) and [OAuth through tunnels](https://claude.com/docs/connectors/mcp-tunnels/oauth) (an Enterprise research preview for private networks, not for a laptop)
 - RFCs: 6749 and the OAuth 2.1 draft, 7591 (DCR), 7636 (PKCE), 7009 (revocation), 8252 (loopback redirects), 8414 (server metadata), 8707 (resource indicators), 9207 (`iss`), 9728 (protected-resource metadata)
+
+---
+
+## What changed during the build
+
+Built 2026-11-27 on the branch `claude/oauth-connectors-956d8a`. New: `src/oauth.rs` and `tests/oauth_http.rs`. Changed: `src/serve.rs`, `src/main.rs`, `src/mcp.rs`, `src/ui/index.html`, `Cargo.toml` (`sha2` 0.10, the only new crate), the docs, `fly.toml`'s comment and `.claude/launch.json`. `cargo test` runs 114 tests (95 before), and `cargo clippy --all-targets -- -D warnings` and `cargo check --no-default-features` pass on Rust 1.87, the only toolchain on the build machine. CI's newer clippy has not seen it yet.
+
+**Where the build differs from the text above, and why:**
+
+1. **The PKCE test vector had a typo.** The challenge for RFC 7636's verifier is `…K1t8URW…`, not `…K1t2URW…` (RFC 7636, Appendix B). Fixed in "Tests" above. The code was right; the first test run caught it.
+2. **"404 from the routes" over plain HTTP.** Today an unknown route answers 401 without the login (the login gate) and 404 with it. The rule "byte for byte as today" wins, so over plain HTTP, through a name that is not the pinned one, with `--no-oauth`, and with a short token, the OAuth addresses answer exactly like that: 401, or 404 when signed in. Test 1 checks both.
+3. **`/api/oauth/connections` exists in every mode.** With OAuth off it answers `{"on": false, "reason": "no-oauth" | "no-auth" | "short-token", "why": "…"}`, so the page can say why (decision 2.8). It is a new route behind the login, so `--no-oauth` is byte for byte as before on every existing route, not on this new one.
+4. **Claude's return address is allowed on `claude.com` as well as `claude.ai`**, since Part 1 says Anthropic may move it. Same path, exact match.
+5. **A client that names no `token_endpoint_auth_method` is registered as public (`none`)**, not with RFC 7591's default `client_secret_basic`. Every MCP client is public, and the reply says which method it got.
+6. **Scopes.** Unknown scopes are ignored, `lorefile:read` is always included, and a request that names none of Lorefile's scopes asks for both: the person can untick "suggest changes" on the page.
+7. **Detecting an old refresh token.** Each connection keeps the hashes of its last 20 replaced refresh tokens (`refresh.retired` in `oauth.json`). One of those within 60 seconds of its replacement gets a fresh pair (a retry); after that it revokes the connection. A refresh token more than 20 rotations old is just unknown: `invalid_grant`, and nothing is revoked.
+8. **`Referrer-Policy: same-origin` on the approval page, not `no-referrer`.** With `no-referrer`, browsers send `Origin: null` on the form's POST, which the same-origin check would refuse. `same-origin` sends no referrer to ChatGPT or Claude either.
+9. **While the form is paused** (10 wrong tokens in 10 minutes), Allow answers 429 and refuses even the right token or a signed-in browser, which is what "pauses for everyone" means. Deny still works.
+10. **The 401 from `/mcp` on an OAuth address adds `error="invalid_token"`** when a token was sent (RFC 6750), and its JSON body says that connectors sign in with OAuth. The 401 on plain HTTP is unchanged.
+11. **The page's cookie gets `Secure`** when the request is marked HTTPS by any of the three marks (`Forwarded: proto=https`, `X-Forwarded-Proto`, `CF-Visitor`), not only `X-Forwarded-Proto`. Plain HTTP is unchanged.
+12. **Small additions.** The server metadata also lists `revocation_endpoint_auth_methods_supported`. The `Seen` line stops after 50 addresses, so a stream of forged names cannot fill the log. Pending approval requests and codes are capped at 500 each in memory. A read-only connection's `initialize` instructions leave out the propose sentences and say it may only read.
+13. **The approval page's "Asked N seconds ago"** counts from when the page was first shown. Lorefile cannot know when the person pressed Connect, and every request still expires 10 minutes after the page was shown.
+14. **Where the approval page lives.** Its HTML is a const in `src/oauth.rs`. The login screen's CSS became `PAGE_STYLE` in `src/serve.rs`, shared by the login screen (whose output is unchanged byte for byte), the approval page and its error page.
+15. **The connection label's date** is the approval day in UTC ("approved 27 Nov").
+16. **`.claude/launch.json`** gained `ontology-oauth` (port 7078, `--public-url http://127.0.0.1:7078`), used for the browser check. It writes `.lorefile/` into `examples/supply-chain` like `ontology-login` does; delete that folder afterwards.
+
+**What was checked, and how:**
+
+- Unit tests in `src/oauth.rs`: PKCE, return addresses, resources, the address rule, the store (hashes only, atomic, 0600, pruning, a changed login), lifetimes on a fake clock, one-address tokens and the tick box, the failed-try pause.
+- `tests/oauth_http.rs`, 11 tests through the real binary with no network, covering the 13 cases in "Tests". Time passing (an expired access token, the end of the grace window) is done by editing `oauth.json` between two starts, not by waiting.
+- In the in-app browser, against `ontology-oauth`: the approval page signed out, with a wrong token (the error, status 401), and signed in (one click, no token box). Allow redirected to a loopback listener with `code`, `state` and `iss`. The code was exchanged and `tools/list` answered. Settings showed the connector URL and the connection ("ChatGPT · all spaces · read, suggest · approved 27 Nov with the signed-in browser · used just now"), Disconnect gave the token a 401, and the empty list survived a restart. Agents › Connect showed the three recipes. Start-up and `Seen` lines were read from the server log. No console errors.
+
+**Not verified (needs real accounts, so it is Vinay's by-hand run in "Tests"):** ChatGPT developer mode, claude.ai, Claude Desktop and mobile, Claude Code without a header, the MCP Inspector, and every tunnel and proxy (ngrok, Cloudflare quick and named, Tailscale Funnel, localtunnel, Caddy, nginx, Fly). DEPLOY.md §8 lists each one as untested. Still open from the text: which `resource` and `token_endpoint_auth_method` ChatGPT sends, whether it uses the stable return address, and which plans can add a connector.

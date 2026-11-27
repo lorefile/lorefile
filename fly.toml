@@ -22,8 +22,12 @@ primary_region = "lhr"
 [processes]
   # The command the machine runs, after the image's ENTRYPOINT (`lorefile`).
   # --host 0.0.0.0 is needed so Fly's proxy can reach the server; on its own it
-  # listens on 127.0.0.1 only. Read-only on purpose: the page has no login yet,
-  # so add --allow-edit only once an SSO proxy (Cloudflare Access) is in front.
+  # listens on 127.0.0.1 only. Read-only on purpose: everyone shares one login
+  # token, so add --allow-edit when that is enough, or put an SSO proxy in front.
+  # ChatGPT's and Claude's connectors: OAuth is on by itself here, since Fly's
+  # proxy marks requests HTTPS and passes the name; give them
+  # https://<app>.fly.dev/mcp. Add --public-url https://<app>.fly.dev to answer
+  # sign-ins on that one name only. LOREFILE_TOKEN needs 32+ characters for it.
   app = "serve --dir /spaces --port 7070 --host 0.0.0.0"
 
 [mounts]
