@@ -6,18 +6,23 @@
 #     target in the build matrix and attaches them, each with a .sha256 and one
 #     checksums.txt, to a GitHub Release whose notes are the tag's message;
 #   - pushes ghcr.io/<owner>/lorefile:<version> and :latest (linux/amd64, linux/arm64);
-#   - publishes the npm launcher if the NPM_TOKEN secret exists, and the crate if
-#     CARGO_REGISTRY_TOKEN exists. Without a secret its job is skipped and the run
-#     shows a notice saying which secret to add.
+#   - publishes the npm launcher and the crate with trusted publishing: npm and
+#     crates.io trust this repository's release.yml, and each job swaps the run's
+#     GitHub identity (OIDC) for a token that lasts minutes. No secrets, nothing
+#     to renew. The trust is set up once on each site: npmjs.com > lorefile >
+#     Settings > Trusted publisher, and crates.io > lorefile > Settings > Trusted
+#     Publishing, both with repository lorefile/lorefile and workflow release.yml.
+#     A tag pushed in another repository (a fork) skips both, with a notice.
 #
 # Running it by hand (Actions > release > Run workflow) is the dry run: the same
 # builds, the assets kept as workflow artifacts instead of a release,
 # `npm publish --dry-run`, `cargo publish --dry-run`, and the image pushed as :edge.
-# Do one on a branch before the first tag.
+# It needs no trusted publisher. Do one on a branch after changing this file.
 #
 # Re-running a tag's run is safe: an existing release keeps its assets, and a
-# version already on npm or crates.io is not published again. So after adding a
-# missing secret, re-run the tag's workflow and only what is missing goes out.
+# version already on npm or crates.io is not published again. So if a publish
+# failed (say the trusted publisher was missing), fix that and re-run the tag's
+# workflow: only what is missing goes out.
 
 name: release
 
@@ -50,8 +55,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       prerelease: ${{ steps.version.outputs.prerelease }}
       image: ${{ steps.version.outputs.image }}
-      npm: ${{ steps.secrets.outputs.npm }}
-      cargo: ${{ steps.secrets.outputs.cargo }}
+      publish: ${{ steps.publish.outputs.mode }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -85,30 +89,22 @@ jobs:
             echo "::warning title=LOREFILE_REPO is another repository::This run is in $GITHUB_REPOSITORY but LOREFILE_REPO is $LOREFILE_REPO, so the npm launcher and install script would download from $LOREFILE_REPO. Fine for a dry run; change LOREFILE_REPO here, in npm/ and in scripts/install.sh before releasing."
           fi
 
-      - name: check which publishing secrets exist
-        id: secrets
+      - name: decide whether npm and crates.io publish
+        id: publish
         shell: bash
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          # For each registry: publish (tag + secret), dry-run (run by hand) or skip (tag, no secret).
-          mode() {
-            if [ "$GITHUB_EVENT_NAME" != push ]; then echo dry-run
-            elif [ -n "$1" ]; then echo publish
-            else echo skip
-            fi
-          }
-          npm=$(mode "$NPM_TOKEN")
-          cargo=$(mode "$CARGO_REGISTRY_TOKEN")
-          echo "npm=$npm" >> "$GITHUB_OUTPUT"
-          echo "cargo=$cargo" >> "$GITHUB_OUTPUT"
-          if [ "$npm" = skip ]; then
-            echo "::notice title=npm publish skipped::The NPM_TOKEN secret is not set, so the lorefile npm package was not published. Add it under Settings > Secrets and variables > Actions, then re-run this workflow."
+          # publish: a tag in LOREFILE_REPO, the repository npm and crates.io trust.
+          # dry-run: run by hand, on any branch. skip: a tag in another repository.
+          if [ "$GITHUB_EVENT_NAME" != push ]; then
+            mode=dry-run
+          elif [ "${GITHUB_REPOSITORY,,}" = "${LOREFILE_REPO,,}" ]; then
+            mode=publish
+          else
+            mode=skip
+            echo "::notice title=npm and crates.io skipped::This run is in $GITHUB_REPOSITORY, not $LOREFILE_REPO, so the npm package and the crate were not published: their trusted publishers trust $LOREFILE_REPO only."
           fi
-          if [ "$cargo" = skip ]; then
-            echo "::notice title=crates.io publish skipped::The CARGO_REGISTRY_TOKEN secret is not set, so the lorefile crate was not published. Add it under Settings > Secrets and variables > Actions, then re-run this workflow."
-          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "npm and crates.io: $mode"
 
       # Every archive carries the licences of the crates compiled into it, and
       # DuckDB's (MIT) for the full build. Collected once here for all targets.
@@ -381,22 +377,30 @@ jobs:
           if-no-files-found: error
 
   npm:
-    name: npm (${{ needs.plan.outputs.npm }})
+    name: npm (${{ needs.plan.outputs.publish }})
     needs: [plan, release]
-    if: needs.plan.outputs.npm != 'skip'
+    if: needs.plan.outputs.publish != 'skip'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # npm provenance: the package page links back to this run
+      # Trusted publishing (npm signs in as this run, no token) and provenance
+      # (the package page links back to this run).
+      id-token: write
     env:
       VERSION: ${{ needs.plan.outputs.version }}
-      MODE: ${{ needs.plan.outputs.npm }}
+      MODE: ${{ needs.plan.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
+      # No registry-url on purpose: it writes an .npmrc holding a placeholder token.
+      # Without one, `npm view` asks anonymously and `npm publish` signs in through
+      # trusted publishing, or says plainly that it could not.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
+      - name: upgrade npm (trusted publishing needs 11.5.1 or newer; Node 22 ships 10)
+        run: |
+          npm install -g npm@11
+          npm --version
       - uses: actions/download-artifact@v4
         with:
           name: checksums
@@ -423,8 +427,6 @@ jobs:
 
       - name: publish
         working-directory: npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           dist_tag=latest
           case $VERSION in *-dev.*) dist_tag=dev ;; *-*) dist_tag=next ;; esac
@@ -432,33 +434,58 @@ jobs:
             npm publish --dry-run --tag "$dist_tag"
           elif npm view "lorefile@$VERSION" version >/dev/null 2>&1; then
             echo "::notice title=Already on npm::lorefile@$VERSION is already published; nothing to do."
-          else
-            npm publish --access public --provenance --tag "$dist_tag"
+          elif ! npm publish --access public --provenance --tag "$dist_tag"; then
+            echo "::error title=npm did not accept the publish::If the log above says ENEEDAUTH, 401 or 404, npm does not trust this run: on npmjs.com, open the lorefile package > Settings > Trusted publisher and check it is GitHub Actions, organization lorefile, repository lorefile, workflow release.yml, no environment, with npm publish allowed. Then re-run this workflow."
+            exit 1
           fi
 
   crate:
-    name: crates.io (${{ needs.plan.outputs.cargo }})
+    name: crates.io (${{ needs.plan.outputs.publish }})
     needs: [plan, release]
-    if: needs.plan.outputs.cargo != 'skip'
+    if: needs.plan.outputs.publish != 'skip'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # trusted publishing: crates.io swaps this run's identity for a short-lived token
     env:
       VERSION: ${{ needs.plan.outputs.version }}
-      MODE: ${{ needs.plan.outputs.cargo }}
+      MODE: ${{ needs.plan.outputs.publish }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: publish (cargo builds the packaged crate first, DuckDB included)
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      # Built before the token is asked for: the token lasts minutes, compiling DuckDB can take longer.
+      - name: package and build the crate (DuckDB included; 5 to 15 minutes)
         run: |
           cargo package --locked --list
+          cargo package --locked
+
+      - name: dry run, or check whether this version is already on crates.io
+        id: check
+        run: |
+          upload=false
           if [ "$MODE" = dry-run ]; then
-            cargo publish --locked --dry-run
+            cargo publish --locked --no-verify --dry-run
           elif curl -fsS https://index.crates.io/lo/re/lorefile 2>/dev/null | grep -q "\"vers\":\"$VERSION\""; then
             echo "::notice title=Already on crates.io::lorefile $VERSION is already published; nothing to do."
           else
-            cargo publish --locked
+            upload=true
           fi
+          echo "upload=$upload" >> "$GITHUB_OUTPUT"
+
+      # Fails here if crates.io does not trust this run: crates.io > lorefile > Settings >
+      # Trusted Publishing needs owner lorefile, repository lorefile, workflow release.yml.
+      # The token is revoked when the job ends.
+      - name: get a short-lived crates.io token (trusted publishing)
+        id: auth
+        if: steps.check.outputs.upload == 'true'
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: publish (the crate built and checked above)
+        if: steps.check.outputs.upload == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: cargo publish --locked --no-verify
 
   # The image is built from the Dockerfile, from source, once per platform on a
   # native runner (compiling DuckDB under emulation would take hours), pushed by
