@@ -80,6 +80,12 @@ textarea.yaml{width:100%;min-height:420px;font-family:var(--mono);font-size:12.5
 .grade{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;background:var(--chip);color:var(--muted)}
 .grade.proposed,.grade.changed{background:var(--warn-bg);color:var(--warn)}.grade.accepted{background:var(--info-bg);color:var(--info)}.grade.checked{background:var(--ok-bg);color:var(--ok)}
 .chip.bad{background:var(--block-bg);color:var(--block)}
+.gline{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.5}.gline>span:last-child{min-width:0}.gline button{margin-left:4px}.gl-i{flex:0 0 auto;width:16px;text-align:center;color:var(--muted);font-weight:700}.gl-i.ok{color:var(--ok)}.gl-i.warn{color:var(--warn)}
+button.lnk.quiet{color:var(--muted);font-size:12.5px;text-decoration:underline;text-underline-offset:2px;margin-left:6px}
+.meaning{font-size:12.5px;color:var(--muted)}.meaning summary{cursor:pointer;width:max-content}.meaning div{margin-top:3px}
+.kinds-hint{font-size:12px;margin-top:2px}
+.card details>summary{cursor:pointer;font-size:12.5px;color:var(--muted);width:max-content}.details{display:flex;flex-direction:column;gap:5px;margin-top:6px;font-size:13px}.drow{display:grid;grid-template-columns:76px 1fr;gap:8px;align-items:baseline}.drow pre{margin:0}
+.namebox .row{align-items:center}
 button.lnk{background:none;border:none;color:var(--accent);padding:0;min-height:0;cursor:pointer;font:inherit;text-align:left}button.lnk:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .rv{display:flex;flex-direction:column;gap:12px;max-width:880px;min-width:0}
 .rv-title{font-size:22px;line-height:1.3}
@@ -156,8 +162,39 @@ const nameOk = (n) => n.length <= 60 && /^[\p{L}\p{N} .'_-]+$/u.test(n) && !/age
 const NAME_RULE = 'Use up to 60 letters, digits, spaces and . - \' _ (no "agent" or "via"): the name is what history and trust.yaml will say.';
 // a 401 means the sign-in went away (a new token, or signed out elsewhere): load again and the server shows its login screen
 const api = async (p, opt) => { const r = await fetch(p, opt); if (r.status === 401) { location.reload(); return new Promise(() => {}); } return r.json(); };
-// the name from Settings, kept in this browser, rides along with every write: "Priya via page" in history and trust.yaml
-const ME = () => { try { return localStorage.getItem('lorefile-name') || ''; } catch (e) { return ''; } };
+// the name, kept in this browser (Settings › Your name, the sign-in page, or the first decision), rides along with every
+// write: "Priya via page" in history and trust.yaml. Where the browser keeps nothing, it lives in memory for the tab.
+let MEM_NAME = '';
+const ME = () => { try { return localStorage.getItem('lorefile-name') || MEM_NAME; } catch (e) { return MEM_NAME; } };
+function setMe(v){ MEM_NAME = v || ''; try { if (v) localStorage.setItem('lorefile-name', v); else localStorage.removeItem('lorefile-name'); } catch (e) {} }
+// every decision from the page waits for a name (the server still takes none, from scripts and older pages)
+const nameReady = () => { const n = ME(); return !!n && nameOk(n); };
+// a button that needs a name: disabled, with the reason as its label, until there is one ({n} is the name)
+const nameBtn = (label, wait, js, cls, off) => { const ok = nameReady(); return `<button class="${cls || 'small'}" data-needs-name data-label="${esc(label)}" data-wait="${esc(wait)}" ${off ? 'data-off' : ''} ${!ok || off ? 'disabled' : ''} onclick="${js}">${esc(ok ? label.replace('{n}', ME()) : wait)}</button>`; };
+function syncNameButtons(){ const ok = nameReady(), n = ME(); document.querySelectorAll('[data-needs-name]').forEach(b => { b.disabled = !ok || b.hasAttribute('data-off'); b.textContent = ok ? b.dataset.label.replace('{n}', n) : b.dataset.wait; }); }
+function nameBoxHtml(id){
+  const me = ME();
+  return `<div class="rv-q namebox"><label for="${id}"><b>Your name</b> <span class="hint">kept in this browser, recorded with every decision</span></label><div class="row"><input id="${id}" value="${esc(me)}" placeholder="e.g. Vinay" style="max-width:260px" autocomplete="name" oninput="nameTyped(this)">${me ? `<button type="button" class="lnk" onclick="notMe(${jq(id)})">not you?</button>` : ''}</div><div class="name-err"></div>${AUTH && !AUTH.required ? '<div class="hint">This server runs with --no-auth: anyone who can reach it can type any name.</div>' : ''}</div>`;
+}
+function nameTyped(el){
+  const v = el.value.trim(), err = el.closest('.namebox').querySelector('.name-err');
+  if (v && !nameOk(v)) { err.innerHTML = `<div class="d error">✗ That name cannot be used. ${esc(NAME_RULE)}</div>`; setMe(''); }
+  else { err.innerHTML = ''; setMe(v); }
+  syncNameButtons();
+}
+function notMe(id){ setMe(''); const b = $(id); if (b) { b.value = ''; nameTyped(b); b.focus(); } }
+// a name box for screens whose decisions sit on cards, shown only while no name is known
+const nameBar = () => !ro() && !shipped() && !nameReady() ? `<div class="card">${nameBoxHtml('nb-name')}</div>` : '';
+function decideName(){
+  if (nameReady()) return ME();
+  const b = document.querySelector('.namebox input');
+  if (b) { note('Type your name first: it is recorded with every decision.', true); b.focus(); return null; }
+  // no box on this screen (Vouch for all under What to do next): ask once
+  const v = (prompt('Your name, recorded with this decision (kept in this browser)') || '').trim();
+  if (!v) return null;
+  if (!nameOk(v)) { note('That name cannot be used. ' + NAME_RULE, true); return null; }
+  setMe(v); return v;
+}
 const post = (p, body) => api(p, { method:'POST', headers:{'Content-Type':'application/json', 'X-Lorefile':'write'}, body: JSON.stringify(ME() && body && typeof body === 'object' && !Array.isArray(body) ? Object.assign({ by: ME() }, body) : body) });
 // --- grades: who stands behind each definition (trust.yaml) ---
 const TR = (kind, name) => ((O.trust && O.trust.items) || []).find(x => x.kind === kind && x.name === name) || { grade: 'ungraded' };
@@ -166,49 +203,59 @@ const whoSaid = (by) => { const n = String(by || '').split(' via ')[0].trim(); r
 function gradeChip(kind, name){
   const t = TR(kind, name); const say = esc(t.say || 'Nobody has said yet who stands behind this.');
   if (t.changed_since) return `<span class="grade changed" title="${say}">✎ changed since ${esc(t.changed_since.split(' ')[0])}</span>`;
-  if (t.grade === 'checked') return `<span class="grade checked" title="${say}">● checked ${esc(shortDate(t.at))}</span>`;
-  if (t.grade === 'accepted') return `<span class="grade accepted" title="${say}">accepted</span>`;
-  if (t.grade === 'proposed') return `<span class="grade proposed" title="${say}">▲ proposed by an agent</span>`;
+  if (t.grade === 'checked') return `<span class="grade checked" title="${say}">● checked</span>`;
+  if (t.grade === 'accepted') return `<span class="grade accepted" title="${say}">✓ accepted</span>`;
+  if (t.grade === 'proposed') return `<span class="grade proposed" title="${say}">▲ unverified</span>`;
   return `<span class="grade" title="${say}">ungraded</span>`;
 }
-// the line under a chip: who and when, and for a check, which source and what was compared
-function gradeNote(kind, name){
-  const t = TR(kind, name);
-  if (t.changed_since) return `<div class="hint">Changed since it was ${esc(t.changed_since)} (${esc(whoSaid(t.was_by))}); a person has to look again.</div>`;
-  if (t.grade === 'checked') return `<div class="hint">${esc(whoSaid(t.by))} · ${esc(t.against || '')} · “${esc(t.note || '')}”</div>`;
-  if (t.grade === 'proposed') return `<div class="hint">${esc(shortDate(t.at))} · ${esc(t.by)} · not reviewed</div>`;
-  if (t.grade === 'accepted') return `<div class="hint">Accepted by ${esc(whoSaid(t.by))}, ${esc(shortDate(t.at))}</div>`;
-  return '';
+// "Vinay" from "Vinay via page"; a decision made with no name says so
+const anonBy = (by) => whoSaid(by) === 'a person';
+const whoWords = (by) => anonBy(by) ? 'a person (no name was given)' : whoSaid(by);
+const agentWho = (by) => { const a = agentOf(by); return a === 'An agent' ? 'an agent' : a; };
+const labelOf = (n) => /[a-z]/.test(String(n || '')) ? human(snake(n)) : String(n || '');
+const kindName = (k, n) => k === 'binding' ? `the source of ${n}` : k === 'term' ? `the also-called word “${n}”` : `${k} ${n}`;
+// the line in words under a definition: who stands behind it, and what that means for agents
+function gradeLine(kind, name, opts){
+  const t = TR(kind, name), k = jq(kind), n = jq(name), can = !ro(), o = opts || {};
+  const sign = can && anonBy(t.by) && (t.grade === 'accepted' || t.grade === 'checked') && !t.changed_since ? ' ' + nameBtn('Put your name on it', 'Type your name to sign it', `signGrade(${k},${n})`) : '';
+  const looks = can ? ' ' + nameBtn('Looks right', 'Type your name first', `looksRight(${k},${n})`) : '';
+  const again = can && kind !== 'term' && !o.noCheckAgain ? ` <button type="button" class="lnk quiet" onclick="openCheck(${k},${n})">Check again…</button>` : '';
+  let h;
+  if (t.changed_since) { const [g, at] = t.changed_since.split(' '); h = `<span class="gl-i warn" aria-hidden="true">✎</span><span><b>Changed since ${esc(whoWords(t.was_by))} ${esc(g)} it on ${esc(shortDate(at))}.</b> Look again.${looks}</span>`; }
+  else if (t.grade === 'checked') h = `<span class="gl-i ok" aria-hidden="true">●</span><span><b>Checked against ${esc(t.against || 'a source')} by ${esc(whoWords(t.by))}, ${esc(shortDate(t.at))}</b>${t.note ? `: “${esc(t.note)}”` : ''}. Agents use it.${sign}${again}</span>`;
+  else if (t.grade === 'accepted') h = `<span class="gl-i ok" aria-hidden="true">✓</span><span><b>Accepted by ${esc(whoWords(t.by))}, ${esc(shortDate(t.at))}: agents use it.</b>${sign}${can && kind !== 'term' ? ` <button type="button" class="lnk quiet" onclick="openCheck(${k},${n})">I compared it with real numbers… (optional)</button>` : ''}</span>`;
+  else if (t.grade === 'proposed') h = `<span class="gl-i warn" aria-hidden="true">▲</span><span><b>Unverified</b>: proposed by ${esc(agentWho(t.by))} on ${esc(shortDate(t.at))}; no person has looked.${looks}</span>`;
+  else h = `<span class="gl-i" aria-hidden="true">·</span><span>Nobody has graded this yet.${looks}</span>`;
+  return `<div class="gline">${h}</div>`;
 }
+const gradeMeaning = () => `<details class="meaning"><summary>What do these mean?</summary><div>✓ <b>Accepted</b>: a person stands behind it, and agents use it as settled.</div><div>● <b>Checked</b> (optional): someone ran it against real rows and the result was right.</div><div>▲ <b>Unverified</b>: an agent wrote it and no person has looked; agents say so.</div></details>`;
+// the small buttons beside a chip where there is no room for a line (an also-called word on an entity)
 function gradeButtons(kind, name){
   if (ro()) return '';
-  const t = TR(kind, name); const k = jq(kind), n = jq(name);
-  let h = '';
-  if (t.grade !== 'accepted' && t.grade !== 'checked') h += `<button class="small" onclick="looksRight(${k},${n})" title="Say you stand behind it: saved as accepted by ${esc(ME() || 'a person')}">Looks right</button>`;
-  if (kind !== 'term' && (t.grade === 'accepted' || t.grade === 'checked')) h += `<button class="small" onclick="openCheck(${k},${n})">${t.grade === 'checked' ? 'Check again…' : 'Mark as checked…'}</button>`;
-  return h;
+  const t = TR(kind, name), k = jq(kind), n = jq(name);
+  if (t.changed_since || (t.grade !== 'accepted' && t.grade !== 'checked')) return nameBtn('Looks right', 'Type your name first', `looksRight(${k},${n})`);
+  return anonBy(t.by) ? nameBtn('Put your name on it', 'Type your name to sign it', `signGrade(${k},${n})`) : '';
 }
-async function looksRight(kind, name){ const r = await post(B + '/api/trust', { op: 'accept', kind, name }); await afterWrite({ ...r, summary: r.written ? `Accepted ${kind === 'term' ? 'the word' : kind} ${name}` : undefined }); }
+async function looksRight(kind, name){ if (!decideName()) return; const r = await post(B + '/api/trust', { op: 'accept', kind, name }); await afterWrite({ ...r, summary: r.written ? `Accepted ${kindName(kind, name)}` : undefined }); }
+async function signGrade(kind, name){ if (!decideName()) return; const r = await post(B + '/api/trust', { op: 'sign', kind, name }); await afterWrite(r); }
 function openCheck(kind, name){ const sources = (O.sources || []).map(s => s.connection); ui.check = { kind, name, against: (ui.check && ui.check.against) || sources[0] || '', note: '' }; renderSheet(); }
 function renderSheet(){
   let el = $('sheet'); if (!ui.check) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement('div'); el.id = 'sheet'; el.className = 'sheet'; document.body.appendChild(el); }
-  const c = ui.check; const what = c.kind === 'binding' ? `the data binding of ${c.name}` : `${c.kind} ${c.name}`;
-  el.innerHTML = `<div class="card"><b style="font-size:15px">Mark ${esc(what)} as checked</b><div style="font-size:13px">You are saying: I ran this definition against real rows and the result was right. Lorefile records your word; it does not run anything.</div><div class="form"><label>Against which source</label><select id="ck-against">${(O.sources || []).map(s => `<option ${s.connection===c.against?'selected':''}>${esc(s.connection)}</option>`).join('')}</select><label>What did you compare</label><textarea id="ck-note" rows="2" placeholder="e.g. 412 paid orders for 16–22 Nov, the same as Shopify's own report">${esc(c.note)}</textarea><label>Your name</label><input id="ck-name" value="${esc(ME())}" placeholder="shown on what you check"></div><div id="ck-err"></div><div class="row" style="justify-content:flex-end"><button onclick="ui.check=null;renderSheet()">Cancel</button><button class="primary" onclick="saveCheck()">Mark as checked</button></div></div>`;
+  const c = ui.check; const what = c.kind === 'binding' ? `${labelOf(c.name)}’s source` : c.kind === 'metric' ? labelOf(c.name) : `${c.kind} ${c.name}`;
+  el.innerHTML = `<div class="card"><b style="font-size:15px">You compared ${esc(what)} with real numbers</b><div style="font-size:13px">Optional: accepted is all agents need. This records that you ran it against real rows and the result was right. Lorefile records your word; it does not run anything.</div><div class="form"><label>Against which source</label><select id="ck-against">${(O.sources || []).map(s => `<option ${s.connection===c.against?'selected':''}>${esc(s.connection)}</option>`).join('')}</select><label>What did you compare</label><textarea id="ck-note" rows="2" placeholder="e.g. 412 paid orders for 16–22 Nov, the same as Shopify's own report">${esc(c.note)}</textarea></div>${nameBoxHtml('ck-name')}<div id="ck-err"></div><div class="row" style="justify-content:flex-end"><button onclick="ui.check=null;renderSheet()">Cancel</button>${nameBtn('Mark as checked', 'Type your name to mark it', 'saveCheck()', 'primary')}</div></div>`;
 }
 async function saveCheck(){
-  const c = ui.check; const name = $('ck-name').value.trim();
-  if (name && !nameOk(name)) { $('ck-err').innerHTML = `<div class="d error">✗ That name cannot be used. ${esc(NAME_RULE)}</div>`; return; }
-  try { if (name) localStorage.setItem('lorefile-name', name); else localStorage.removeItem('lorefile-name'); } catch (e) {}
-  // sent as typed, so it counts even where the browser keeps no storage; an empty one says "person via page"
+  const c = ui.check; const name = decideName(); if (!name) return;
   const r = await post(B + '/api/trust', { op: 'check', kind: c.kind, name: c.name, against: $('ck-against').value, note: $('ck-note').value, by: name });
-  if (!r.written) { const why = r.error || (r.diagnostics || []).filter(d => d.level === 'error').map(d => d.message).join('; ') || 'Not saved'; $('ck-err').innerHTML = `<div class="d error">✗ ${esc(why)}</div>`; return; }
+  if (!r.written) { const why = r.error || r.refused || (r.diagnostics || []).filter(d => d.level === 'error').map(d => d.message).join('; ') || 'Not saved'; $('ck-err').innerHTML = `<div class="d error">✗ ${esc(why)}</div>`; return; }
   const against = $('ck-against').value;
-  ui.check = null; renderSheet(); await afterWrite({ ...r, summary: `Checked ${c.kind} ${c.name} against ${against}` });
+  ui.check = null; renderSheet(); await afterWrite({ ...r, summary: `Checked ${kindName(c.kind, c.name)} against ${against}` });
 }
 async function vouchAll(){
   const tc = (O.trust && O.trust.counts) || {}; const n = (tc.ungraded || 0) - (tc.changed || 0);
-  if (!confirm(`Vouch for ${n} ungraded definition${n===1?'':'s'}?\n\nEach metric, data binding, glossary word and guardrail nobody has graded yet is saved as accepted by ${ME() || 'a person'}, in one change. What an agent proposed, and what changed since a person graded it, still need a look each.`)) return;
+  const me = decideName(); if (!me) return;
+  if (!confirm(`Vouch for ${n} ungraded definition${n===1?'':'s'}?\n\nEach metric, source choice, also-called word and guardrail nobody has graded yet is saved as accepted by ${me}, in one change. What an agent proposed, and what changed since a person graded it, still need a look each.`)) return;
   const r = await post(B + '/api/trust', { op: 'vouch_all' }); await afterWrite({ ...r, summary: r.written ? `Vouched for ${r.name} definitions` : undefined });
 }
 const snake = (s) => String(s).replace(/([a-z0-9])([A-Z])/g, '$1_$2').replace(/[-\s]+/g, '_').toLowerCase();
@@ -254,7 +301,8 @@ async function boot(){
 }
 function renderSpacePicker(){
   const sel = $('h-space'); if (!sel || !SPACES) return;
-  const opt = (s) => `<option value="${esc(s.id)}" ${s.id===SPACE?'selected':''} title="${esc((s.description||'').trim())}">${esc(s.name)} · ${s.types} entit${s.types===1?'y':'ies'}${s.ok===false?' · has errors':''}</option>`;
+  const state = (s) => s.empty ? 'empty' : plural(s.types || 0, 'entity', 'entities') + (s.ok === false ? ' · ' + (s.errors ? plural(s.errors, 'error') : 'has errors') : '');
+  const opt = (s) => `<option value="${esc(s.id)}" ${s.id===SPACE?'selected':''} title="${esc((s.description||'').trim())}">${esc(s.name)} · ${esc(state(s))}</option>`;
   const grp = (label, list) => list.length ? `<optgroup label="${label}">${list.map(opt).join('')}</optgroup>` : '';
   const mine = SPACES.spaces.filter(s => !s.builtin), ex = SPACES.spaces.filter(s => s.group === 'example'), packs = SPACES.spaces.filter(s => s.group === 'pack');
   sel.innerHTML = (SPACE ? '' : '<option value="" selected>Pick a space…</option>') + grp('Your spaces', mine) + grp('Examples that ship with it', ex) + grp('Packs for common MCPs', packs) + (!SPACES.single ? `<option value="__new">＋ New space…</option>` : '');
@@ -266,7 +314,7 @@ function switchSpace(v){
 function renderNoSpace(message){
   $('h-name').textContent = 'Lorefile'; $('h-counts').textContent = ''; $('h-ready').textContent = ''; $('h-mode').textContent = SPACES && SPACES.editable ? 'edit mode' : 'read-only'; $('h-mode').className = 'pill ' + (SPACES && SPACES.editable ? '' : 'plain');
   $('nav').innerHTML = `<div style="font-size:12.5px;color:var(--muted);padding:8px;line-height:1.5">A space is one ontology: one brand, one business unit, one client. Pick one at the top, or create the first.</div>`;
-  $('footer').innerHTML = SPACES ? `<span>${SPACES.spaces.filter(s => !s.builtin).length} space(s) of yours in <code>${esc(SPACES.root)}</code></span><span style="flex:1"></span><span>MCP: <code>lorefile mcp --dir ${esc(SPACES.root)}</code></span>` : '';
+  $('footer').innerHTML = SPACES ? `<span>${plural(SPACES.spaces.filter(s => !s.builtin).length, 'space')} of yours in <code>${esc(SPACES.root)}</code></span><span style="flex:1"></span><span>MCP: <code>lorefile mcp --dir ${esc(SPACES.root)}</code></span>` : '';
   const why = message ? `<div class="banner">${esc(message)}</div>` : (SPACE ? `<div class="banner">There is no space called <b>${esc(SPACE)}</b> here. Pick one at the top.</div>` : '');
   ui.ns = ui.ns || { name: '', from: 'blank' };
   $('view').innerHTML = main(why + (SPACE ? '' : newSpaceHtml(true)));
@@ -279,15 +327,27 @@ async function loadSummary(){
   (O.functions || []).forEach(f => { f.name = f.name || f.function; });
   $('h-md').href = B + '/api/summary.md';
   try { PR = await api(B + '/api/proposals'); } catch (e) { PR = { proposals: [], activity: [] }; }
+  // the picker counts too: every decision, edit, undo and reload passes through here. A failed fetch keeps the old one.
+  try { const sp = await api('/api/spaces'); if (sp && sp.spaces) { SPACES = sp; renderSpacePicker(); } } catch (e) {}
+  LOADED_AT = Date.now();
   const f = facts(); const s = O.stats;
   $('h-name').textContent = O.manifest.name + (O.manifest.version ? ' v' + O.manifest.version : '');
-  $('h-counts').textContent = `${s.types} entities · ${s.relationships} links · ${s.constraints} guardrails · ${s.actions} actions`;
-  $('h-meter').style.width = f.ready + '%'; $('h-ready').textContent = f.ready + '% ready for agents';
+  $('h-counts').textContent = `${plural(s.types, 'entity', 'entities')} · ${countOr(s.relationships, 'link')} · ${countOr(s.constraints, 'guardrail')} · ${countOr(s.actions, 'action')}`;
+  $('h-meter').style.width = f.ready + '%'; $('h-ready').textContent = f.ready + '% filled in';
+  $('h-ready').title = 'What the meter counts: fields described, links explained, entities with data. What to do next lists what is left beyond that.';
   $('h-mode').textContent = O.editable ? (O.commit_edits ? 'edit mode · history on' : (nested() ? 'edit mode · changes stay uncommitted' : 'edit mode · history off')) : (O.space && O.space.builtin ? 'shipped ' + O.space.group + ' · read-only' : 'read-only');
   $('h-mode').className = 'pill ' + (O.editable ? '' : 'plain');
   renderNav(); renderFooter();
 }
 async function reload(){ await post(B + '/api/reload', {}); await loadSummary(); render(); }
+// back to the tab: an agent may have written meanwhile. Never while someone is typing, editing or checking.
+let LOADED_AT = 0;
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !O || !SPACE) return;
+  const a = document.activeElement;
+  if ((a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')) || ui.editor || ui.check || Date.now() - LOADED_AT < 5000) return;
+  await loadSummary(); if (O && !O.error) render();
+});
 function go(screen, arg){ const h = screen + (arg ? '/' + encodeURIComponent(arg) : ''); if (location.hash.slice(1) === h) { onHash(); } else { location.hash = h; } }
 function onHash(){ const h = decodeURIComponent(location.hash.slice(1)); const [screen, ...rest] = h.split('/'); route = { screen: screen || 'map', arg: rest.join('/') }; ui.editor = null; renderNav(); render(); }
 window.addEventListener('hashchange', onHash);
@@ -324,12 +384,12 @@ function renderNav(){
   let h = `<input id="find" placeholder="Find anything…" value="${esc(ui.search)}" oninput="searchNav(this.value)">`;
   if (q) { n.innerHTML = h + '<h4>Results</h4><div id="find-results"><div class="empty">…</div></div>'; return; }
   const build = [
-    ['sources', 'Sources', `${(O.sources||[]).length} connected · ${f.unbound.length} entities without data`, f.unbound.length > 0],
-    ['entities', 'Entities', f.types.length ? `${f.types.length} · ${f.gapTypes.length} need plain words` : 'none yet: start here', f.gapTypes.length > 0 || !f.types.length],
-    ['links', 'Links', `${f.rels.length} · ${f.relsNoDesc.length} without a sentence`, f.relsNoDesc.length > 0],
-    ['logic', 'Logic', `${f.metrics.length} metric${f.metrics.length===1?'':'s'} · ${f.fns.length} function${f.fns.length===1?'':'s'}${f.metricsNoOwner.length ? ' · ' + f.metricsNoOwner.length + ' with no owner' : ''}`, f.metricsNoOwner.length > 0],
-    ['rules', 'Guardrails', `${f.rules.length} · ${f.noOwner.length} with no sign-off`, f.noOwner.length > 0],
-    ['actions', 'Actions', `${(O.actions||[]).length} things agents may do`, false]
+    ['sources', 'Sources', !(O.sources||[]).length ? 'none yet' : `${plural((O.sources||[]).length, 'source')} · ${f.unbound.length ? plural(f.unbound.length, 'entity', 'entities') + ' without data' : (f.types.length ? 'every entity has data' : 'no entities yet')}`, f.unbound.length > 0],
+    ['entities', 'Entities', f.types.length ? `${f.types.length} · ${f.gapTypes.length ? f.gapTypes.length + ' need plain words' : 'every field described'}` : 'none yet: start here', f.gapTypes.length > 0 || !f.types.length],
+    ['links', 'Links', f.rels.length ? `${f.rels.length} · ${f.relsNoDesc.length ? f.relsNoDesc.length + ' without a sentence' : 'every link explained'}` : 'none yet', f.relsNoDesc.length > 0],
+    ['logic', 'Logic', `${countOr(f.metrics.length, 'metric')} · ${countOr(f.fns.length, 'function')}${f.metricsNoOwner.length ? ' · ' + f.metricsNoOwner.length + ' with no owner' : ''}`, f.metricsNoOwner.length > 0],
+    ['rules', 'Guardrails', f.rules.length ? `${f.rules.length} · ${f.noOwner.length ? f.noOwner.length + ' with no sign-off' : 'every one signed off'}` : 'none yet', f.noOwner.length > 0],
+    ['actions', 'Actions', (O.actions||[]).length ? `${plural((O.actions||[]).length, 'thing')} agents may do` : 'none yet', false]
   ];
   h += '<h4>Build</h4>' + build.map(([k, t, s, warn], i) => `<button class="step ${route.screen===k?'active':''}" onclick="go('${k}')"><span class="dot ${warn?'warn':'ok'}">${warn ? i+1 : '✓'}</span><span><div class="t">${t}</div><div class="s ${warn?'warn':''}">${esc(s)}</div></span></button>`).join('');
   const use = [['usage', 'How to use it', 'what agents can answer now', 0], ['map', 'Map', 'the whole shape', 0], ['agents', 'Agents', 'MCP, proposals, activity', f.pending], ['history', 'History', 'what changed, who, when', 0], ['data', 'Data & SQL', 'one door across sources', 0], ['files', 'Files', 'every YAML, explained', 0], ['settings', 'Settings', 'sharing, server, MCP', 0]];
@@ -396,22 +456,28 @@ function renderMap(v){
   const legend = O.domains.map(d => `<span><i style="background:${domainColor(d.name)}"></i>${esc(d.name)}</span>`).join('');
   const t = byName[ui.mapSel];
   let side = '';
-  if (t) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><i style="width:10px;height:10px;border-radius:50%;background:${domainColor(t.domain)}"></i><h2>${esc(t.name)}</h2></div><div style="font-size:13.5px">${esc(t.description)}</div><div style="font-size:12.5px;color:var(--muted)">${t.fields} fields · ${f.rels.filter(r => r.from===t.name||r.to===t.name).length} links · ${rulesFor(t.name).length} guardrails · ${t.has_source ? esc((t.source_kind||'inline') + ' ' + (t.source_table||'')) : 'no data bound'}</div><div class="row"><button class="primary small" onclick="go('entities',${jq(t.name)})">Open</button><button class="small" onclick="ui.ruleQuery=${jq(t.name)};go('rules')">Its guardrails</button></div></div>`;
-  const nudges = [];
+  if (t) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row" style="gap:8px"><i style="width:10px;height:10px;border-radius:50%;background:${domainColor(t.domain)}"></i><h2>${esc(t.name)}</h2></div><div style="font-size:13.5px">${esc(t.description)}</div><div style="font-size:12.5px;color:var(--muted)">${plural(t.fields, 'field')} · ${countOr(f.rels.filter(r => r.from===t.name||r.to===t.name).length, 'link')} · ${countOr(rulesFor(t.name).length, 'guardrail')} · ${t.has_source ? esc((t.source_kind||'inline') + ' ' + (t.source_table||'')) : 'no data bound'}</div><div class="row"><button class="primary small" onclick="go('entities',${jq(t.name)})">Open</button><button class="small" onclick="ui.ruleQuery=${jq(t.name)};go('rules')">Its guardrails</button></div></div>`;
+  side += nextSteps();
+  v.innerHTML = `<div class="map"><div style="position:relative;width:${L.width}px;height:${L.height}px;margin:0 auto">${edges}${nodes}</div><div class="legend">${legend}</div></div><div class="aside">${side}</div>`;
+}
+// "What to do next": the nudges both Home and Map show, in the page's words
+function nextSteps(){
+  const f = facts(), nudges = [];
   const tc = (O.trust && O.trust.counts) || {};
+  const ungraded = (tc.ungraded || 0) - (tc.changed || 0);
   if (tc.proposed) nudges.push([`${plural(tc.proposed, 'definition')} written by agents, not reviewed`, 'An agent wrote them and no person has looked. Agents call them unverified until someone does.', 'Review', "go('agents')"]);
   if (tc.changed) nudges.push([`${plural(tc.changed, 'definition')} changed since a person graded ${tc.changed === 1 ? 'it' : 'them'}`, 'Edited outside Lorefile (by hand, a merge, another tool), so the grade no longer counts.', 'Review', "go('agents')"]);
-  if (tc.ungraded - (tc.changed || 0) > 0 && !shipped()) nudges.push([`${plural(tc.ungraded - (tc.changed || 0), 'definition')} ${tc.ungraded - (tc.changed || 0) === 1 ? 'is' : 'are'} ungraded`, 'Metrics, data bindings, words and guardrails nobody has stood behind yet. If you know them, vouch for them.', ro() ? '' : 'Vouch for all', ro() ? '' : 'vouchAll()']);
+  if (ungraded > 0 && !shipped()) nudges.push([`${plural(ungraded, 'definition')} ${ungraded === 1 ? 'is' : 'are'} ungraded`, 'Metrics, source choices, also-called words and guardrails nobody has stood behind yet. If you know them, vouch for them.', ro() ? '' : 'Vouch for all', ro() ? '' : 'vouchAll()']);
   if (!f.types.length) nudges.push(['No entities yet', 'Start with the nouns of the business: Customer, Order, Campaign. Each becomes a small YAML file that agents read.', 'Add the first entity', "go('entities')"]);
   if (shipped()) nudges.push([`A shipped ${O.space.group}, read-only`, 'Browse it to see how things are described, linked and guarded. Copy it to make it yours.', 'Copy into a new space', `ui.ns={name:'',from:${jq(O.space.id)}};go('new-space')`]);
-  if (f.pending) nudges.push([`${f.pending} change${f.pending>1?'s':''} proposed by agents`, 'Something an agent learned while answering your team. Review it so the next person gets the same answer.', 'Review', "go('agents')"]);
-  if (f.gapTypes.length) nudges.push([`${f.gapTypes.length} entities have fields without plain words`, f.gapTypes.slice(0, 4).map(t => `${t.name} (${t.fields - t.described})`).join(', ') + (f.gapTypes.length > 4 ? '…' : ''), 'Add words', `ui.typeTab='fields';go('entities',${jq(f.gapTypes[0].name)})`]);
-  if (f.relsNoDesc.length) nudges.push([`${f.relsNoDesc.length} links have no sentence`, 'One line each, like "The carrier currently booked for the parcel".', 'Describe links', "go('links')"]);
-  if (f.unbound.length) nudges.push([`${f.unbound.map(t => t.name).join(' and ')} have no data behind them`, 'Agents can read their rules but cannot check a real row.', 'Bind a table', `ui.typeTab='data';go('entities',${jq(f.unbound[0].name)})`]);
-  if (f.noOwner.length) nudges.push([`${f.noOwner.length} guardrails have no sign-off`, f.noOwner.map(r => r.id).join(', '), 'Name an owner', `go('rules',${jq(f.noOwner[0].id)})`]);
-  if (!nudges.length) nudges.push(['Nothing waiting', 'Every field has words, every link a sentence, every entity a table. Agents have what they need.', 'See agents', "go('agents')"]);
-  side += `<h4>What to do next</h4>` + nudges.map(([t, d, cta, js]) => `<div class="card"><b style="font-size:13.5px">${esc(t)}</b><div style="font-size:12.5px;color:var(--muted)">${esc(d)}</div>${cta ? `<button class="small" style="align-self:flex-start" onclick="${js}">${cta}</button>` : ''}</div>`).join('');
-  v.innerHTML = `<div class="map"><div style="position:relative;width:${L.width}px;height:${L.height}px;margin:0 auto">${edges}${nodes}</div><div class="legend">${legend}</div></div><div class="aside">${side}</div>`;
+  if (f.pending) nudges.push([`${plural(f.pending, 'change')} proposed by agents`, 'Something an agent learned while answering your team. Review it so the next person gets the same answer.', 'Review', "go('agents')"]);
+  if (f.metricsNoOwner.length) nudges.push([`${plural(f.metricsNoOwner.length, 'metric')} ${f.metricsNoOwner.length === 1 ? 'has' : 'have'} no owner`, f.metricsNoOwner.slice(0, 4).map(m => labelOf(m.name)).join(', ') + (f.metricsNoOwner.length > 4 ? '…' : '') + ': nobody is named to decide what ' + (f.metricsNoOwner.length === 1 ? 'it means' : 'they mean') + '.', ro() ? '' : 'Name an owner', `ui.focusOwner=true;go('logic')`]);
+  if (f.gapTypes.length) nudges.push([`${plural(f.gapTypes.length, 'entity', 'entities')} ${f.gapTypes.length === 1 ? 'has' : 'have'} fields without plain words`, f.gapTypes.slice(0, 4).map(t => `${t.name} (${t.fields - t.described})`).join(', ') + (f.gapTypes.length > 4 ? '…' : ''), 'Add words', `ui.typeTab='fields';go('entities',${jq(f.gapTypes[0].name)})`]);
+  if (f.relsNoDesc.length) nudges.push([`${plural(f.relsNoDesc.length, 'link')} ${f.relsNoDesc.length === 1 ? 'has' : 'have'} no sentence`, 'One line each, like "The carrier currently booked for the parcel".', 'Describe links', "go('links')"]);
+  if (f.unbound.length) nudges.push([`${f.unbound.map(t => t.name).join(' and ')} ${f.unbound.length === 1 ? 'has' : 'have'} no data behind ${f.unbound.length === 1 ? 'it' : 'them'}`, 'Agents can read their rules but cannot check a real row.', 'Bind a table', `ui.typeTab='data';go('entities',${jq(f.unbound[0].name)})`]);
+  if (f.noOwner.length) nudges.push([`${plural(f.noOwner.length, 'guardrail')} ${f.noOwner.length === 1 ? 'has' : 'have'} no sign-off`, f.noOwner.map(r => r.id).join(', '), 'Name an owner', `go('rules',${jq(f.noOwner[0].id)})`]);
+  if (!nudges.length) nudges.push(['Nothing waiting', 'Every field has words, every link a sentence, every entity a table, every metric an owner. Agents have what they need.', 'See agents', "go('agents')"]);
+  return `<h4 title="Beyond what the meter counts (fields described, links explained, entities with data): owners, grades and what agents proposed">What to do next</h4>` + nudges.map(([t, d, cta, js]) => `<div class="card"><b style="font-size:13.5px">${esc(t)}</b><div style="font-size:12.5px;color:var(--muted)">${esc(d)}</div>${cta ? `<button class="small" style="align-self:flex-start" onclick="${js}">${cta}</button>` : ''}</div>`).join('');
 }
 function mapPick(name){ ui.mapSel = ui.mapSel === name ? null : name; render(); }
 
@@ -483,12 +549,12 @@ function linkRow(from, name, to, card, desc, incoming){
 }
 async function dataTab(d){
   const w = await api(B + '/api/where?name=' + encodeURIComponent(d.name));
-  let h = '';
+  let h = w.connection ? nameBar() : '';
   if (w.connection) {
     const fromUser = w.kind === 'from_user';
     const said = fromUser ? `Rows come from a file a person gives the agent (usually called ${esc(w.table)}…). Lorefile keeps the meaning, not the rows: the agent reads the file with its own tools.` : (w.readable_here ? `Rows are read directly, so guardrails can be checked against a real ${esc(d.name)}.` : `Not readable here. An agent calls where_is(${esc(d.name)}), fetches the row it needs with its own ${esc(w.kind)} connector, and passes it inline to validate.`);
     const detail = fromUser ? `columns ${(w.columns || []).join(', ')}` : (w.hint || ('key ' + (w.key || '')));
-    h += `<div class="card"><div class="row"><b>${fromUser ? 'From a file people give agents' : (w.readable_here ? 'Readable here' : 'Lives in')} · ${esc(w.connection)} · ${esc(w.table)}</b><span style="margin-left:auto"></span>${gradeChip('binding', d.name)}${gradeButtons('binding', d.name)}</div>${gradeNote('binding', d.name)}<div style="font-size:13px">${said}</div><div class="mono" style="color:var(--muted)">${esc(detail)}</div></div>`;
+    h += `<div class="card"><div class="row"><b>${fromUser ? 'From a file people give agents' : (w.readable_here ? 'Readable here' : 'Lives in')} · ${esc(w.connection)} · ${esc(w.table)}</b><span style="margin-left:auto"></span>${gradeChip('binding', d.name)}</div>${gradeLine('binding', d.name)}${gradeMeaning()}<div style="font-size:13px">${said}</div><div class="mono" style="color:var(--muted)">${esc(detail)}</div></div>`;
     if (w.readable_here) { const rows = await api(`/api/instances?name=${encodeURIComponent(d.name)}&limit=25`); const cols = rows.rows && rows.rows.length ? Object.keys(rows.rows[0]) : []; h += `<h4 style="padding:0">Rows <small style="font-weight:400">${rows.total ?? ''}</small></h4><div style="overflow:auto"><table><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr>${(rows.rows||[]).map(r => `<tr>${cols.map(c => `<td class="mono">${esc(typeof r[c]==='object'?JSON.stringify(r[c]):r[c])}</td>`).join('')}</tr>`).join('')}</table></div>`; }
   } else {
     h += `<div class="card need"><b>No data bound yet</b><div style="font-size:13px">Agents can read the rules for ${esc(d.name)} but cannot check a real row. ${w.row_count ? `${w.row_count} inline rows are defined in the file.` : ''}</div></div>`;
@@ -519,17 +585,49 @@ async function addLink(){ const r = await patch({ op: 'add_relationship', type: 
 const runsText = (r) => !r ? 'nowhere declared yet' : r.kind === 'mcp' ? `calls tool ${r.tool} on the ${r.server} MCP server` + (r.args && Object.keys(r.args).length ? ' with ' + JSON.stringify(r.args) : '') : r.kind === 'http' ? `${r.method || 'POST'} ${r.url}` : r.kind === 'manual' ? 'a person does it; the agent records the request' : r.kind;
 const ioText = (m) => Object.entries(m || {}).map(([k, t]) => `${k}: ${t}`).join(', ') || 'nothing';
 const srcOf = (m) => m.source ? m.source.connection : ((m.variants || []).map(x => x.source.connection).join(' and ') || 'sql');
+// the kinds in the page's words, with the plain hint a screen shows the first time it names one
+const HINTS = { entity: ['Entity', 'a kind of thing in your business'], field: ['Field', 'one fact about an entity, like a column'], link: ['Link', 'how two entities connect'], metric: ['Metric', 'a number every agent computes the same way'], function: ['Function', 'an operation an agent can run with its own tools'], guardrail: ['Guardrail', 'a rule an action must not break'], action: ['Action', 'something agents may do'], source: ['Source', 'where an entity’s rows come from'], word: ['Also called', 'another word people use for an entity'] };
+const hintLine = (kinds) => { const ks = [...new Set(kinds)].filter(k => HINTS[k]); return ks.length ? `<div class="hint kinds-hint">${ks.map(k => `${HINTS[k][0]}: ${esc(HINTS[k][1])}`).join(' · ')}</div>` : ''; };
+const SOURCE_WORDS = { from_user: 'files people give agents', mcp: 'tools on an MCP server', bigquery: 'a BigQuery dataset', snowflake: 'a Snowflake database', postgres: 'a Postgres database', duckdb: 'a DuckDB database', csv: 'CSV files', parquet: 'Parquet files', s3: 'files in S3', http: 'an HTTP API' };
+const sourceWords = (conn) => { const s = (O.sources || []).find(x => x.connection === conn); return s ? (SOURCE_WORDS[s.kind] || s.kind) : 'not under sources/'; };
+const BASIS_WORDS = { transactional: 'counted from records, not modelled', attributed: 'credited to channels by an attribution model', modelled: 'estimated by a model', experimental: 'measured by an experiment' };
+const formulaOf = (s) => s ? `${s.tool ? 'tool ' + s.tool + (s.params && Object.keys(s.params).length ? ' ' + JSON.stringify(s.params) : '') + ' · ' : ''}${s.measure || 'count(*)'}${s.filter ? ' where ' + s.filter : ''}` : '';
+// the owner of a metric, in a line: who decides what it means. Empty: a box to name one (set_metric).
+function ownerLine(m){
+  if (m.owner) return `<div class="gline"><span class="gl-i" aria-hidden="true">·</span><span>Owner: <b>${esc(owner(m.owner))}</b> <span class="hint">who decides what this metric means</span></span></div>`;
+  if (ro()) return `<div class="gline"><span class="gl-i warn" aria-hidden="true">!</span><span>Owner: no one named yet <span class="hint">who decides what this metric means</span></span></div>`;
+  const id = 'ow-' + m.name.replace(/[^\w-]/g, '_');
+  return `<div class="gline owner-fix"><span class="gl-i warn" aria-hidden="true">!</span><span class="row" style="gap:6px;flex-wrap:wrap"><label for="${id}">Owner:</label><input id="${id}" class="owner-box" value="${esc(ME())}" placeholder="a name or a team" style="max-width:220px"><button class="small" onclick="saveOwner(${jq(m.name)}, ${jq(id)})">Save</button><span class="hint">who decides what this metric means</span></span></div>`;
+}
+async function saveOwner(metric, id){ const v = ($(id) || {}).value || ''; if (!v.trim()) { note('Type a name or a team first.', true); return; } await patch({ op: 'set_metric', metric, owner: v.trim() }); }
 function renderLogic(v){
   const f = facts();
-  const recipe = (s) => s ? [esc(s.connection), s.tool ? 'tool ' + esc(s.tool) + (s.params && Object.keys(s.params).length ? ' ' + esc(JSON.stringify(s.params)) : '') : '', s.table ? esc(s.table) : '', s.filter ? 'where ' + esc(s.filter) : '', s.measure ? esc(s.measure) : ''].filter(Boolean).join(' · ') : '';
-  const intro = `<div class="card"><b>What logic is</b><div style="font-size:13px"><b>Numbers</b> (metrics): what counts for this business and where the number comes from, so every agent computes it the same way tomorrow. <b>Operations</b> (functions): what an agent can run, with what goes in, what comes out and which tool does it. Neither runs here: the agent reads the recipe and calls the tool with its own login. Guardrails, the next step, say when it may not.</div></div>`;
-  const mcards = f.metrics.map(m => `<div class="card ${m.owner?'':'need'}"><div class="row"><span class="mono" style="font-weight:700;font-size:14px">${esc(m.name)}</span>${m.grain?`<span class="chip">per ${esc(m.grain)}</span>`:''}${m.basis?`<span class="chip" title="What kind of number this is">${esc(m.basis)}</span>`:''}<span style="margin-left:auto;font-size:12.5px;color:${m.owner?'var(--muted)':'var(--warn)'}">${m.owner ? 'owned by ' + esc(owner(m.owner)) : 'no owner yet'}</span>${gradeChip('metric', m.name)}</div>${gradeNote('metric', m.name)}<div style="font-size:13px">${esc(m.description || 'No description yet.')}</div>${m.source ? `<div class="mono" style="font-size:12px;color:var(--muted)">${recipe(m.source)}</div>` : ''}${(m.variants||[]).map(x => `<div style="font-size:12.5px;padding-left:10px;border-left:2px solid var(--line)"><span class="chip">when ${esc(x.when)}</span>${x.basis?`<span class="chip">${esc(x.basis)}</span>`:''} ${esc(x.description||'')}<div class="mono" style="font-size:12px;color:var(--muted)">${recipe(x.source)}</div></div>`).join('')}${m.sql ? `<pre>${esc(m.sql)}</pre>` : ''}${m.caveats ? `<div style="font-size:12.5px;color:var(--muted)">Caveat: ${esc(m.caveats)}</div>` : ''}<div class="row"><span class="mono" style="font-size:11.5px;color:var(--faint)">${esc(m.file)}</span><span style="flex:1"></span>${gradeButtons('metric', m.name)}${yamlBtn(m.file, m.name, 'metric')}</div></div>`).join('');
-  const fcards = f.fns.map(fn => `<div class="card ${fn.runs?'':'need'}"><div class="row"><span class="mono" style="font-weight:700;font-size:14px">${esc(fn.name)}</span><span class="chip">${esc((fn.runs||{}).kind || 'runs where?')}</span><span style="margin-left:auto;font-size:12.5px;color:${fn.owner?'var(--muted)':'var(--warn)'}">${fn.owner ? 'owned by ' + esc(owner(fn.owner)) : 'no owner yet'}</span></div><div style="font-size:13px">${esc(fn.description || 'No description yet.')}</div><div class="mono" style="font-size:12px"><span style="color:var(--muted)">in</span> ${esc(ioText(fn.inputs))} <span style="color:var(--muted)">→ out</span> ${esc(ioText(fn.outputs))}</div><div style="font-size:12.5px;color:var(--muted)">How: ${esc(runsText(fn.runs))}${(fn.may_be_called_by||[]).length ? ' · may be called by ' + esc(fn.may_be_called_by.join(', ')) : ''}</div>${fn.caveats ? `<div style="font-size:12.5px;color:var(--muted)">Caveat: ${esc(fn.caveats)}</div>` : ''}<div class="row"><span class="mono" style="font-size:11.5px;color:var(--faint)">${esc(fn.file)}</span><span style="flex:1"></span>${yamlBtn(fn.file, fn.name, 'function')}</div></div>`).join('');
+  ui.open = ui.open || {};
+  const det = (key, inner) => `<details ${ui.open[key] ? 'open' : ''} ontoggle="ui.open[${jq(key)}]=this.open"><summary>Details</summary><div class="details">${inner}</div></details>`;
+  const drow = (k, val) => `<div class="drow"><span class="hint">${k}</span><span>${val}</span></div>`;
+  const intro = `<div class="card"><b>What logic is</b><div style="font-size:13px"><b>Metrics</b>: what counts for this business and where the number comes from, so every agent computes it the same way tomorrow. <b>Functions</b>: what an agent can run, with what goes in, what comes out and which tool does it. Neither runs here: the agent reads the recipe and calls the tool with its own login. Guardrails, the next step, say when it may not.</div></div>`;
+  const mcards = f.metrics.map(m => {
+    const sentences = (m.sentences || []).filter(Boolean);
+    const lead = m.sentence ? esc(m.sentence) + '.' : (sentences.length ? esc(sentences[0]) + '.' : 'Counted by its own recipe; see Details.');
+    const more = sentences.slice(m.sentence ? 1 : (sentences.length ? 1 : 0)).map(x => `<div style="font-size:13.5px">${esc(x)}.</div>`).join('');
+    const srcs = m.source ? [m.source] : (m.variants || []).map(x => x.source);
+    const from = srcs.map(x => `${esc(x.connection)}${x.table ? ' · ' + esc(x.table) : ''} <span class="hint">(${esc(sourceWords(x.connection))})</span>`).join('<br>');
+    const formula = m.sql ? `<pre>${esc(m.sql)}</pre>` : (m.source ? `<span class="mono">${esc(formulaOf(m.source))}</span>` : (m.variants || []).map(x => `<span class="mono">when ${esc(x.when)}: ${esc(formulaOf(x.source))}</span>`).join('<br>'));
+    const t = TR('metric', m.name), checkable = !ro() && t.grade === 'checked' && !t.changed_since;
+    const details = det('m:' + m.name, (from ? drow('From', from) : '') + drow('Formula', formula || '<span class="hint">none written</span>') + (m.basis ? drow('Kind', `${esc(m.basis)}: ${esc(BASIS_WORDS[m.basis] || '')}`) : '') + (m.grain ? drow('Per', esc(m.grain)) : '') + drow('Name', `<span class="mono">${esc(m.name)}</span> · <span class="mono hint">${esc(m.file)}</span> ${yamlBtn(m.file, m.name, 'metric')}`) + (checkable ? `<div><button class="small" onclick="openCheck('metric',${jq(m.name)})">Check again…</button></div>` : ''));
+    return `<div class="card ${m.owner?'':'need'}"><div class="row"><b style="font-size:15px">${esc(m.label || labelOf(m.name))}</b><span style="margin-left:auto"></span>${gradeChip('metric', m.name)}</div><div style="font-size:14px">${lead}</div>${more}${m.description ? `<div style="font-size:13px;color:var(--muted)">${esc(m.description)}</div>` : ''}${m.caveats ? `<div style="font-size:12.5px">Caveat: ${esc(m.caveats)}</div>` : ''}${gradeLine('metric', m.name, { noCheckAgain: true })}${ownerLine(m)}${details}</div>`;
+  }).join('');
+  const fcards = f.fns.map(fn => {
+    const takes = `Takes ${esc(ioText(fn.inputs))}, gives ${esc(ioText(fn.outputs))}`;
+    const details = det('f:' + fn.name, drow('In', `<span class="mono">${esc(ioText(fn.inputs))}</span>`) + drow('Out', `<span class="mono">${esc(ioText(fn.outputs))}</span>`) + drow('Runs', esc(runsText(fn.runs))) + ((fn.may_be_called_by||[]).length ? drow('Called by', esc(fn.may_be_called_by.join(', '))) : '') + drow('Name', `<span class="mono">${esc(fn.name)}</span> · <span class="mono hint">${esc(fn.file)}</span> ${yamlBtn(fn.file, fn.name, 'function')}`));
+    return `<div class="card ${fn.runs?'':'need'}"><div class="row"><b style="font-size:15px">${esc(labelOf(fn.name))}</b><span class="chip" style="margin-left:auto">${esc((fn.runs||{}).kind || 'runs where?')}</span></div><div style="font-size:14px">${esc(fn.description || 'No description yet.')}</div><div style="font-size:13px">${takes}</div><div style="font-size:12.5px;color:var(--muted)">Runs: ${esc(runsText(fn.runs))}</div>${fn.caveats ? `<div style="font-size:12.5px">Caveat: ${esc(fn.caveats)}</div>` : ''}<div class="gline"><span class="gl-i ${fn.owner ? '' : 'warn'}" aria-hidden="true">${fn.owner ? '·' : '!'}</span><span>Owner: ${fn.owner ? `<b>${esc(owner(fn.owner))}</b>` : 'no one named yet'}</span></div>${details}</div>`;
+  }).join('');
   const emptyM = f.metrics.length ? '' : `<div class="card need"><b>No metrics yet</b><div style="font-size:13px;color:var(--muted)">Start with <span class="mono">success</span>: the one number this business is run on, and where it comes from. The first time an agent does the reporting it can save this for you with <span class="mono">propose_patch</span>; you accept it under Agents.</div></div>`;
   const emptyF = f.fns.length ? '' : `<div class="card need"><b>No functions yet</b><div style="font-size:13px;color:var(--muted)">A function is a contract plus a pointer: inputs, outputs, and the MCP tool or endpoint that does the work. Forecasting, cancelling an order, moving a budget. Agents read it to know what to call.</div></div>`;
-  v.innerHTML = main(roBanner() + stepHead(4, 'Logic', 'The numbers and the operations of this business, written down once so every agent uses the same ones.') + intro
-    + `<h4 style="padding:0">Numbers · ${f.metrics.length} metric${f.metrics.length===1?'':'s'}</h4>` + emptyM + mcards + `<div><button class="small" ${ro()?'disabled':''} onclick="startNew('metric')">+ New metric</button></div>`
-    + `<h4 style="padding:0">Operations · ${f.fns.length} function${f.fns.length===1?'':'s'}</h4>` + emptyF + fcards + `<div><button class="small" ${ro()?'disabled':''} onclick="startNew('function')">+ New function</button></div>`);
+  v.innerHTML = main(roBanner() + stepHead(4, 'Logic', 'The metrics and the functions of this business, written down once so every agent uses the same ones.') + intro + nameBar()
+    + `<h4 style="padding:0">Metrics · ${f.metrics.length}</h4>` + hintLine(['metric', 'function', 'source']) + (f.metrics.length ? gradeMeaning() : '') + emptyM + mcards + `<div><button class="small" ${ro()?'disabled':''} onclick="startNew('metric')">+ New metric</button></div>`
+    + `<h4 style="padding:0">Functions · ${f.fns.length}</h4>` + emptyF + fcards + `<div><button class="small" ${ro()?'disabled':''} onclick="startNew('function')">+ New function</button></div>`);
+  if (ui.focusOwner) { ui.focusOwner = false; const b = document.querySelector('.owner-box'); if (b) { b.scrollIntoView({ block: 'center' }); b.focus(); } }
 }
 
 // --- how to use it ---
@@ -653,7 +751,7 @@ function connectorRecipes(){
 }
 
 // --- settings ---
-function saveMe(){ const v = $('me-name').value.trim(); if (v && !nameOk(v)) { note('That name cannot be used. ' + NAME_RULE, true); return; } try { if (v) localStorage.setItem('lorefile-name', v); else localStorage.removeItem('lorefile-name'); } catch (e) {} note(v ? `Saved: what you accept and check here says ${v}` : 'Name cleared: changes say "person via page"'); }
+function saveMe(){ const v = $('me-name').value.trim(); if (v && !nameOk(v)) { note('That name cannot be used. ' + NAME_RULE, true); return; } setMe(v); note(v ? `Saved: what you accept and check here says ${v}` : 'Name cleared: decisions here wait until you type one'); }
 async function renderSettings(v){
   const g = await api(B + '/api/git');
   await loadOAuth();
@@ -661,11 +759,14 @@ async function renderSettings(v){
   const row = (k, val) => `<tr><th style="width:200px">${k}</th><td>${val}</td></tr>`;
   const editRow = O.editable ? 'on' + (O.commit_edits ? ', each change is saved to history' : (nested() ? ', changes stay uncommitted until you commit above' : ', history is off')) : 'off · start with <code>--allow-edit</code>';
   const server = `<div class="card"><b>This server</b><table>${row('Version', esc(O.version || ''))}${row('Folder of spaces', `<code>${esc(O.root)}</code>${O.single ? ' (one ontology folder)' : ''}`)}${row('This space', `<code>${esc(O.dir)}</code>`)}${row('Edit mode', editRow)}${row('Shipped examples', (SPACES && SPACES.spaces.some(s => s.builtin)) ? 'shown in the picker, read-only · hide with <code>--no-examples</code>' : 'hidden')}${row('MCP for agents', `<div class="col"><div class="hint">On this machine (stdio: Claude Desktop, Cursor, or a <code>.mcp.json</code> next to the code for Claude Code)</div>${cmdRow(stdioCmd(), 'stdio')}<div class="hint">From a container or another machine (HTTP: Claude Code)</div>${cmdRow(httpCmd(MASK), 'http')}${connectorRow()}<div class="hint">${loginOn() ? 'The copy button copies the real token. ' : ''}${esc(DESKTOP_HTTPS)}${O.single ? '' : ` Tool calls say <code>space: "${esc(O.space.id)}"</code>.`}</div></div>`)}${row('Sign in', loginOn() ? `with the token the server printed · <a onclick="signOut()">Sign out</a>` : 'off (<code>--no-auth</code>): anyone who can reach this address can open it')}${row('Export for other tools', `<div class="col"><div><b>Apache Ossie</b> · <a href="${B}/api/export?format=ossie" download>Download</a> (one JSON file)</div><div class="hint">The semantic model, ontology and mapping that Snowflake, dbt, Cube, Atlan, DataHub and NVIDIA's Auto Ontology read, in Apache Ossie's draft format. Guardrails, actions and sources ride along in a part those tools keep but do not use, so importing it back loses nothing. As YAML files: <code>lorefile export --ossie --dir ${esc(O.dir)} --out ossie</code></div>${O.rdf ? `<div><b>OWL, SKOS and SHACL</b> · <a href="${B}/api/export?format=turtle" download>Turtle</a> · <a href="${B}/api/export?format=jsonld" download>JSON-LD</a></div><div class="hint">One graph for Protégé, GraphDB, Stardog or TopBraid: entities as OWL classes, words as SKOS labels, guardrails as SHACL shapes. Actions, metrics and sources ride along as lorefile: statements, so importing it back loses nothing. Every IRI starts with <code>${esc(O.namespace || '')}</code> unless an entity sets its own. <code>lorefile export --rdf --dir ${esc(O.dir)} --out space.ttl</code></div>` : `<div class="hint">OWL, SKOS and SHACL export is not in this build (built without the <code>rdf</code> feature).</div>`}</div>`)}</table></div>`;
-  const me = `<div class="card"><b>Your name, shown on what you accept and check</b><div class="row"><input id="me-name" style="width:260px" value="${esc(ME())}" placeholder="e.g. Priya"><button class="small" onclick="saveMe()">Save</button></div><div class="hint">Kept in this browser only. It goes with every change you make here, so history and trust.yaml say "Priya via page" instead of "person via page". There are no accounts yet, so it is the name you typed, not a sign-in. ${esc(NAME_RULE)}</div></div>`;
+  const me = `<div class="card"><b>Your name, shown on what you accept and check</b><div class="row"><input id="me-name" style="width:260px" value="${esc(ME())}" placeholder="e.g. Priya"><button class="small" onclick="saveMe()">Save</button></div><div class="hint">Kept in this browser only. It goes with every change you make here, so history and trust.yaml say "Priya via page" instead of "person via page". There are no accounts yet, so it is the name you typed, not a sign-in. Accepting, setting aside and checking on this page wait until there is one. ${esc(NAME_RULE)}</div></div>`;
+  const words = `<div class="card"><b>Words Lorefile uses</b><table>${Object.values(HINTS).map(([w, h]) => `<tr><td style="font-weight:600;white-space:nowrap;padding-right:14px">${esc(w)}</td><td>${esc(h)}</td></tr>`).join('')}</table><div class="hint">The sidebar, the review screen, the YAML keys and what agents say use these same words.</div></div>`;
   const who = `<div class="card"><b>Who writes the YAML</b><div style="font-size:13px">Agents and the builders on these pages, not people. An agent saves what it settles with <span class="mono">propose_patch</span>; the page turns a form into a file; the compiler checks both before anything is written. The YAML editor stays for the rare hand fix, and Files lets you read what the agent reads.</div></div>`;
-  v.innerHTML = main(`<h1>Settings</h1><div class="desc">Where this space lives, how its history is kept and shared, and how agents connect.</div>` + vc + me + server + connectionsCard() + who);
+  v.innerHTML = main(`<h1>Settings</h1><div class="desc">Where this space lives, how its history is kept and shared, and how agents connect.</div>` + vc + me + words + server + connectionsCard() + who);
 }
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const plural = (n, word, many) => `${n} ${n === 1 ? word : (many || word + 's')}`;
+// a count where none reads as words: "no links", "1 link", "3 links"
+const countOr = (n, word, many) => n ? plural(n, word, many) : 'no ' + (many || word + 's');
 function uncommittedBox(g, intro){
   if (!(g.uncommitted || []).length) return '';
   return `<div style="font-size:13px">${intro(g.uncommitted.length)}</div><div class="mono" style="font-size:12px;color:var(--muted)">${g.uncommitted.map(esc).join('<br>')}</div><div class="row"><input id="commit-msg" placeholder="What changed, in a sentence" style="flex:1;min-width:240px"><button class="primary small" ${ro()?'disabled':''} onclick="gitDo('commit')">Commit</button></div>`;
@@ -777,7 +878,7 @@ async function renderRules(v){
   const groups = keys.map(k => { const rel = f.rels.find(r => r.name === k); const act = (O.actions||[]).find(a => a.action === k); const title = rel ? `When linking ${rel.from} to ${rel.to} (${k})` : (act ? `When running ${human(k).toLowerCase()}` : k); return `<h4 style="padding:0">${esc(title)}</h4>` + rules.filter(c => c.applies_to === k).map(c => `<button class="card ${selId===c.id?'sel':''}" style="width:100%;text-align:left;cursor:pointer" onclick="go('rules',${jq(c.id)})"><div class="row">${sev(c.severity)}<b>${esc(c.name)}</b><span class="mono" style="color:var(--faint)">${esc(c.id)}</span><span style="margin-left:auto"></span>${gradeChip('guardrail', c.id)}</div><div style="font-size:12.5px;color:var(--muted)">${esc(whenOf(c))} · ${esc(owner(c.owner))}</div></button>`).join(''); }).join('');
   const c = f.rules.find(x => x.id === selId);
   let side = '';
-  if (c) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row">${sev(c.severity)}<span class="mono" style="color:var(--faint)">${esc(c.id)}</span></div><b style="font-size:16px;line-height:1.3">${esc(c.name)}</b><div style="font-size:13px">${esc(c.rationale||'')}</div><div style="font-size:12.5px;color:var(--muted)">Checked ${esc(whenOf(c))} · sign-off: ${esc(owner(c.owner))}</div><div class="row">${gradeChip('guardrail', c.id)}${gradeButtons('guardrail', c.id)}</div>${gradeNote('guardrail', c.id)}<h4 style="padding:0">How it is written</h4><code class="block">${esc(c.rule)}</code><div class="row">${yamlBtn(c.file, c.id, 'constraint', 'Edit in ' + c.file, 'View in ' + c.file)}</div></div>`;
+  if (c) side += `<div style="display:flex;flex-direction:column;gap:6px;padding-bottom:12px;border-bottom:1px solid var(--line)"><div class="row">${sev(c.severity)}<span class="mono" style="color:var(--faint)">${esc(c.id)}</span></div><b style="font-size:16px;line-height:1.3">${esc(c.name)}</b><div style="font-size:13px">${esc(c.rationale||'')}</div><div style="font-size:12.5px;color:var(--muted)">Checked ${esc(whenOf(c))} · sign-off: ${esc(owner(c.owner))}</div><div class="row">${gradeChip('guardrail', c.id)}</div>${gradeLine('guardrail', c.id)}${nameBar()}<h4 style="padding:0">How it is written</h4><code class="block">${esc(c.rule)}</code><div class="row">${yamlBtn(c.file, c.id, 'constraint', 'Edit in ' + c.file, 'View in ' + c.file)}</div></div>`;
   const things = f.types.map(t => t.name); const links = f.rels.map(r => r.name).filter((x, i, a) => a.indexOf(x) === i); const acts = (O.actions||[]).map(a => a.action);
   if (!ui.rf.applies) ui.rf.applies = things[0] || '';
   const isType = things.includes(ui.rf.applies);
@@ -844,7 +945,7 @@ function localWhen(iso){
   return t.toLocaleDateString([], { day: 'numeric', month: 'short', year: t.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) + ', ' + time;
 }
 const agentOf = (via) => { const m = /connection "([^"]+)"/.exec(via || ''); return m ? m[1] : 'An agent'; };
-const decidedWords = (p) => p.status === 'accepted' ? `accepted by ${whoSaid(p.accepted_by)}` : p.status === 'replaced' ? 'replaced by a newer version' : p.status === 'set_aside' ? `set aside by ${whoSaid(p.decided_by)}${p.why ? ': “' + p.why + '”' : ''}` : p.status;
+const decidedWords = (p) => p.status === 'accepted' ? `accepted by ${whoWords(p.accepted_by)}` : p.status === 'replaced' ? 'replaced by a newer version' : p.status === 'set_aside' ? `set aside by ${whoWords(p.decided_by)}${p.why ? ': “' + p.why + '”' : ''}` : p.status;
 async function renderAgents(v){
   TOOLS = TOOLS || await api(B + '/api/tools');
   await loadOAuth();
@@ -861,7 +962,7 @@ async function renderAgents(v){
   };
   const doneCard = (p) => {
     const words = decidedWords(p);
-    const act = p.status === 'set_aside' && !p.replaced_by ? `<button class="small" ${ro() ? 'disabled' : ''} onclick="reopenP(${jq(p.id)})">Look again</button>` : '';
+    const act = p.status === 'set_aside' && !p.replaced_by && !ro() ? nameBtn('Look again', 'Type your name first', `reopenP(${jq(p.id)})`) : '';
     return `<div class="card rv-card"><div class="row"><span>${p.status === 'accepted' ? '✓' : p.status === 'replaced' ? '↷' : '–'}</span><b style="font-weight:600;min-width:0;flex:1 1 300px">${esc(p.check ? `A check of ${p.check.kind} ${p.check.name}` : (p.summary ? (p.summary.charAt(0).toUpperCase() + p.summary.slice(1)).replace(/^(.{140}).+$/s, '$1…') : p.file))}</b><span class="hint" style="margin-left:auto">${esc(localWhen(p.resolved_at || p.created_at))}</span></div><div class="row"><span class="hint">${esc(agentOf(p.via))} · ${esc(words)}</span><span style="margin-left:auto"></span>${act}${p.check ? '' : `<button class="small" onclick="go('review',${jq(p.id)})">Open</button>`}</div></div>`;
   };
   // more than five waiting: grouped under the agent that sent them
@@ -873,22 +974,24 @@ async function renderAgents(v){
   } else waiting = pending.map(card).join('');
   const items = ((O.trust && O.trust.items) || []).filter(x => x.grade === 'proposed' || x.changed_since);
   const goTo = (x) => x.kind === 'metric' ? "go('logic')" : x.kind === 'guardrail' ? `go('rules',${jq(x.name)})` : x.kind === 'binding' ? `ui.typeTab='data';go('entities',${jq(x.name)})` : `openHit('term',${jq(x.name)})`;
-  const kindWord = { metric: 'Number', binding: 'Where rows come from', term: 'Word', guardrail: 'Rule' };
-  const row = (x) => `<div class="card need rv-card"><div class="row"><b>${esc(kindWord[x.kind] || x.kind)}: <span class="mono">${esc(x.name)}</span></b>${gradeChip(x.kind, x.name)}<span class="hint" style="margin-left:auto">${x.changed_since ? 'changed since ' + esc(x.changed_since) : esc(shortDate(x.at)) + ' · ' + esc(whoSaid(x.by))}</span></div><div class="row"><span class="hint">${x.changed_since ? 'Edited outside Lorefile, so the grade stopped counting.' : 'In use, marked unverified: an agent wrote it and no person has looked.'}</span><span style="margin-left:auto"></span>${gradeButtons(x.kind, x.name)}<button class="small" onclick="${goTo(x)}">Show</button></div></div>`;
-  const inUse = items.length ? `<div class="hint" style="font-weight:600;margin-top:4px">In use, not reviewed</div>` + items.map(row).join('') : '';
+  // the same words as the sidebar: Metric, an entity's source, Also called, Guardrail
+  const kindTitle = (x) => x.kind === 'metric' ? `Metric: ${esc(labelOf(x.name))}` : x.kind === 'binding' ? `${esc(labelOf(x.name))}’s source` : x.kind === 'term' ? `Also called: “${esc(x.name)}”` : `Guardrail: <span class="mono">${esc(x.name)}</span>`;
+  const row = (x) => `<div class="card need rv-card"><div class="row"><b>${kindTitle(x)}</b>${gradeChip(x.kind, x.name)}<span style="margin-left:auto"></span><button class="small" onclick="${goTo(x)}">Show</button></div>${gradeLine(x.kind, x.name)}${x.changed_since ? '<div class="hint">Edited outside Lorefile, so the grade stopped counting.</div>' : ''}</div>`;
+  const inUse = items.length ? `<div class="hint" style="font-weight:600;margin-top:4px">In use, not reviewed</div>` + hintLine(items.map(x => ({ metric: 'metric', binding: 'source', term: 'word', guardrail: 'guardrail' })[x.kind])) + gradeMeaning() + items.map(row).join('') : '';
   const tools = `<div class="card"><b>What an agent can ask</b>${TOOLS.map(t => `<div style="display:flex;gap:10px;font-size:13px"><span class="mono" style="color:var(--accent);width:124px;flex:0 0 auto">${esc(t.name)}</span><span style="color:var(--muted)">${esc(t.description.split('.')[0])}.</span></div>`).join('')}<div class="row" style="margin-top:6px"><select id="tool-name" onchange="toolTemplate()">${TOOLS.map(t => `<option>${esc(t.name)}</option>`).join('')}</select><button class="small" onclick="runTool()">Call it from here</button></div><textarea id="tool-args" class="mono" rows="3" spellcheck="false">{"query": "lead time"}</textarea><pre id="tool-out" style="display:none"></pre></div>`;
   const spaceNote = O.single ? '' : `<div style="font-size:12.5px;color:var(--muted)">One server holds every space here. Agents pass <code>space: "${esc(O.space.id)}"</code> in each tool call (the tool list names the spaces); add <code>--space ${esc(O.space.id)}</code> to the command instead for a server that only ever sees this one.</div>`;
   const connect = `<div class="card"><b>Connect</b><div style="font-size:12.5px;color:var(--muted)">Claude Code, on this machine</div>${cmdRow(`claude mcp add lorefile -- ${stdioCmd()}`, 'claude')}<div style="font-size:12.5px;color:var(--muted)">Claude Desktop (claude_desktop_config.json)</div><code class="block">${esc(JSON.stringify({ mcpServers: { 'lorefile': { command: 'lorefile', args: ['mcp', '--dir', O.root].concat(O.editable ? ['--allow-edit'] : []) } } }, null, 2))}</code><div style="font-size:12.5px;color:var(--muted)">Desktop needs the full path to the binary if it is not on your PATH (<code>which lorefile</code>).</div><div style="font-size:12.5px;color:var(--muted)">Claude Code, to a container or a server (HTTP)</div>${cmdRow(httpCmd(MASK), 'http')}${spaceNote}<div style="font-size:12.5px;color:var(--muted)">${esc(DESKTOP_HTTPS)}</div>${connectorRecipes()}</div>`;
   const activity = (PR.activity||[]).length ? PR.activity.slice(0, 30).map(a => `<div style="display:flex;gap:10px;font-size:13px;align-items:flex-start"><i style="flex:0 0 auto;width:8px;height:8px;border-radius:50%;margin-top:7px;background:${/agent/.test(a.who)?'var(--warn)':'var(--ok)'}"></i><span>${esc(a.text)} <span style="color:var(--faint)">· ${esc(whoSaid(a.who) === 'a person' || /agent/.test(a.who) ? a.who : whoSaid(a.who))} · ${esc(localWhen(a.at))}</span></span></div>`).join('') : '<div style="color:var(--muted);font-size:13px">No activity recorded yet.</div>';
   const roNote = ro() ? `<div class="banner">This Lorefile server is read-only (started without --allow-edit), so nobody can accept or set aside here. You can still read each review.</div>` : '';
-  v.innerHTML = main(`<h1>Agents</h1><div class="desc">Claude, ChatGPT and your own agents read this ontology over MCP. The chat happens there; what they learn and propose shows up here.</div>${roNote}<h4 style="padding:0">To review</h4><div class="hint" style="font-weight:600">Waiting for you</div>${waiting}${inUse}${done.length?`<h4 style="padding:0">Recently decided</h4>`+done.map(doneCard).join(''):''}<div style="display:flex;gap:16px;flex-wrap:wrap"><div style="flex:1 1 380px;min-width:0">${connect}</div><div style="flex:1 1 380px;min-width:0">${tools}</div></div><h4 style="padding:0">Activity</h4>${activity}`);
+  v.innerHTML = main(`<h1>Agents</h1><div class="desc">Claude, ChatGPT and your own agents read this ontology over MCP. The chat happens there; what they learn and propose shows up here.</div>${roNote}${pending.length || items.length || done.some(p => p.status === 'set_aside') ? nameBar() : ''}<h4 style="padding:0">To review</h4><div class="hint" style="font-weight:600">Waiting for you</div>${waiting}${inUse}${done.length?`<h4 style="padding:0">Recently decided</h4>`+done.map(doneCard).join(''):''}<div style="display:flex;gap:16px;flex-wrap:wrap"><div style="flex:1 1 380px;min-width:0">${connect}</div><div style="flex:1 1 380px;min-width:0">${tools}</div></div><h4 style="padding:0">Activity</h4>${activity}`);
   toolTemplate();
 }
-async function reopenP(id){ if (!rememberName()) return; const r = await post(B + '/api/proposals/reopen', { id }); if (r.error) { note(r.error, true); return; } note('Waiting for review again'); if (route.screen === 'review') renderReview($('view')); else render(); }
+async function reopenP(id){ if (!decideName()) return; const r = await post(B + '/api/proposals/reopen', { id }); if (r.error) { note(r.error, true); return; } note('Waiting for review again'); if (route.screen === 'review') renderReview($('view')); else render(); }
 
 // --- the review screen: one proposal, by meaning ---
 const SYM = { add: '+', change: '~', remove: '−', rename: '↷' };
-const KIND_WORD = { entity: 'thing', metric: 'number', source: 'place rows come from', link: 'link', rule: 'rule', word: 'word', function: 'function', action: 'action' };
+const KIND_WORD = { entity: 'entity', metric: 'metric', source: 'source', link: 'link', rule: 'guardrail', word: 'also called', function: 'function', action: 'action' };
+const KIND_HINT = { entity: 'entity', metric: 'metric', source: 'source', link: 'link', rule: 'guardrail', word: 'word', function: 'function', action: 'action' };
 let RV = null;
 async function renderReview(v){
   const [id, sub] = route.arg.split('/');
@@ -896,7 +999,10 @@ async function renderReview(v){
   v.innerHTML = main('<div class="empty">Loading the review…</div>');
   const r = await api(B + '/api/proposals/' + encodeURIComponent(id) + '/review');
   if (r.missing || r.error) { v.innerHTML = main(`<h1>Review</h1><div class="card"><b>${esc(r.error || ('There is no proposal ' + id))}</b><div class="hint">It may be in another space, or the link is wrong.</div><button class="small" style="align-self:flex-start" onclick="go('agents')">Go to Agents</button></div>`); return; }
-  RV = r; ui.rv = ui.rv && ui.rv.id === r.id ? ui.rv : { id: r.id, all: {}, files: false, why: null, fixes: {}, confirmRemove: false };
+  const fresh = !(ui.rv && ui.rv.id === r.id);
+  RV = r; ui.rv = fresh ? { id: r.id, all: {}, files: false, why: null, fixes: {}, confirmRemove: false } : ui.rv;
+  // who owns a new metric: prefilled with your name, so it is hard to miss; clear it to leave it for later
+  if (fresh && r.status === 'pending') (r.questions || []).forEach((q, i) => { const f = q.fix || {}; if (q.ask && f.op === 'set_metric' && f.field === 'owner' && ME()) ui.rv.fixes[i] = { text: ME(), prefilled: true }; });
   v.innerHTML = main(reviewHtml(r));
 }
 function changeHtml(c){
@@ -907,7 +1013,7 @@ function changeHtml(c){
   let body = '';
   if (c.kind === 'entity' && c.op === 'add') {
     const all = ui.rv.all[c.name], fields = c.fields || [], shown = all ? fields : fields.slice(0, 3);
-    body = `${c.description ? `<div>${esc(c.description)}</div>` : ''}<div class="hint">${esc(c.grain || 'no column identifies one row yet')}${c.binding ? ' · ' + esc(c.binding) : ''}</div><table class="rv-fields"><tbody>${shown.map(f => `<tr><td class="mono">${esc(f.name)}${f.key ? ' <span class="chip">key</span>' : ''}</td><td>${esc(f.type)}</td><td>${f.description ? esc(f.description) : '<span class="hint">Not described.</span>'}</td></tr>`).join('')}</tbody></table>${fields.length > 3 ? `<button type="button" class="lnk" style="font-size:12.5px" onclick="ui.rv.all[${jq(c.name)}]=!ui.rv.all[${jq(c.name)}];renderReviewAgain()">${all ? 'Show fewer' : `+ ${fields.length - 3} more columns · show all`}</button>` : ''}`;
+    body = `${c.description ? `<div>${esc(c.description)}</div>` : ''}<div class="hint">${esc(c.grain || 'no column identifies one row yet')}${c.binding ? ' · ' + esc(c.binding) : ''}</div><table class="rv-fields"><tbody>${shown.map(f => `<tr><td class="mono">${esc(f.name)}${f.key ? ' <span class="chip">key</span>' : ''}</td><td>${esc(f.type)}</td><td>${f.description ? esc(f.description) : '<span class="hint">Not described.</span>'}</td></tr>`).join('')}</tbody></table>${fields.length > 3 ? `<button type="button" class="lnk" style="font-size:12.5px" onclick="ui.rv.all[${jq(c.name)}]=!ui.rv.all[${jq(c.name)}];renderReviewAgain()">${all ? 'Show fewer' : `+ ${fields.length - 3} more fields · show all`}</button>` : ''}`;
     return `<div class="rv-change ${cls}">${head(esc(c.label) + (c.label !== c.name ? ` <span class="mono hint">${esc(c.name)}</span>` : ''))}${body}</div>`;
   }
   if (c.kind === 'entity' && c.op === 'change') {
@@ -916,7 +1022,7 @@ function changeHtml(c){
   }
   if (c.kind === 'metric' && c.op === 'add') {
     body = `<div><b>${esc(c.label)}</b> = ${esc(c.sentence)}</div>${c.as_written ? `<div class="hint">As written: <code>${esc(c.as_written)}</code></div>` : ''}${c.preview ? `<div class="hint">${esc(c.preview)}</div>` : ''}<div class="hint">${[c.from ? 'from ' + c.from : '', c.grain ? 'per ' + c.grain : '', c.basis ? c.basis : '', c.owner ? 'owner ' + c.owner : 'no owner yet'].filter(Boolean).map(esc).join(' · ')}</div>${c.caveats ? `<div class="hint">${esc(c.caveats)}</div>` : ''}`;
-    return `<div class="rv-change ${cls}">${head(`<span class="mono">${esc(c.name)}</span>`)}${body}</div>`;
+    return `<div class="rv-change ${cls}">${head(esc(c.label || c.name) + (c.label && c.label !== c.name ? ` <span class="mono hint">${esc(c.name)}</span>` : ''))}${body}</div>`;
   }
   if (c.op === 'add') {
     const extra = c.kind === 'rule' ? `<div>${c.sentence ? esc(c.sentence) : `<code>${esc(c.as_written)}</code>`} <span class="hint">· applies to ${esc(c.applies_to)} · ${esc(c.severity)}</span></div>${c.rationale ? `<div class="hint">Why: ${esc(c.rationale)}</div>` : ''}` : c.kind === 'link' ? `<div>${esc(c.from)} → ${esc(c.to)} (${esc(c.cardinality || '')})</div>${c.description ? `<div class="hint">${esc(c.description)}</div>` : ''}` : `<div>${esc(c.sentence || c.description || '')}</div>${c.description && c.sentence && c.description !== c.sentence ? `<div class="hint">${esc(c.description)}</div>` : ''}`;
@@ -936,6 +1042,7 @@ function questionHtml(q, i, editable){
     return `<div class="rv-q"><label for="fx-${i}"><b>? ${esc(q.ask)}</b> <span class="hint">(optional)</span></label><div class="row"><select id="fx-${i}" ${editable ? '' : 'disabled'} onchange="setFix(${i},'pick',this.value)"><option value="">Leave it for later</option>${nums}${key}<option value="count:*" ${val.pick === 'count:*' ? 'selected' : ''}>count the rows</option></select>${flags ? `<label class="hint" for="fx-${i}-lo">leave out rows where</label><select id="fx-${i}-lo" ${editable ? '' : 'disabled'} onchange="setFix(${i},'leave_out',this.value)"><option value="">(nothing)</option>${flags}</select><span class="hint">is true</span>` : ''}</div></div>`;
   }
   const field = f.field === 'owner' ? 'a name or a team' : 'one sentence';
+  if (f.op === 'set_metric' && f.field === 'owner') return `<div class="rv-q"><label for="fx-${i}"><b>? Owner of ${esc(labelOf(f.metric))}: who decides what this metric means</b></label><input id="fx-${i}" ${editable ? '' : 'disabled'} placeholder="${esc(field)}" value="${esc(val.text || '')}" oninput="setFix(${i},'text',this.value)" style="max-width:420px"><div class="hint">${val.prefilled ? 'Prefilled with your name · clear it to leave it for later' : 'Optional · leave it empty to decide later'}</div></div>`;
   return `<div class="rv-q"><label for="fx-${i}"><b>? ${esc(q.ask)}</b> <span class="hint">(optional)</span></label><input id="fx-${i}" ${editable ? '' : 'disabled'} placeholder="${esc(field)}" value="${esc(val.text || '')}" oninput="setFix(${i},'text',this.value)" style="max-width:420px"></div>`;
 }
 function setFix(i, k, v){ ui.rv.fixes[i] = Object.assign(ui.rv.fixes[i] || {}, { [k]: v }); }
@@ -948,9 +1055,11 @@ function reviewHtml(r){
   let state = '';
   if (r.status === 'accepted') {
     const tb = r.take_back || {};
-    state = `<div class="rv-state ok">✓ Accepted by ${esc(d.accepted_by || 'a person')} ${esc(localWhen(d.at))}${(d.fixes || []).length ? ` · with ${esc(d.fixes.join('; '))}` : ''}</div>` + (tb.possible ? `<div class="row"><button class="small" onclick="takeBack(${jq(r.id)})">${tb.undo ? 'Undo' : 'Take it back'}</button><span class="hint">${tb.undo ? 'History is on: this is the commit’s Undo.' : 'Puts the files and trust.yaml back as they were; the proposal waits again.'}</span></div>` : (tb.why_not ? `<div class="hint">${esc(tb.why_not)}</div>` : ''));
+    const anon = !d.accepted_by || d.accepted_by === 'a person';
+    state = `<div class="rv-state ok">✓ Accepted by ${esc(anon ? 'a person (no name was given)' : d.accepted_by)} ${esc(localWhen(d.at))}${(d.fixes || []).length ? ` · with ${esc(d.fixes.join('; '))}` : ''}</div>` + (can.sign ? `<div class="row">${nameBtn('Put your name on it', 'Type your name to sign it', `signP(${jq(r.id)})`)}<span class="hint">Fills in the missing name on this decision and the grades it gave. It never renames a named one.</span></div>` : '') + (tb.possible ? `<div class="row">${nameBtn(tb.undo ? 'Undo' : 'Take it back', 'Type your name first', `takeBack(${jq(r.id)})`)}<span class="hint">${tb.undo ? 'History is on: this is the commit’s Undo.' : 'Puts the files and trust.yaml back as they were; the proposal waits again.'}</span></div>` : (tb.why_not ? `<div class="hint">${esc(tb.why_not)}</div>` : ''));
   } else if (r.status === 'set_aside') {
-    state = `<div class="rv-state">– Set aside by ${esc(d.decided_by || 'a person')} ${esc(localWhen(d.at))}${d.why ? `: “${esc(d.why)}”` : ''}</div>${can.reopen ? `<div class="row"><button class="small" onclick="reopenP(${jq(r.id)})">Look again</button></div>` : ''}`;
+    const anon = !d.decided_by || d.decided_by === 'a person';
+    state = `<div class="rv-state">– Set aside by ${esc(anon ? 'a person (no name was given)' : d.decided_by)} ${esc(localWhen(d.at))}${d.why ? `: “${esc(d.why)}”` : ''}</div>${can.reopen ? `<div class="row">${nameBtn('Look again', 'Type your name first', `reopenP(${jq(r.id)})`)}${anon && can.sign ? nameBtn('Put your name on it', 'Type your name to sign it', `signP(${jq(r.id)})`) : ''}</div>` : ''}`;
   } else if (r.status === 'replaced') {
     state = `<div class="rv-state">↷ Replaced by a newer version from the same chat. <button type="button" class="lnk" onclick="go('review',${jq(d.replaced_by || '')})">Open the newer one</button></div>`;
   }
@@ -958,6 +1067,7 @@ function reviewHtml(r){
   const notes = (r.notes || []).filter(n => n.kind !== 'undo').map(n => `<div class="rv-note ${n.kind === 'stale' ? 'bad' : ''}"><span aria-hidden="true">${noteIcon[n.kind] || '·'}</span> <span>${esc(n.text)}${n.kind === 'replaces' ? ` <button type="button" class="lnk" onclick="go('review',${jq(n.id)})">see it</button>` : ''}${n.copy ? `<div class="row" style="margin-top:6px"><code class="block" style="flex:1 1 auto;min-width:0">${esc(n.copy)}</code><button class="small" onclick="copyText(${jq(n.copy)})">Copy</button></div>` : ''}</span></div>`).join('');
   const counts = r.counts || {};
   const countRow = (label, list) => (list && list.length) ? `<div class="rv-count"><span class="rv-count-l">${label}</span><span>${list.map(esc).join(' · ')}</span></div>` : '';
+  const kindsHint = hintLine((r.changes || []).map(x => KIND_HINT[x.kind]));
   const changes = (r.changes || []).length ? (r.changes || []).map(changeHtml).join('') : `<div class="hint">Nothing changes in meaning: only how the files are laid out.</div>`;
   const editable = r.status === 'pending' && !!can.accept;
   const qs = (r.questions || []), asks = qs.filter(q => q.ask);
@@ -966,26 +1076,26 @@ function reviewHtml(r){
   const others = r.other_warnings ? `<div class="hint">The space has ${plural(r.other_warnings, 'other warning')} this proposal did not cause (see Problems).</div>` : '';
   const undo = (r.notes || []).find(n => n.kind === 'undo');
   const removes = (r.changes || []).filter(x => x.op === 'remove');
-  const me = ME();
-  const decidable = (r.status === 'pending' && (can.accept || can.dismiss)) || (r.status === 'set_aside' && can.reopen) || (r.status === 'accepted' && r.take_back && r.take_back.possible);
-  const nameBox = decidable && !me ? `<div class="rv-q"><label for="rv-name"><b>Your name</b> <span class="hint">(recorded with every decision; kept in this browser, like Settings › Your name)</span></label><input id="rv-name" placeholder="e.g. Vinay" style="max-width:260px" oninput="const b=document.getElementById('rv-accept'); if (b && !ui.rv.confirmRemove) b.textContent='Accept as ' + (this.value.trim() || 'you')">${AUTH && !AUTH.required ? '<div class="hint">This server runs with --no-auth: anyone who can reach it can type any name.</div>' : ''}</div>` : '';
+  const anonDecision = (r.status === 'accepted' && (!d.accepted_by || d.accepted_by === 'a person')) || (r.status === 'set_aside' && (!d.decided_by || d.decided_by === 'a person'));
+  const decidable = (r.status === 'pending' && (can.accept || can.dismiss)) || (r.status === 'set_aside' && can.reopen) || (r.status === 'accepted' && r.take_back && r.take_back.possible) || !!can.sign;
+  const nameBox = decidable ? nameBoxHtml('rv-name') : '';
   let actions = '';
   if (r.status === 'pending') {
-    const whyBox = ui.rv.why !== null ? `<div class="rv-q"><label for="rv-why"><b>Why?</b> <span class="hint">(optional; the agent sees this)</span></label><textarea id="rv-why" rows="2" style="max-width:520px" oninput="ui.rv.why=this.value">${esc(ui.rv.why || '')}</textarea><div class="row"><button class="small" onclick="dismissP(${jq(r.id)})">Set aside</button><button class="small" onclick="ui.rv.why=null;renderReviewAgain()">Cancel</button></div></div>` : '';
+    const whyBox = ui.rv.why !== null ? `<div class="rv-q"><label for="rv-why"><b>Why?</b> <span class="hint">(optional; the agent sees this)</span></label><textarea id="rv-why" rows="2" style="max-width:520px" oninput="ui.rv.why=this.value">${esc(ui.rv.why || '')}</textarea><div class="row">${nameBtn('Set aside', 'Type your name to set aside', `dismissP(${jq(r.id)})`)}<button class="small" onclick="ui.rv.why=null;renderReviewAgain()">Cancel</button></div></div>` : '';
     const confirmRm = removes.length && ui.rv.confirmRemove ? `<div class="rv-note bad"><span aria-hidden="true">−</span> <span>Accepting removes ${removes.map(x => esc(x.label)).join(', ')}. Press again to confirm.</span></div>` : '';
-    actions = `${whyBox}${confirmRm}<div class="rv-actions"><button id="rv-accept" class="primary" ${can.accept ? '' : 'disabled'} onclick="acceptP(${jq(r.id)})">${removes.length && ui.rv.confirmRemove ? 'Yes, remove ' + esc(removes.map(x => x.label).join(', ')) : 'Accept as ' + esc(me || 'you')}</button><button ${can.dismiss && ui.rv.why === null ? '' : 'disabled'} onclick="ui.rv.why='';renderReviewAgain()">Not now</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>${can.why_not ? `<div class="hint">${esc(can.why_not)}</div>` : ''}`;
+    actions = `${whyBox}${confirmRm}<div class="rv-actions">${nameBtn(removes.length && ui.rv.confirmRemove ? 'Yes, remove ' + removes.map(x => x.label).join(', ') : 'Accept as {n}', 'Type your name to accept', `acceptP(${jq(r.id)})`, 'primary', !can.accept)}<button ${can.dismiss && ui.rv.why === null ? '' : 'disabled'} onclick="ui.rv.why='';renderReviewAgain()">Not now</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>${can.why_not ? `<div class="hint">${esc(can.why_not)}</div>` : ''}`;
   } else {
     actions = `<div class="rv-actions"><button type="button" class="lnk" onclick="go('agents')">Back to Agents</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>`;
   }
   const files = ui.rv.files ? (r.files || []).map(f => `<div style="font-size:12.5px;margin-top:6px"><b class="mono">${esc(f.file)}</b> <span class="hint">${esc((f.summaries || []).join('; '))}${f.comments_lost ? ` · loses ${plural(f.comments_lost, 'comment')}` : ''}</span></div><div class="diff">${diffHtml(f.before, f.after)}</div>`).join('') : '';
-  return `<div class="rv"><div class="hint"><button type="button" class="lnk" onclick="go('agents')">Agents</button> › Review</div><h1 class="rv-title">${esc(r.headline)}</h1><div class="hint">${meta}</div>${quote}${state}${r.status !== 'pending' ? nameBox : ''}${notes}<div class="rv-counts">${countRow('Adds', counts.adds)}${countRow('Changes', counts.changes)}${countRow('Removes', counts.removes)}</div><div class="rv-changes">${changes}</div>${errors}${questions}${asks.length ? '' : ''}${others}${undo && r.status === 'pending' ? `<div class="hint">${esc(undo.text)}</div>` : ''}${r.status === 'pending' ? nameBox : ''}${files}${actions}</div>`;
+  return `<div class="rv"><div class="hint"><button type="button" class="lnk" onclick="go('agents')">Agents</button> › Review</div><h1 class="rv-title">${esc(r.headline)}</h1><div class="hint">${meta}</div>${quote}${state}${r.status !== 'pending' ? nameBox : ''}${notes}<div class="rv-counts">${countRow('Adds', counts.adds)}${countRow('Changes', counts.changes)}${countRow('Removes', counts.removes)}${kindsHint}</div><div class="rv-changes">${changes}</div>${errors}${questions}${asks.length ? '' : ''}${others}${undo && r.status === 'pending' ? `<div class="hint">${esc(undo.text)}</div>` : ''}${r.status === 'pending' ? nameBox : ''}${files}${actions}</div>`;
 }
 function copyText(t){ try { navigator.clipboard.writeText(t); note('Copied'); } catch (e) { note('Copy did not work here; select the text instead', true); } }
 async function acceptP(id){
   const r = RV; if (!r || r.id !== id) return;
   const removes = (r.changes || []).filter(x => x.op === 'remove');
   if (removes.length && !ui.rv.confirmRemove) { ui.rv.confirmRemove = true; renderReviewAgain(); return; }
-  if (!rememberName()) return;
+  if (!decideName()) return;
   const fixes = [];
   (r.questions || []).forEach((q, i) => {
     const v = ui.rv.fixes[i]; if (!q.ask || !v) return; const f = q.fix || {};
@@ -999,16 +1109,21 @@ async function acceptP(id){
   toast(res.error ? res : { ...res, error: res.error || 'Not accepted' });
   renderReview($('view'));
 }
-// the name typed on the review screen, kept like Settings › Your name, before any decision is sent
-function rememberName(){ const nb = $('rv-name'); if (nb && nb.value.trim()) { const v = nb.value.trim(); if (!nameOk(v)) { note('That name cannot be used. ' + NAME_RULE, true); return false; } try { localStorage.setItem('lorefile-name', v); } catch (e) {} } return true; }
+async function signP(id){
+  if (!decideName()) return;
+  const res = await post(B + '/api/proposals/sign', { id });
+  toast(res.written ? res : { ...res, error: res.error || 'Not signed' });
+  if (res.written && (res.already_named || []).length) note('Already named: ' + res.already_named.join('; '));
+  ui.rv = null; await loadSummary(); renderReview($('view'));
+}
 async function dismissP(id){
-  if (!rememberName()) return;
+  if (!decideName()) return;
   const res = await post(B + '/api/proposals/dismiss', { id, why: (ui.rv && ui.rv.why) || '' });
   if (res.error) { note(res.error, true); return; }
   note('Set aside'); ui.rv = null; await loadSummary(); renderReview($('view'));
 }
 async function takeBack(id){
-  if (!rememberName()) return;
+  if (!decideName()) return;
   if (!confirm('Take this back? The files go back to how they were before Accept, and the proposal waits for review again.')) return;
   const res = await post(B + '/api/proposals/take_back', { id });
   toast(res.written ? res : { ...res, error: res.error || 'Not taken back' });
@@ -1032,7 +1147,7 @@ async function renderReviewMap(v, id){
 function checkCard(p){
   const c = p.check || {};
   const what = c.kind === 'binding' ? `the data binding of ${c.name}` : `${c.kind} ${c.name}`;
-  return `<div class="card ${p.status==='pending'?'need':''}"><div class="row"><b>An agent reports a check: ${esc(what)} against ${esc(c.against)}</b><span class="chip">check</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">${esc(agentOf(p.via))} · ${esc(localWhen(p.created_at))}</span></div><div style="font-size:13px">“${esc(c.note)}”</div>${p.reason ? `<div class="hint">${esc(p.reason)}</div>` : ''}<div class="row">${p.status==='pending' ? `<span style="font-size:13px">Did you see this match yourself?</span><span style="margin-left:auto"></span><button class="primary small" ${ro()?'disabled':''} onclick="decide(${jq(p.id)},'accept')">Yes, mark as checked</button><button class="small" onclick="decide(${jq(p.id)},'dismiss')">Not now</button>` : `<span style="margin-left:auto;font-size:12.5px;color:var(--muted)">${esc(decidedWords(p))} · ${esc(localWhen(p.resolved_at))}</span>`}</div></div>`;
+  return `<div class="card ${p.status==='pending'?'need':''}"><div class="row"><b>An agent reports a check: ${esc(what)} against ${esc(c.against)}</b><span class="chip">check</span><span style="margin-left:auto;font-size:12px;color:var(--muted)">${esc(agentOf(p.via))} · ${esc(localWhen(p.created_at))}</span></div><div style="font-size:13px">“${esc(c.note)}”</div>${p.reason ? `<div class="hint">${esc(p.reason)}</div>` : ''}<div class="row">${p.status==='pending' ? `<span style="font-size:13px">Did you see this match yourself?</span><span style="margin-left:auto"></span>${ro() ? '' : nameBtn('Yes, mark as checked', 'Type your name to mark it', `decide(${jq(p.id)},'accept')`, 'primary small') + nameBtn('Not now', 'Type your name first', `decide(${jq(p.id)},'dismiss')`)}` : `<span style="margin-left:auto;font-size:12.5px;color:var(--muted)">${esc(decidedWords(p))} · ${esc(localWhen(p.resolved_at))}</span>`}</div></div>`;
 }
 function diffHtml(before, after){
   const a = (before||'').split('\n'), b = (after||'').split('\n'); const sa = new Set(a), sb = new Set(b);
@@ -1048,7 +1163,7 @@ function diffHtml(before, after){
   if (!changed) return '(identical to the current file)';
   return keep.map(([m, l]) => `<div class="${m==='+'?'add':(m==='-'?'del':'')}">${m==='='?' ':m} ${esc(l)}</div>`).join('');
 }
-async function decide(id, what){ const p = (PR.proposals || []).find(x => x.id === id) || {}; const r = await post(B + '/api/proposals/' + what, { id }); if (what === 'accept') await afterWrite({ ...r, summary: r.written ? (p.check ? `Marked ${p.check.kind} ${p.check.name} as checked` : 'Accepted') : undefined }); else if (r.error) { toast(r); } else { toast({ written: true, summary: 'Set aside' }); } render(); }
+async function decide(id, what){ if (!decideName()) return; const p = (PR.proposals || []).find(x => x.id === id) || {}; const r = await post(B + '/api/proposals/' + what, { id }); if (what === 'accept') await afterWrite({ ...r, summary: r.written ? (p.check ? `Marked ${p.check.kind} ${p.check.name} as checked` : 'Accepted') : undefined }); else if (r.error) { toast(r); } else { toast({ written: true, summary: 'Set aside' }); } render(); }
 const toolExamples = { search: {query: 'lead time'}, describe: {name: ''}, neighbors: {name: '', depth: 1}, path: {from: '', to: ''}, constraints_for: {name: ''}, validate: {action: '', inputs: {}}, where_is: {type: ''}, instances: {type: '', limit: 3}, summary: {}, query: {sql: 'select name from nodes limit 5'}, tables: {}, propose_change: {file: 'glossary.yaml', content: '', reason: ''}, match_file: {file_name: 'promo_sales.csv', columns: [{name: 'line_id', examples: ['L-1', 'L-2']}, {name: 'revenue', examples: ['43.20', '19.80']}]} };
 function toolTemplate(){ const n = $('tool-name'); if (!n) return; const ex = JSON.parse(JSON.stringify(toolExamples[n.value] || {})); const t0 = (O.types[0]||{}).name || ''; for (const k of ['name','type','from']) if (k in ex && !ex[k]) ex[k] = t0; if ('to' in ex && !ex.to) ex.to = (O.types[1]||O.types[0]||{}).name || ''; if ('action' in ex) ex.action = (O.actions[0]||{}).action || ''; $('tool-args').value = JSON.stringify(ex, null, 2); }
 async function runTool(){ let args = {}; try { args = JSON.parse($('tool-args').value || '{}'); } catch (e) { $('tool-out').style.display = 'block'; $('tool-out').textContent = 'arguments are not valid JSON: ' + e.message; return; } const r = await post(B + '/api/tool', { name: $('tool-name').value, arguments: args }); $('tool-out').style.display = 'block'; $('tool-out').textContent = (r.isError ? '[error] ' : '') + (r.content && r.content[0] ? r.content[0].text : JSON.stringify(r, null, 2)); if ($('tool-name').value === 'propose_change') { PR = await api(B + '/api/proposals'); await loadSummary(); } }

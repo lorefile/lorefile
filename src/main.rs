@@ -592,7 +592,7 @@ fn trust_cmd(ont: &Ontology, report: &validate::Report, dir: &Path, spaces_root:
                 }
             }
             for (k, n, r) in &ont.graded.orphans {
-                println!("no longer exists: {} {} ({} in trust.yaml)", k.word(), n, r.grade.word());
+                println!("no longer exists: {} ({} in trust.yaml)", k.name_words(n), r.grade.word());
             }
             return Ok(());
         }
@@ -625,9 +625,10 @@ fn trust_cmd(ont: &Ontology, report: &validate::Report, dir: &Path, spaces_root:
     }
     if !as_json {
         let what = match &gop {
-            edit::GradeOp::Accept { kind, name } => format!("{} {} is accepted, by {}", kind.word(), name, by),
-            edit::GradeOp::Check { kind, name, against, .. } => format!("{} {} is checked against {}, by {}", kind.word(), name, against, by),
+            edit::GradeOp::Accept { kind, name } => format!("{} is accepted, by {}", kind.name_words(name), by),
+            edit::GradeOp::Check { kind, name, against, .. } => format!("{} is checked against {}, by {}", kind.name_words(name), against, by),
             edit::GradeOp::VouchAll => format!("vouched for {} definitions, by {}", out.name, by),
+            edit::GradeOp::Sign { .. } => format!("{} signed, by {}", out.stamped.join(", "), by),
         };
         eprintln!("✓ {}{}", what, out.commit.as_ref().map(|h| format!(" (saved to history as {})", h)).unwrap_or_else(|| " (trust.yaml written, not committed)".into()));
     }

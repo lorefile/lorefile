@@ -211,7 +211,7 @@ pub fn plan_check(ont: &Ontology, body: &Json) -> Result<crate::proposals::Check
     }
     let st = ont.grade_of(kind, &name);
     if st.grade.is_none() || st.grade == Some(crate::schema::Grade::Proposed) {
-        return Err(format!("{} {} is {}; a person has to accept it first, then a check can be recorded", kind.word(), name, if st.changed { "changed since it was graded".to_string() } else { st.word().to_string() }));
+        return Err(format!("{} is {}; a person has to accept it first, then a check can be recorded", kind.name_words(&name), if st.changed { "changed since it was graded".to_string() } else { st.word().to_string() }));
     }
     Ok(crate::proposals::CheckClaim { kind: match kind { crate::trust::Kind::Metric => "metric", crate::trust::Kind::Binding => "binding", crate::trust::Kind::Guardrail => "guardrail", crate::trust::Kind::Term => "term" }.into(), of: crate::trust::things(ont, kind).get(&name).map(crate::trust::fingerprint).unwrap_or_default(), name, against: against.to_string(), note })
 }
@@ -674,7 +674,7 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             let obj = body.as_object().cloned().unwrap_or_default();
             for k in obj.keys() {
                 match k.as_str() {
-                    "op" | "metric" | "reason" | "owner" | "description" | "caveats" | "grain" | "basis" => {}
+                    "op" | "metric" | "reason" | "by" | "owner" | "description" | "caveats" | "grain" | "basis" => {}
                     "source" | "filter" | "measure" | "variants" | "sql" | "connection" | "table" | "tool" | "params" => {
                         return Err(format!("set_metric changes words only (owner, description, caveats, grain, basis); `{}` changes what the number is, so propose the metric again with propose_change", k))
                     }

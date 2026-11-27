@@ -154,7 +154,7 @@ fn tool_list() -> Json {
         },
         {
             "name": "describe",
-            "description": "Full detail of one thing: an entity type (properties, relationships, rules, data source, actions), a relationship, an action (inputs, effects, checks, approval), a rule, a metric (what counts and the recipe for where the number comes from), a function (what an agent can run: inputs, outputs, which tool), or a data source. Accepts glossary terms like 'vendor'.",
+            "description": "Full detail of one item: an entity (fields, links, guardrails, source, actions), a link, an action (inputs, effects, checks, approval), a guardrail, a metric (what counts and the recipe for where the number comes from), a function (what an agent can run: inputs, outputs, which tool), or a source. Accepts also-called words like 'vendor'.",
             "inputSchema": { "type": "object", "properties": {
                 "name": { "type": "string", "description": "Exact name, e.g. 'Supplier', 'supplies', 'switch_supplier', 'SC-041'" }
             }, "required": ["name"] }

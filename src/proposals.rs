@@ -402,6 +402,28 @@ pub fn reopen(root: &Path, id: &str, by: &str) -> Result<Proposal, String> {
     Ok(p)
 }
 
+/// "Put your name on it": `by` replaces a decision's missing name (`person via …`) when given,
+/// and a snapshot that held `trust_was` as the text after Accept now holds `trust_now`, so the
+/// name alone never blocks Take it back.
+pub fn sign(root: &Path, id: &str, by: Option<&str>, trust_was: Option<String>, trust_now: Option<String>) -> Result<Proposal, String> {
+    let mut p = get(root, id).ok_or_else(|| format!("there is no proposal {}", id))?;
+    let anon = |b: &Option<String>| b.as_deref().map(|b| crate::trust::who_said(b) == "a person").unwrap_or(false);
+    if let Some(by) = by {
+        match p.status.as_str() {
+            "accepted" if anon(&p.accepted_by) => p.accepted_by = Some(by.to_string()),
+            "set_aside" if anon(&p.decided_by) => p.decided_by = Some(by.to_string()),
+            _ => return Err(format!("{} already says who decided it", p.id)),
+        }
+    }
+    if let Some(snap) = p.snapshot.as_mut() {
+        if trust_was != trust_now && snap.trust_after == trust_was {
+            snap.trust_after = trust_now;
+        }
+    }
+    write(root, &p)?;
+    Ok(p)
+}
+
 /// Accept wrote it: who, the fixes that rode along, and how to take it back.
 pub fn mark_accepted(root: &Path, id: &str, by: &str, fixes: Vec<String>, snapshot: Option<Snapshot>, commit: Option<String>, errors_before: Vec<KnownError>) -> Result<Proposal, String> {
     let mut p = get(root, id).ok_or_else(|| format!("there is no proposal {}", id))?;

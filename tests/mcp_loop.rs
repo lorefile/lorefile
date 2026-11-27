@@ -251,7 +251,7 @@ fn agents_cannot_promote_themselves_or_overwrite_what_a_person_stands_behind() {
     assert!(text(&replies[1]).contains("trust.yaml is written by Lorefile when a person accepts or checks something"), "{}", text(&replies[1]));
     // the accepted binding: queued, not written, and the reply says why
     let held = text(&replies[2]);
-    assert!(held.contains("data binding Order is accepted (Priya,") && held.contains("so this change waits for a person: queued as p-"), "{}", held);
+    assert!(held.contains("source of Order is accepted (Priya,") && held.contains("so this change waits for a person: queued as p-"), "{}", held);
     assert!(fs::read_to_string(dir.join("types/order.yaml")).unwrap().contains("connection: shop_files"), "Order's binding is untouched");
     // the ungraded binding: written, as proposed
     assert!(text(&replies[3]).contains("Grade: proposed"), "{}", text(&replies[3]));
@@ -270,7 +270,7 @@ fn agents_cannot_promote_themselves_or_overwrite_what_a_person_stands_behind() {
     assert!(summary.contains("**Customer** [data binding UNVERIFIED"), "{}", summary);
     assert!(!summary.contains("**Order** [data"), "accepted lines carry no mark: {}", summary);
     let c: serde_json::Value = serde_json::from_str(&text(&replies[8])).unwrap();
-    assert!(c["source"]["trust"]["say"].as_str().unwrap().starts_with("Unverified: an agent proposed this data binding"), "{}", c["source"]);
+    assert!(c["source"]["trust"]["say"].as_str().unwrap().starts_with("Unverified: an agent proposed this choice of source"), "{}", c["source"]);
     let proposals: Vec<serde_json::Value> = fs::read_dir(dir.join(".lorefile/proposals")).unwrap().map(|e| serde_json::from_str(&fs::read_to_string(e.unwrap().path()).unwrap()).unwrap()).collect();
     assert_eq!(proposals.len(), 2, "the held binding and the check, nothing for trust.yaml: {:?}", proposals);
     assert!(proposals.iter().any(|p| p["check"]["name"] == "success" && p["check"]["against"] == "shop_bigquery"), "{:?}", proposals);

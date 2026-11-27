@@ -441,6 +441,8 @@ fn stats_json(ont: &Ontology, report: &Report) -> Json {
         "description": ont.manifest.description,
         "types": st.types, "relationships": st.relationships, "rules": st.constraints, "actions": st.actions, "sources": st.sources,
         "ok": report.ok(), "errors": report.errors().len(), "warnings": report.warnings().len(),
+        // a blank space's only error is "no types found": the picker says "empty", not "has errors"
+        "empty": report.errors().len() == 1 && report.errors().iter().all(|d| d.code == "E000" && st.types == 0),
     })
 }
 
@@ -532,6 +534,22 @@ mod tests {
         let d = std::env::temp_dir().join(format!("lorefile-spaces-{}-{}", tag, std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
+    }
+
+    #[test]
+    fn a_blank_space_is_empty_and_a_broken_one_is_not() {
+        let d = scratch("empty");
+        write_blank(&d, "branda", "Branda").unwrap();
+        let (o, r) = load_ontology(&d).unwrap();
+        let j = stats_json(&o, &r);
+        assert_eq!((j["empty"].as_bool(), j["ok"].as_bool()), (Some(true), Some(false)), "{}", j);
+        // E000 and another error: "2 errors", not "empty"
+        let m = std::fs::read_to_string(d.join("ontology.yaml")).unwrap().replace("types: []", "types: [Ghost]");
+        std::fs::write(d.join("ontology.yaml"), m).unwrap();
+        let (o, r) = load_ontology(&d).unwrap();
+        let j = stats_json(&o, &r);
+        assert!(j["errors"].as_u64().unwrap() >= 2 && j["empty"] == false, "{}", j);
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]

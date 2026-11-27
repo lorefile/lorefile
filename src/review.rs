@@ -307,7 +307,7 @@ fn uses_of_entity(ont: &Ontology, name: &str) -> Vec<String> {
     }
     for c in ont.constraints.values() {
         if c.applies_to == name {
-            out.push(format!("the rule {}", c.id));
+            out.push(format!("the guardrail {}", c.id));
         }
     }
     for a in ont.actions.values() {
@@ -317,7 +317,7 @@ fn uses_of_entity(ont: &Ontology, name: &str) -> Vec<String> {
     }
     for g in &ont.glossary {
         if g.means == name {
-            out.push(format!("the word \"{}\"", g.term));
+            out.push(format!("the also-called word \"{}\"", g.term));
         }
     }
     let bound = ont.type_(name).and_then(|t| t.source.clone());
@@ -325,7 +325,7 @@ fn uses_of_entity(ont: &Ontology, name: &str) -> Vec<String> {
         let recipe = serde_json::to_string(&(&m.source, &m.variants, &m.sql)).unwrap_or_default();
         let on_table = bound.as_ref().map(|b| m.source.as_ref().map(|s| s.connection == b.connection && s.table == b.table && !b.table.is_empty()).unwrap_or(false)).unwrap_or(false);
         if on_table || word_in(&recipe, name) || word_in(&m.description, name) {
-            out.push(format!("the number {}", m.name));
+            out.push(format!("the metric {}", m.name));
         }
     }
     for f in ont.functions.values() {
@@ -343,12 +343,12 @@ fn uses_of_column(ont: &Ontology, entity: &str, col: &str) -> Vec<String> {
     for m in ont.metrics.values() {
         let srcs: Vec<&MetricSource> = m.source.iter().chain(m.variants.iter().map(|v| &v.source)).collect();
         if srcs.iter().any(|s| s.connection == b.connection && s.table == b.table && (word_in(&s.filter, col) || word_in(&s.measure, col))) {
-            out.push(format!("the number {} (its recipe names {})", m.name, col));
+            out.push(format!("the metric {} (its recipe names {})", m.name, col));
         }
     }
     for c in ont.constraints.values() {
         if c.applies_to == entity && word_in(&c.rule, col) {
-            out.push(format!("the rule {}", c.id));
+            out.push(format!("the guardrail {}", c.id));
         }
     }
     out
@@ -434,7 +434,7 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
     }
     for (q, r) in &before_links {
         if !after_links.contains_key(q) {
-            let uses: Vec<String> = after.constraints.values().filter(|c| c.applies_to == r.name || c.applies_to == r.qualified()).map(|c| format!("the rule {}", c.id)).collect();
+            let uses: Vec<String> = after.constraints.values().filter(|c| c.applies_to == r.name || c.applies_to == r.qualified()).map(|c| format!("the guardrail {}", c.id)).collect();
             out.push(json!({ "kind": "link", "op": "remove", "name": r.qualified(), "label": link_label(&r.from, &r.name, &r.to), "link": r.name, "from": r.from, "to": r.to, "uses": uses, "structural": true }));
         }
     }
@@ -459,7 +459,7 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
                     "kind": "metric", "op": "add", "name": m.name, "label": label(&m.name), "sentence": sentence, "as_written": as_written,
                     "description": m.description, "grain": m.grain, "owner": m.owner, "basis": m.basis.map(|b| b.word()), "caveats": m.caveats,
                     "from": m.source.as_ref().map(|s| format!("{}.{}", s.connection, if s.tool.is_empty() { &s.table } else { &s.tool })),
-                    "preview": if from_user { Json::from("Lorefile can't preview this number: the rows stay with the agent.") } else { Json::Null },
+                    "preview": if from_user { Json::from("Lorefile can't preview this metric: the rows stay with the agent.") } else { Json::Null },
                 }));
             }
             Some(b) if same(b, m) => {}
@@ -573,7 +573,7 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
                     .values()
                     .filter(|t| t.source.as_ref().map(|x| x.connection == s.connection).unwrap_or(false))
                     .map(|t| format!("the rows of {}", t.name))
-                    .chain(before.metrics.values().filter(|m| m.source.iter().chain(m.variants.iter().map(|v| &v.source)).any(|x| x.connection == s.connection)).map(|m| format!("the number {}", m.name)))
+                    .chain(before.metrics.values().filter(|m| m.source.iter().chain(m.variants.iter().map(|v| &v.source)).any(|x| x.connection == s.connection)).map(|m| format!("the metric {}", m.name)))
                     .collect();
                 out.push(json!({ "kind": "source", "op": "change", "name": s.connection, "label": s.connection, "diffs": diffs, "depends": graded }));
             }
@@ -586,7 +586,7 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
                 .values()
                 .filter(|t| t.source.as_ref().map(|x| x.connection == b.connection).unwrap_or(false))
                 .map(|t| format!("the rows of {}", t.name))
-                .chain(before.metrics.values().filter(|m| m.source.iter().chain(m.variants.iter().map(|v| &v.source)).any(|x| x.connection == b.connection)).map(|m| format!("the number {}", m.name)))
+                .chain(before.metrics.values().filter(|m| m.source.iter().chain(m.variants.iter().map(|v| &v.source)).any(|x| x.connection == b.connection)).map(|m| format!("the metric {}", m.name)))
                 .collect();
             out.push(json!({ "kind": "source", "op": "remove", "name": b.connection, "label": b.connection, "uses": bound }));
         }
@@ -614,7 +614,7 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
     }
     for b in before.actions.values() {
         if !after.actions.contains_key(&b.name) {
-            let uses: Vec<String> = after.constraints.values().filter(|c| c.applies_to == b.name).map(|c| format!("the rule {}", c.id)).collect();
+            let uses: Vec<String> = after.constraints.values().filter(|c| c.applies_to == b.name).map(|c| format!("the guardrail {}", c.id)).collect();
             out.push(json!({ "kind": "action", "op": "remove", "name": b.name, "label": label(&b.name), "uses": uses }));
         }
     }
@@ -712,13 +712,13 @@ fn entity_change(before: &Ontology, after: &Ontology, b: &TypeDef, t: &TypeDef) 
     let changed_n = fields.iter().filter(|f| f["op"] == "change" || f["op"] == "rename").count();
     let mut said = Vec::new();
     if added_n > 0 {
-        said.push(format!("{} added", plural(added_n, "column")));
+        said.push(format!("{} added", plural(added_n, "field")));
     }
     if changed_n > 0 {
-        said.push(format!("{} changed", plural(changed_n, "column")));
+        said.push(format!("{} changed", plural(changed_n, "field")));
     }
     if removed_n > 0 {
-        said.push(format!("{} removed", plural(removed_n, "column")));
+        said.push(format!("{} removed", plural(removed_n, "field")));
     }
     if diffs.iter().any(|d| d["what"] == "description") {
         said.push("described differently".into());
@@ -742,11 +742,11 @@ pub fn plural(n: usize, word: &str) -> String {
 
 fn kind_noun(kind: &str, n: usize) -> String {
     let (one, many) = match kind {
-        "entity" => ("thing", "things"),
-        "metric" => ("number", "numbers"),
-        "source" => ("place rows come from", "places rows come from"),
-        "word" => ("word", "words"),
-        "rule" => ("rule", "rules"),
+        "entity" => ("entity", "entities"),
+        "metric" => ("metric", "metrics"),
+        "source" => ("source", "sources"),
+        "word" => ("also-called word", "also-called words"),
+        "rule" => ("guardrail", "guardrails"),
         "link" => ("link", "links"),
         "function" => ("function", "functions"),
         "action" => ("action", "actions"),
@@ -755,7 +755,7 @@ fn kind_noun(kind: &str, n: usize) -> String {
     format!("{} {}", n, if n == 1 { one } else { many })
 }
 
-/// "1 thing (Promo sale, 14 columns)", grouped by kind, for adds, changes and removes.
+/// "1 entity (Promo sale, 14 fields)", grouped by kind, for adds, changes and removes.
 pub fn counts(changes: &[Json]) -> Json {
     let order = ["entity", "metric", "source", "link", "rule", "word", "function", "action"];
     let mut adds = Vec::new();
@@ -771,7 +771,7 @@ pub fn counts(changes: &[Json]) -> Json {
                 .map(|c| {
                     let l = c["label"].as_str().unwrap_or("").to_string();
                     match c["fields"].as_array() {
-                        Some(f) if k == "entity" => format!("{}, {}", l, plural(f.len(), "column")),
+                        Some(f) if k == "entity" => format!("{}, {}", l, plural(f.len(), "field")),
                         _ => l,
                     }
                 })
@@ -844,16 +844,16 @@ pub fn headline(p: &Proposal, changes: &[Json]) -> String {
         let c = &changes[0];
         let l = c["label"].as_str().unwrap_or("");
         return match (c["kind"].as_str().unwrap_or(""), c["op"].as_str().unwrap_or("")) {
-            ("rule", "add") => format!("{} a new rule for {}", suggests, label(c["applies_to"].as_str().unwrap_or(""))),
-            ("rule", _) => format!("{} to change the rule {}", wants, l),
-            ("metric", "add") => format!("{} a new number: {}", suggests, l),
+            ("rule", "add") => format!("{} a new guardrail for {}", suggests, label(c["applies_to"].as_str().unwrap_or(""))),
+            ("rule", _) => format!("{} to change the guardrail {}", wants, l),
+            ("metric", "add") => format!("{} a new metric: {}", suggests, l),
             ("metric", _) if c["recipe_changed"] == true => format!("{} to change how {} is counted", wants, l),
             ("metric", _) => format!("{} to describe {} differently", wants, l),
-            ("entity", "add") => format!("{} a new thing: {}", suggests, l),
+            ("entity", "add") => format!("{} a new entity: {}", suggests, l),
             ("entity", _) => format!("{} to change {}", wants, l),
-            ("word", "add") => format!("{} a word: \"{}\"", suggests, l),
+            ("word", "add") => format!("{} an also-called word: \"{}\"", suggests, l),
             ("word", _) => format!("{} to change what \"{}\" means", wants, l),
-            ("source", "add") => format!("{} a new place rows come from: {}", suggests, l),
+            ("source", "add") => format!("{} a new source: {}", suggests, l),
             ("source", _) => format!("{} to change the source {}", wants, l),
             ("link", "add") => format!("{} a link: {}", suggests, l),
             ("link", _) => format!("{} to change the link {}", wants, l),
@@ -894,8 +894,8 @@ pub fn questions(before_report: &Report, after: &Ontology, after_report: &Report
             "W101" if d.message.starts_with("type ") => json!({ "code": d.code, "ask": format!("What is one {}?", label(&n)), "name": n, "fix": { "op": "set_type_description", "type": n, "field": "description" } }),
             "W101" if d.message.starts_with("metric ") => json!({ "code": d.code, "ask": format!("What does {} measure?", label(&n)), "name": n, "fix": { "op": "set_metric", "metric": n, "field": "description" } }),
             "W101" => json!({ "code": d.code, "text": format!("{} has no description, so agents have only its name to go on.", n) }),
-            "W103" => json!({ "code": d.code, "text": format!("No column of {} says which row is which, so agents cannot look one up.", label(&n)) }),
-            "W102" => json!({ "code": d.code, "text": format!("The rule {} stops actions but doesn't say why.", d.message.split_whitespace().nth(2).unwrap_or("")) }),
+            "W103" => json!({ "code": d.code, "text": format!("No field of {} says which row is which, so agents cannot look one up.", label(&n)) }),
+            "W102" => json!({ "code": d.code, "text": format!("The guardrail {} stops actions but doesn't say why.", d.message.split_whitespace().nth(2).unwrap_or("")) }),
             "W105" => json!({ "code": d.code, "text": format!("{} is \"one of\" but lists none.", n) }),
             "W106" => json!({ "code": d.code, "text": format!("Lorefile can't find {}, so rows can't be read here.", d.message.rsplit(" at ").next().unwrap_or("the file")) }),
             "W107" => json!({ "code": d.code, "text": format!("{} links the wrong way round for its inputs.", n) }),
@@ -1107,7 +1107,23 @@ fn own_texts(ont: &Ontology, p: &Proposal) -> Option<(Ontology, Ontology)> {
     Some((overlay(&ont.root, &before)?.0, overlay(&ont.root, &after)?.0))
 }
 
-const KIND_NOUN: [(&str, &str); 8] = [("entity", "the thing"), ("metric", "the number"), ("source", "the source"), ("rule", "the rule"), ("function", "the function"), ("action", "the action"), ("link", "the link"), ("word", "the word")];
+/// The gradable things a proposal adds or changes (a metric, an entity's source, an also-called
+/// word, a guardrail): what its Accept graded, for "Put your name on it".
+pub fn graded_by(ont: &Ontology, p: &Proposal) -> Vec<(crate::trust::Kind, String)> {
+    let Some((before, after)) = own_texts(ont, p) else { return vec![] };
+    let mut out = Vec::new();
+    for k in crate::trust::Kind::ALL {
+        let was = crate::trust::things(&before, k);
+        for (n, v) in crate::trust::things(&after, k) {
+            if was.get(&n).map(|o| crate::trust::fingerprint(o) != crate::trust::fingerprint(&v)).unwrap_or(true) {
+                out.push((k, n));
+            }
+        }
+    }
+    out
+}
+
+const KIND_NOUN: [(&str, &str); 8] = [("entity", "the entity"), ("metric", "the metric"), ("source", "the source"), ("rule", "the guardrail"), ("function", "the function"), ("action", "the action"), ("link", "the link"), ("word", "the also-called word")];
 
 /// The whole answer of `GET /api/proposals/<id>/review`.
 pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json {
@@ -1251,7 +1267,7 @@ pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json 
                 };
                 if let Some(f) = file {
                     let verb = match c["op"].as_str().unwrap_or("") { "add" => "adds", "remove" => "removes", "rename" => "renames", _ => "changes" };
-                    by_file.entry(f).or_default().push(format!("{} {} {}", verb, KIND_NOUN.iter().find(|(k, _)| *k == c["kind"].as_str().unwrap_or("")).map(|(_, w)| *w).unwrap_or("thing"), n));
+                    by_file.entry(f).or_default().push(format!("{} {} {}", verb, KIND_NOUN.iter().find(|(k, _)| *k == c["kind"].as_str().unwrap_or("")).map(|(_, w)| *w).unwrap_or("the item"), n));
                 }
             }
         }
@@ -1300,10 +1316,18 @@ pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json 
         j["take_back"] = json!({ "possible": ok && ctx.editable, "why_not": why, "undo": p.commit });
     }
     j["notes"] = json!(notes);
+    // "Put your name on it": the decision, or a grade it gave, was saved with no name
+    let anon = |b: &Option<String>| b.as_deref().map(|b| crate::trust::who_said(b) == "a person").unwrap_or(false);
+    let sign = ctx.editable
+        && match p.status.as_str() {
+            "accepted" => anon(&p.accepted_by) || graded_by(ont, p).iter().any(|(k, n)| crate::edit::sign_refusal(ont, *k, n).is_none()),
+            "set_aside" => anon(&p.decided_by),
+            _ => false,
+        };
     if p.status == "set_aside" {
-        j["can"] = json!({ "accept": false, "dismiss": false, "reopen": ctx.editable, "why_not": why_not });
+        j["can"] = json!({ "accept": false, "dismiss": false, "reopen": ctx.editable, "sign": sign, "why_not": why_not });
     } else {
-        j["can"] = json!({ "accept": can_accept && why_not.is_none(), "dismiss": ctx.editable && p.status == "pending", "why_not": why_not });
+        j["can"] = json!({ "accept": can_accept && why_not.is_none(), "dismiss": ctx.editable && p.status == "pending", "sign": sign, "why_not": why_not });
     }
     j["changes"] = json!(changes);
     j
@@ -1532,7 +1556,7 @@ mod tests {
         let ops: Vec<(&str, &str)> = fields.iter().map(|f| (f["op"].as_str().unwrap(), f["name"].as_str().unwrap())).collect();
         assert_eq!(ops.len(), 3, "{:?}", ops);
         assert!(ops.contains(&("add", "gift_wrap")) && ops.contains(&("remove", "coupon")) && ops.contains(&("change", "total")), "{:?}", ops);
-        assert_eq!(c[0]["summary"], "1 column added, 1 column changed, 1 column removed");
+        assert_eq!(c[0]["summary"], "1 field added, 1 field changed, 1 field removed");
         assert_eq!(comments_lost(ORDER, after_text), 3);
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1564,7 +1588,7 @@ mod tests {
         let c = compare(&before, &after);
         let gone = c.iter().find(|x| x["kind"] == "entity" && x["op"] == "remove").unwrap();
         let uses: Vec<&str> = gone["uses"].as_array().unwrap().iter().filter_map(|u| u.as_str()).collect();
-        assert!(uses.iter().any(|u| u.contains("link places")) && uses.iter().any(|u| u.contains("\"basket\"")) && uses.iter().any(|u| u.contains("number coupon_orders")), "{:?}", uses);
+        assert!(uses.iter().any(|u| u.contains("link places")) && uses.iter().any(|u| u.contains("\"basket\"")) && uses.iter().any(|u| u.contains("metric coupon_orders")), "{:?}", uses);
         let (after, _) = load(&dir2, &[("types/order.yaml", Some(&ORDER.replace("properties:", "source: { connection: shop, table: orders, key: order_id }\nproperties:").replace("  coupon: { type: string, description: The coupon used. }\n", "")))]);
         let c = compare(&before, &after);
         let col = c[0]["fields"].as_array().unwrap().iter().find(|f| f["op"] == "remove").unwrap();

@@ -327,7 +327,7 @@ pub fn validate(ont: &Ontology) -> Report {
         let f = crate::trust::FILE;
         for k in crate::trust::Kind::ALL {
             for (name, rec) in crate::trust::entries(book, k) {
-                let what = format!("{} {}", k.word(), name);
+                let what = k.name_words(name);
                 if rec.of.trim().is_empty() {
                     r.err("E018", f, format!("{} has a grade with no fingerprint (`of`), so nobody can tell what was graded", what));
                 }
@@ -350,11 +350,11 @@ pub fn validate(ont: &Ontology) -> Report {
         for (k, name) in &ont.graded.all {
             let st = ont.graded.get(*k, name);
             if let (true, Some(rec)) = (st.changed, &st.record) {
-                r.warn("W113", f, format!("{} {} changed since it was {} ({}, {}); a person has to accept it again", k.word(), name, rec.grade.word(), crate::trust::who_said(&rec.by), rec.at));
+                r.warn("W113", f, format!("{} changed since it was {} ({}, {}); a person has to accept it again", k.name_words(name), rec.grade.word(), crate::trust::who_said(&rec.by), rec.at));
             }
         }
         for (k, name, rec) in &ont.graded.orphans {
-            r.warn("W114", f, format!("{} {} is {} in trust.yaml but no longer exists; the line can go", k.word(), name, rec.grade.word()));
+            r.warn("W114", f, format!("{} is {} in trust.yaml but no longer exists; the line can go", k.name_words(name), rec.grade.word()));
         }
     }
 

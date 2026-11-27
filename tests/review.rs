@@ -161,10 +161,10 @@ fn a_learned_file_reads_by_meaning_and_accept_takes_the_owner_fix() {
     let _srv = serve(&sp.0, port, &["--allow-edit"]);
     let r = review(port, &id);
     assert_eq!(r["headline"], "An agent wants Lorefile to remember a file");
-    assert_eq!(r["counts"]["adds"][0], "1 thing (Promo sale, 14 columns)");
+    assert_eq!(r["counts"]["adds"][0], "1 entity (Promo sale, 14 fields)");
     let metric = r["changes"].as_array().unwrap().iter().find(|c| c["kind"] == "metric").unwrap();
     assert_eq!(metric["sentence"], "add up revenue, leaving out lines where refunded is true", "it says lines: the key is line_id");
-    assert_eq!(metric["preview"], "Lorefile can't preview this number: the rows stay with the agent.");
+    assert_eq!(metric["preview"], "Lorefile can't preview this metric: the rows stay with the agent.");
     let q = &r["questions"][0];
     assert_eq!((q["code"].as_str(), q["fix"]["op"].as_str()), (Some("W109"), Some("set_metric")), "{}", r["questions"]);
     assert_eq!(r["can"]["accept"], true);
@@ -240,7 +240,7 @@ fn a_whole_file_proposal_on_a_changed_file_is_refused_in_words() {
     let id = queued(&agent(&sp.0, &[("propose_change", json!({ "file": "glossary.yaml", "content": "terms:\n  - term: patron\n    means: Customer\n", "reason": "the team says patron" }))])[0]);
     let port = 7192;
     let _srv = serve(&sp.0, port, &["--allow-edit"]);
-    assert_eq!(review(port, &id)["headline"], "An agent suggests a word: \"patron\"");
+    assert_eq!(review(port, &id)["headline"], "An agent suggests an also-called word: \"patron\"");
     fs::write(sp.0.join("glossary.yaml"), "terms:\n  - term: client\n    means: Customer\n").unwrap();
     let rv = review(port, &id);
     assert_eq!(rv["can"]["accept"], false);
@@ -436,7 +436,9 @@ fn a_review_link_survives_the_sign_in() {
     let page = raw(format!("GET /s/branda/?review=p-20261127-080758-6 HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n", port));
     assert!(page.contains("name=\"next\" value=\"/s/branda/?review=p-20261127-080758-6\""), "the form carries the review link: {}", page);
     assert!(page.contains("location.pathname + location.search + location.hash"), "the cookie retry keeps it too");
-    let form = "token=review-link-token-0123456789abcdef&next=%2Fs%2Fbranda%2F%3Freview%3Dp-20261127-080758-6";
+    assert!(page.contains("id=\"me\"") && page.contains("Your name") && page.contains("localStorage.setItem('lorefile-name'"), "an optional name on the sign-in page, kept in this browser");
+    // a form that sends a name too still signs in: the server takes the token and ignores the rest
+    let form = "token=review-link-token-0123456789abcdef&me=Vinay&next=%2Fs%2Fbranda%2F%3Freview%3Dp-20261127-080758-6";
     let back = raw(format!("POST /api/login HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{}", port, form.len(), form));
     assert!(back.to_lowercase().contains("location: /s/branda/?review=p-20261127-080758-6"), "{}", back);
 }
@@ -490,4 +492,158 @@ fn with_history_on_take_it_back_is_that_commits_undo() {
     assert_eq!(status, 200, "{}", r);
     assert!(sp.read("types/promo_sale.yaml").is_none());
     assert_eq!(sp.proposal(&id)["status"], "pending");
+}
+
+// ---------------------------------------------------------------------------
+// specs/2026-11-27-ui-fixes.md: one set of words, metric sentences, names on decisions
+// ---------------------------------------------------------------------------
+
+/// Learn the promo file and accept it the way Vinay did in the live test: no name, no owner.
+fn accepted_with_no_name(sp: &Space, port: u16) -> String {
+    let id = queued(&agent(&sp.0, &[("learn_file", learn())])[0]);
+    let fp = review(port, &id)["fingerprint"].as_str().unwrap().to_string();
+    let (status, ok) = post(port, "/api/proposals/accept", json!({ "id": id, "seen": fp, "fixes": [] }));
+    assert_eq!(status, 200, "{}", ok);
+    id
+}
+
+fn trust_line(sp: &Space, name: &str) -> String {
+    sp.read("trust.yaml").unwrap_or_default().lines().find(|l| l.trim_start().starts_with(&format!("{}:", name))).unwrap_or("").trim().to_string()
+}
+
+#[test]
+fn the_summary_says_metrics_in_words_and_a_blank_space_reads_empty() {
+    let sp = Space::new("words");
+    let port = 7230;
+    let _srv = serve(&sp.0, port, &["--allow-edit"]);
+    let (_, spaces) = get(port, "/api/spaces");
+    let me = &spaces["spaces"][0];
+    assert_eq!((me["empty"].as_bool(), me["ok"].as_bool()), (Some(true), Some(false)), "a blank space is empty, not broken: {}", me);
+
+    accepted_with_no_name(&sp, port);
+    let (_, sum) = get(port, "/api/summary");
+    let m = sum["metrics"].as_array().unwrap().iter().find(|m| m["metric"] == "promo_sale_revenue").unwrap();
+    assert_eq!(m["sentence"], "Add up revenue, leaving out lines where refunded is true");
+    assert_eq!(m["label"], "Promo sale revenue");
+    let (_, spaces) = get(port, "/api/spaces");
+    assert_eq!((spaces["spaces"][0]["empty"].as_bool(), spaces["spaces"][0]["types"].as_u64()), (Some(false), Some(1)), "the picker is fresh after Accept");
+
+    // a metric in SQL has no sentence and keeps its SQL, for Details
+    fs::write(sp.0.join("logic/extra.yaml"), "metrics:\n  - metric: gross_margin\n    description: Revenue minus cost.\n    owner: finance\n    sql: select sum(revenue) - sum(cost) from orders\n").unwrap();
+    post(port, "/api/reload", json!({}));
+    let (_, sum) = get(port, "/api/summary");
+    let g = sum["metrics"].as_array().unwrap().iter().find(|m| m["metric"] == "gross_margin").unwrap();
+    assert!(g["sentence"].is_null() && g["sql"].as_str().unwrap().contains("sum(cost)"), "{}", g);
+}
+
+#[test]
+fn naming_an_owner_keeps_the_grade_and_who_gave_it() {
+    let sp = Space::new("owner");
+    let port = 7231;
+    let _srv = serve(&sp.0, port, &["--allow-edit"]);
+    accepted_with_no_name(&sp, port);
+    let (status, ck) = post(port, "/api/trust", json!({ "op": "check", "kind": "metric", "name": "promo_sale_revenue", "against": "user_files", "note": "looked at other tables" }));
+    assert_eq!(status, 200, "{}", ck);
+    let say = |port: u16| { let (_, t) = get(port, "/api/summary"); t["trust"]["items"].as_array().unwrap().iter().find(|x| x["name"] == "promo_sale_revenue").unwrap()["say"].clone() };
+    let said = say(port);
+    let (status, ok) = post(port, "/api/patch", json!({ "op": "set_metric", "metric": "promo_sale_revenue", "owner": "Vinay", "by": "Vinay" }));
+    assert_eq!(status, 200, "the page sends its name as by, and set_metric takes it: {}", ok);
+    assert!(sp.read("logic/metrics.yaml").unwrap().contains("owner: Vinay"));
+    let line = trust_line(&sp, "promo_sale_revenue");
+    assert!(line.contains("grade: checked") && line.contains("by: \"person via page\"") && line.contains("note: \"looked at other tables\""), "{}", line);
+    let (_, sum) = get(port, "/api/summary");
+    assert!(!sum["diagnostics"].as_array().unwrap().iter().any(|d| d["code"] == "W113" || d["code"] == "W109"), "{}", sum["diagnostics"]);
+    assert_eq!(say(port), said, "agents say the same as before");
+    // an accepted binding keeps its record too when only words change around it
+    let binding = trust_line(&sp, "PromoSale");
+    assert!(binding.contains("grade: accepted") && binding.contains("person via page"), "{}", binding);
+}
+
+#[test]
+fn a_name_goes_only_on_a_grade_saved_without_one() {
+    let sp = Space::new("sign");
+    let port = 7232;
+    let _srv = serve(&sp.0, port, &["--allow-edit"]);
+    accepted_with_no_name(&sp, port);
+    post(port, "/api/trust", json!({ "op": "check", "kind": "metric", "name": "promo_sale_revenue", "against": "user_files", "note": "looked at other tables" }));
+    let before = trust_line(&sp, "PromoSale");
+    // no name, or one that reads as an agent: refused, nothing written
+    for by in [json!(null), json!("agent smith")] {
+        let (status, r) = post(port, "/api/trust", json!({ "op": "sign", "kind": "binding", "name": "PromoSale", "by": by }));
+        assert!(status != 200 || r["written"] != true, "{}", r);
+        assert!(r["error"].as_str().or(r["refused"].as_str()).unwrap_or("").contains("type your name first"), "{}", r);
+    }
+    assert_eq!(trust_line(&sp, "PromoSale"), before);
+    // the binding: only `by` changes
+    let (status, r) = post(port, "/api/trust", json!({ "op": "sign", "kind": "binding", "name": "PromoSale", "by": "Priya" }));
+    assert_eq!((status, r["written"].as_bool()), (200, Some(true)), "{}", r);
+    assert_eq!(trust_line(&sp, "PromoSale"), before.replace("person via page", "Priya via page"));
+    assert!(r["summary"].as_str().unwrap().starts_with("Priya put their name on source of PromoSale (accepted "), "{}", r);
+    assert!(sp.activity().last().unwrap().contains("with no name"));
+    // the checked metric keeps its source and note
+    let m = trust_line(&sp, "promo_sale_revenue");
+    let (_, r) = post(port, "/api/trust", json!({ "op": "sign", "kind": "metric", "name": "promo_sale_revenue", "by": "Priya" }));
+    assert_eq!(r["written"], true, "{}", r);
+    assert_eq!(trust_line(&sp, "promo_sale_revenue"), m.replace("person via page", "Priya via page"));
+    // a named record is never renamed
+    let (_, r) = post(port, "/api/trust", json!({ "op": "sign", "kind": "binding", "name": "PromoSale", "by": "Vinay" }));
+    assert!(r["error"].as_str().or(r["refused"].as_str()).unwrap_or("").contains("already recorded as Priya's"), "{}", r);
+    assert!(trust_line(&sp, "PromoSale").contains("Priya via page"));
+    // changed since it was graded: look again instead; the warning says "source of"
+    let t = sp.read("types/promo_sale.yaml").unwrap();
+    fs::write(sp.0.join("types/promo_sale.yaml"), t.replace("table: promo_sales", "table: promo_sales_v2")).unwrap();
+    post(port, "/api/reload", json!({}));
+    let (_, sum) = get(port, "/api/summary");
+    let w113 = sum["diagnostics"].as_array().unwrap().iter().find(|d| d["code"] == "W113").unwrap_or_else(|| panic!("{}", sum["diagnostics"]));
+    assert!(w113["message"].as_str().unwrap().starts_with("source of PromoSale changed since it was accepted"), "{}", w113);
+}
+
+#[test]
+fn a_decision_made_without_a_name_takes_one_with_its_grades() {
+    let sp = Space::new("signp");
+    let port = 7233;
+    let _srv = serve(&sp.0, port, &["--allow-edit"]);
+    let id = accepted_with_no_name(&sp, port);
+    assert_eq!(review(port, &id)["can"]["sign"], true);
+    post(port, "/api/trust", json!({ "op": "check", "kind": "metric", "name": "promo_sale_revenue", "against": "user_files", "note": "looked at other tables" }));
+    let why = review(port, &id)["take_back"]["why_not"].clone();
+    let (status, r) = post(port, "/api/proposals/sign", json!({ "id": id, "by": "Vinay" }));
+    assert_eq!((status, r["written"].as_bool()), (200, Some(true)), "{}", r);
+    assert_eq!(sp.proposal(&id)["accepted_by"], "Vinay via page");
+    assert!(trust_line(&sp, "PromoSale").contains("Vinay via page") && trust_line(&sp, "promo_sale_revenue").contains("Vinay via page"), "one save names both records");
+    assert!(trust_line(&sp, "promo_sale_revenue").contains("grade: checked"));
+    let last = sp.activity().pop().unwrap();
+    assert!(last.starts_with("Vinay put their name on an agent's promo_sales.csv file") && last.contains("(accepted ") && last.ends_with("with no name)"), "{}", last);
+    let rv = review(port, &id);
+    assert_eq!((rv["decided"]["accepted_by"].as_str(), rv["can"]["sign"].as_bool()), (Some("Vinay"), Some(false)));
+    assert_eq!(rv["take_back"]["why_not"], why, "Take it back stays refused for the same reason");
+    let (status, again) = post(port, "/api/proposals/sign", json!({ "id": id, "by": "Priya" }));
+    assert_eq!(status, 409, "{}", again);
+
+    // a fresh Accept with no name: a name alone never blocks Take it back
+    let sp2 = Space::new("signp2");
+    let port2 = 7234;
+    let _srv2 = serve(&sp2.0, port2, &["--allow-edit"]);
+    let id2 = accepted_with_no_name(&sp2, port2);
+    let (_, r) = post(port2, "/api/proposals/sign", json!({ "id": id2, "by": "Vinay" }));
+    assert_eq!(r["written"], true, "{}", r);
+    assert_eq!(review(port2, &id2)["take_back"]["possible"], true);
+    let (_, back) = post(port2, "/api/proposals/take_back", json!({ "id": id2, "by": "Vinay" }));
+    assert_eq!(back["written"], true, "{}", back);
+}
+
+#[test]
+fn review_words_name_entities_metrics_and_sources() {
+    let sp = Space::new("kinds");
+    let id = queued(&agent(&sp.0, &[("learn_file", learn())])[0]);
+    let port = 7235;
+    let _srv = serve(&sp.0, port, &["--allow-edit"]);
+    let r = review(port, &id);
+    let adds = r["counts"]["adds"].to_string();
+    assert!(adds.contains("entity") && adds.contains("metric") && adds.contains("source"), "{}", adds);
+    for old in ["thing", "number", "place rows", "column"] {
+        assert!(!adds.contains(old), "{} still says {}", adds, old);
+    }
+    let metric = r["changes"].as_array().unwrap().iter().find(|c| c["kind"] == "metric").unwrap();
+    assert_eq!(metric["label"], "Promo sale revenue", "the metric's title is its label");
 }

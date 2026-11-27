@@ -262,13 +262,23 @@ const LOGIN_HTML: &str = r##"<!doctype html>
 {{error}}
 <form method="post" action="/api/login">
 <label for="token">Paste the token printed in the terminal</label>
-<div class="row"><input id="token" name="token" type="password" autocomplete="current-password" spellcheck="false" autofocus required><button type="submit">Go</button></div>
+<div class="row"><input id="token" name="token" type="password" autocomplete="current-password" spellcheck="false" autofocus required></div>
+<label for="me" style="display:block;margin-top:10px">Your name <span style="font-weight:400;color:var(--muted)">optional · shown on what you accept</span></label>
+<div class="row"><input id="me" type="text" autocomplete="name" spellcheck="false" maxlength="60" placeholder="e.g. Vinay" style="font-family:var(--sans)"><button type="submit">Go</button></div>
 <input type="hidden" name="next" value="{{next}}">
 </form>
 <p>Running in Docker? It is in <code>LOREFILE_TOKEN</code>.</p>
 <p>Started it yourself? It is also saved in <code>.lorefile/auth.toml</code> in the folder the server was started on.</p>
 </main>
 <script>
+// The name stays in this browser (the page reads it from the same place) and never goes to the
+// server with the token. The input has no name attribute, so the form does not send it.
+(() => { try {
+  const me = document.getElementById('me'), kept = localStorage.getItem('lorefile-name') || '';
+  if (kept && !me.value) me.value = kept;
+  const ok = (n) => n.length <= 60 && /^[\p{L}\p{N} .'_-]+$/u.test(n) && !/agent/i.test(n) && !n.toLowerCase().split(/\s+/).includes('via');
+  document.querySelector('form').addEventListener('submit', () => { try { const v = me.value.trim(); if (v && ok(v)) localStorage.setItem('lorefile-name', v); } catch (e) {} });
+} catch (e) {} })();
 // A link from another site arrives without the cookie (it is SameSite=Strict). Ask once from
 // this page, where the cookie is sent, and come back in if it is already there.
 (async () => { try {
@@ -409,7 +419,7 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
         "actions": ont.actions.values().collect::<Vec<_>>(),
         "sources": ont.sources.values().collect::<Vec<_>>(),
         "glossary": ont.glossary,
-        "metrics": ont.metrics.values().collect::<Vec<_>>(),
+        "metrics": ont.metrics.values().map(|m| metric_json(m, ont)).collect::<Vec<_>>(),
         "functions": ont.functions.values().collect::<Vec<_>>(),
         "files": ont.files,
         "version": env!("CARGO_PKG_VERSION"),
@@ -425,6 +435,27 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
         "commit_edits": edit.commit,
         "git": edit::git_status(&st.dir),
     })
+}
+
+/// A metric as the files say it, plus its label and its recipe in words (`sentence`, one per
+/// variant in `sentences`). A recipe that can't be put into words gives no sentence: the page
+/// says "counted by its own recipe" and shows the formula under Details.
+pub(crate) fn metric_json(m: &crate::schema::MetricDef, ont: &crate::ontology::Ontology) -> Json {
+    let mut j = serde_json::to_value(m).unwrap_or(json!({}));
+    // in words only when all of it is: anything shown "as written" is a formula, for Details
+    let say = |src: &crate::schema::MetricSource| match review::words::recipe_sentence(src, &review::words::rows_of(ont, src)) {
+        (s, None) => Some(s),
+        _ => None,
+    };
+    let sentences: Vec<Json> = if let Some(src) = &m.source {
+        vec![json!(say(src).map(|s| edit::sentence(&s)))]
+    } else {
+        m.variants.iter().map(|v| json!(say(&v.source).map(|s| format!("When {}: {}", v.when, s)))).collect()
+    };
+    j["label"] = json!(review::words::label(&m.name));
+    j["sentence"] = sentences.first().cloned().unwrap_or(Json::Null);
+    j["sentences"] = json!(sentences);
+    j
 }
 
 /// Every graded kind with its resolved grade: what the page's chips show and `GET /api/trust` answers.
@@ -488,7 +519,7 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
         return json_response_private(200, &reply);
     }
     // a person's decision on a proposal: Accept, Not now, Look again, Take it back
-    if matches!(path, "/api/proposals/accept" | "/api/proposals/dismiss" | "/api/proposals/reopen" | "/api/proposals/take_back") {
+    if matches!(path, "/api/proposals/accept" | "/api/proposals/dismiss" | "/api/proposals/reopen" | "/api/proposals/take_back" | "/api/proposals/sign") {
         return decide(st, edit, path, body);
     }
     if !edit.allow {
@@ -506,17 +537,22 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
             "vouch_all" => Ok(edit::GradeOp::VouchAll),
             "accept" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Accept { kind, name }),
             "check" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Check { kind, name, against: str_field(body, "against").to_string(), note: str_field(body, "note").to_string() }),
-            other => Err(format!("op is accept, check or vouch_all, not `{}`", other)),
+            "sign" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Sign { items: vec![(kind, name)] }),
+            other => Err(format!("op is accept, check, sign or vouch_all, not `{}`", other)),
         };
         match op {
             Ok(op) => {
                 let out = edit::grade(&st.dir, edit, &st.report, &op, &by);
                 if out.written {
                     let what = match &op {
-                        edit::GradeOp::Accept { kind, name } => format!("accepted {} {}", kind.word(), name),
-                        edit::GradeOp::Check { kind, name, against, .. } => format!("checked {} {} against {}", kind.word(), name, against),
+                        edit::GradeOp::Accept { kind, name } => format!("accepted {}", kind.name_words(name)),
+                        edit::GradeOp::Check { kind, name, against, .. } => format!("checked {} against {}", kind.name_words(name), against),
                         edit::GradeOp::VouchAll => format!("vouched for {} definitions", out.name),
+                        edit::GradeOp::Sign { .. } => format!("{} put their name on {}", edit::sentence(&crate::trust::who_said(&by)), out.stamped.join(" and ")),
                     };
+                    if matches!(op, edit::GradeOp::Sign { .. }) {
+                        extra["summary"] = json!(what);
+                    }
                     proposals::log(&st.dir, &by, &what, crate::trust::FILE);
                 }
                 out
@@ -615,8 +651,60 @@ fn decide(st: &mut State, edit: EditConfig, path: &str, body: &Json) -> Response
             }
         }
         "/api/proposals/take_back" => take_back(st, edit, &p, &by, &name),
+        "/api/proposals/sign" => sign_proposal(st, edit, &p, &by, &name),
         _ => accept(st, edit, &p, body, &by, &name),
     }
+}
+
+/// "Put your name on it" for a decision made with no name: the proposal's `accepted_by` (or
+/// `decided_by`) and every anonymous grade of the things it graded take the name, in one save.
+/// Named records are left alone and listed as already named.
+fn sign_proposal(st: &mut State, edit: EditConfig, p: &proposals::Proposal, by: &str, name: &str) -> Response<std::io::Cursor<Vec<u8>>> {
+    let who = crate::trust::who_said(by);
+    if who == "a person" || who == "an agent" {
+        return json_response_private(400, &json!({ "error": "Type your name first: putting your name on a decision needs one." }));
+    }
+    let anon = |b: &Option<String>| b.as_deref().map(|b| crate::trust::who_said(b) == "a person").unwrap_or(false);
+    let (field_anon, when) = match p.status.as_str() {
+        "accepted" => (anon(&p.accepted_by), "accepted"),
+        "set_aside" => (anon(&p.decided_by), "set aside"),
+        _ => return json_response_private(409, &json!({ "error": format!("{} is {}; only a decision can take a name.", p.id, p.state_words()) })),
+    };
+    let graded = if p.status == "accepted" { review::graded_by(&st.ont, p) } else { vec![] };
+    let mut items = Vec::new();
+    let mut named = Vec::new();
+    for (k, n) in graded {
+        match edit::sign_refusal(&st.ont, k, &n) {
+            None => items.push((k, n)),
+            Some(why) => named.push(why),
+        }
+    }
+    if items.is_empty() && !field_anon {
+        return json_response_private(409, &json!({ "error": if named.is_empty() { format!("{} already says who decided it.", p.id) } else { format!("Nothing here is missing a name: {}.", named.join("; ")) } }));
+    }
+    let mut out = Outcome { written: true, ok: true, file: crate::trust::FILE.into(), ..Default::default() };
+    let trust_was = std::fs::read_to_string(st.dir.join(crate::trust::FILE)).ok();
+    if !items.is_empty() {
+        out = edit::grade(&st.dir, edit, &st.report, &edit::GradeOp::Sign { items }, by);
+        if !out.written {
+            return json_response_private(409, &out.to_json());
+        }
+    }
+    // a name changes no meaning: Take it back stays possible when it was before
+    let trust_now = std::fs::read_to_string(st.dir.join(crate::trust::FILE)).ok();
+    if let Err(e) = proposals::sign(&st.dir, &p.id, field_anon.then_some(by), trust_was, trust_now) {
+        return json_response_private(409, &json!({ "error": e }));
+    }
+    let changes = review::own_changes(&st.ont, p);
+    let date = crate::trust::short_date(p.resolved_at.get(..10).unwrap_or(""));
+    let what = format!("{} put their name on {} ({} {} with no name)", name, review::object_words(p, &changes), when, date);
+    proposals::log(&st.dir, by, &what, &p.file);
+    st.reload();
+    let mut j = out.to_json();
+    j["written"] = json!(true);
+    j["summary"] = json!(what);
+    j["already_named"] = json!(named);
+    json_response_private(200, &j)
 }
 
 /// Accept: fresh or replayed, the person's fixes on top, then the save gate.
@@ -631,7 +719,7 @@ fn accept(st: &mut State, edit: EditConfig, p: &proposals::Proposal, body: &Json
             // the agent compared one recipe; if the definition changed since, that comparison says nothing about the new one
             let now = crate::trust::things(&st.ont, kind).get(&n).map(crate::trust::fingerprint).unwrap_or_default();
             if c.of.is_empty() || c.of != now {
-                return Err(format!("{} {} has changed since the agent compared it, so this report is about an older definition; set it aside and ask the agent to compare again", kind.word(), n));
+                return Err(format!("{} has changed since the agent compared it, so this report is about an older definition; set it aside and ask the agent to compare again", kind.name_words(&n)));
             }
             Ok(edit::GradeOp::Check { kind, name: n, against: c.against.clone(), note })
         });
@@ -1331,7 +1419,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     // writes: edit, create, delete, and propose_change through /api/tool
     let as_tool = method == Method::Post && path == "/api/tool" && matches!(str_field(&body, "name"), "propose_change" | "propose_patch" | "learn_file");
     let is_write = as_tool
-        || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/proposals/reopen" || path == "/api/proposals/take_back" || path == "/api/trust"))
+        || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/proposals/reopen" || path == "/api/proposals/take_back" || path == "/api/proposals/sign" || path == "/api/trust"))
         || (method == Method::Delete && path == "/api/file");
     if is_write {
         let resp = if !write_allowed(&req) {

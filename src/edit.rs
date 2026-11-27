@@ -730,8 +730,8 @@ fn stamp_for(root: &Path, note: &Note, after: &Ontology) -> Result<Stamp, String
     let said: Vec<String> = entries
         .iter()
         .map(|e| match e {
-            trust::Entry::Set(k, n, r) => format!("{} {}: {}", k.word(), n, r.grade.word()),
-            trust::Entry::Remove(k, n) => format!("{} {}: grade removed", k.word(), n),
+            trust::Entry::Set(k, n, r) => format!("{}: {}", k.name_words(n), r.grade.word()),
+            trust::Entry::Remove(k, n) => format!("{}: grade removed", k.name_words(n)),
         })
         .collect();
     Ok(Some((trust::render(&book), book, said)))
@@ -770,6 +770,24 @@ pub enum GradeOp {
     Check { kind: TKind, name: String, against: String, note: String },
     /// "Vouch for all": every ungraded (or changed) thing becomes accepted.
     VouchAll,
+    /// "Put your name on it": grades saved with no name (`person via …`) get the name; the
+    /// grade, date, fingerprint, source and note stay. A named, changed or missing record is
+    /// refused: a name only fills in a missing one, on the version a person saw.
+    Sign { items: Vec<(TKind, String)> },
+}
+
+/// Why a grade can't take a name, or `None` when it can: it was saved with no name.
+pub fn sign_refusal(ont: &Ontology, kind: TKind, name: &str) -> Option<String> {
+    let st = ont.grade_of(kind, name);
+    let Some(r) = &st.record else { return Some(format!("{} has no grade to put a name on", kind.name_words(name))) };
+    if st.changed {
+        return Some(format!("{} changed since it was {}; look again instead", kind.name_words(name), r.grade.word()));
+    }
+    match trust::who_said(&r.by).as_str() {
+        "a person" => None,
+        "an agent" => Some(format!("{} was graded by an agent, not a person; only a person's record can take a name", kind.name_words(name))),
+        who => Some(format!("{} is already recorded as {}'s; it can't be renamed", kind.name_words(name), who)),
+    }
 }
 
 /// The name of a thing as the space spells it ("order" finds the binding of `Order`).
@@ -795,7 +813,7 @@ pub fn find_graded(ont: &Ontology, kind: Option<TKind>, name: &str) -> Result<(T
             Err(why)
         }
         1 => Ok(found.remove(0)),
-        _ => Err(format!("`{}` names {}; say which with kind", name, found.iter().map(|(k, n)| format!("the {} {}", k.word(), n)).collect::<Vec<_>>().join(" and "))),
+        _ => Err(format!("`{}` names {}; say which with kind", name, found.iter().map(|(k, n)| format!("the {}", k.name_words(n))).collect::<Vec<_>>().join(" and "))),
     }
 }
 
@@ -832,14 +850,14 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
         GradeOp::Accept { kind, name } => {
             let st = ont.grade_of(*kind, name);
             match st.grade {
-                Some(Grade::Checked) => return Outcome::refuse(trust::FILE, format!("{} {} is already checked", kind.word(), name)),
-                Some(Grade::Accepted) => return Outcome::refuse(trust::FILE, format!("{} {} is already accepted", kind.word(), name)),
+                Some(Grade::Checked) => return Outcome::refuse(trust::FILE, format!("{} is already checked", kind.name_words(name))),
+                Some(Grade::Accepted) => return Outcome::refuse(trust::FILE, format!("{} is already accepted", kind.name_words(name))),
                 _ => {}
             }
-            let Some(r) = record(*kind, name, Grade::Accepted, None, None) else { return Outcome::refuse(trust::FILE, format!("there is no {} {}", kind.word(), name)) };
+            let Some(r) = record(*kind, name, Grade::Accepted, None, None) else { return Outcome::refuse(trust::FILE, format!("there is no {}", kind.name_words(name))) };
             trust::entries_mut(&mut book, *kind).insert(name.clone(), r);
             (out.kind, out.name) = label(*kind, name);
-            format!("Accepted {} {}", kind.word(), name)
+            format!("Accepted {}", kind.name_words(name))
         }
         GradeOp::Check { kind, name, against, note } => {
             if !kind.can_be_checked() {
@@ -855,12 +873,12 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
             }
             let st = ont.grade_of(*kind, name);
             if st.grade.is_none() || st.grade == Some(Grade::Proposed) {
-                return Outcome::refuse(trust::FILE, format!("{} {} is {}; a person accepts it first (Looks right), then marks it as checked", kind.word(), name, if st.changed { "changed since it was graded" } else { st.word() }));
+                return Outcome::refuse(trust::FILE, format!("{} is {}; a person accepts it first (Looks right), then marks it as checked", kind.name_words(name), if st.changed { "changed since it was graded" } else { st.word() }));
             }
-            let Some(r) = record(*kind, name, Grade::Checked, Some(against.to_string()), Some(note.to_string())) else { return Outcome::refuse(trust::FILE, format!("there is no {} {}", kind.word(), name)) };
+            let Some(r) = record(*kind, name, Grade::Checked, Some(against.to_string()), Some(note.to_string())) else { return Outcome::refuse(trust::FILE, format!("there is no {}", kind.name_words(name))) };
             trust::entries_mut(&mut book, *kind).insert(name.clone(), r);
             (out.kind, out.name) = label(*kind, name);
-            format!("Checked {} {} against {}", kind.word(), name, against)
+            format!("Checked {} against {}", kind.name_words(name), against)
         }
         GradeOp::VouchAll => {
             let mut n = 0;
@@ -880,6 +898,34 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
             out.kind = "definitions".into();
             out.name = n.to_string();
             format!("Vouched for {} definition{}", n, if n == 1 { "" } else { "s" })
+        }
+        GradeOp::Sign { items } => {
+            let who = trust::who_said(by);
+            if who == "a person" || who == "an agent" {
+                return Outcome::refuse(trust::FILE, "type your name first: putting your name on a grade needs one");
+            }
+            if items.is_empty() {
+                return Outcome::refuse(trust::FILE, "say which grade to put your name on");
+            }
+            let mut said = Vec::new();
+            for (k, n) in items {
+                if let Some(why) = sign_refusal(&ont, *k, n) {
+                    return Outcome::refuse(trust::FILE, why);
+                }
+                let Some(r) = trust::entries_mut(&mut book, *k).get_mut(n.as_str()) else {
+                    return Outcome::refuse(trust::FILE, format!("{} has no line in trust.yaml to put a name on", k.name_words(n)));
+                };
+                said.push(format!("{} ({} {} with no name)", k.name_words(n), r.grade.word(), trust::short_date(&r.at)));
+                r.by = by.to_string();
+            }
+            out.kind = "signed".into();
+            out.name = items.len().to_string();
+            out.stamped = said.clone();
+            let list = match said.len() {
+                1 => said[0].clone(),
+                n => format!("{} and {}", said[..n - 1].join(", "), said[n - 1]),
+            };
+            format!("{} put their name on {}", who, list)
         }
     };
     let new_text = trust::render(&book);
@@ -2402,7 +2448,7 @@ mod tests {
         assert!(kept.metrics.is_empty() && kept.terms.is_empty() && kept.bindings.contains_key("Order"), "{:?}", kept);
         assert_eq!(dropped.len(), 2, "{:?}", dropped);
         let held = graded_overwrites(&dir, &[("a_terms.yaml".to_string(), "terms:\n  - term: basket\n    means: Customer\n".to_string())]);
-        assert!(held.len() == 1 && held[0].starts_with("word basket is accepted"), "{:?}", held);
+        assert!(held.len() == 1 && held[0].starts_with("also-called word \"basket\" is accepted"), "{:?}", held);
         std::fs::write(dir.join("a_terms.yaml"), "terms:\n  - term: basket\n    means: Customer\n").unwrap();
         assert!(load(&dir).grade_of(TKind::Term, "basket").changed, "written by hand, whatever order the files load in");
         let _ = std::fs::remove_dir_all(&dir);
@@ -2444,7 +2490,7 @@ mod tests {
         let has = |code: &str, bit: &str| rep.diags.iter().any(|d| d.code == code && d.message.contains(bit));
         assert!(has("W114", "metric gone"), "{:?}", rep.diags);
         assert!(has("E018", "`nowhere`"), "{:?}", rep.diags);
-        assert!(has("E018", "word basket is marked checked"), "{:?}", rep.diags);
+        assert!(has("E018", "also-called word \"basket\" is marked checked"), "{:?}", rep.diags);
         assert!(has("E018", "guardrail EC-001 has a grade with no fingerprint"), "{:?}", rep.diags);
         assert!(has("E018", "without against"), "{:?}", rep.diags);
         // a trust file anywhere else, or a grade key in a fact file, is an error

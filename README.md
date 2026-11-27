@@ -46,16 +46,19 @@ A folder of small YAML files describes the business. One Rust binary compiles th
 
 ## The words
 
-| Word on the page | In the files | What it is | Example |
-|---|---|---|---|
-| **Entity** | `type:` under `types/` | A noun of the business, with its fields in plain words and where its rows live | Order, Customer, Campaign |
-| **Link** | `relationships:` inline or under `relationships/` | How two entities connect, with a sentence and a cardinality | an Order *is placed by* one Customer |
-| **Guardrail** | `constraints/` | What must hold before an action, as a sentence first and an expression second, with a severity and an owner | only unshipped orders can be cancelled |
-| **Action** | `actions/` | What an agent may do: inputs, what changes, which guardrails to check, who must approve | cancel_order |
-| **Source** | `sources/` | Where rows live: a warehouse, files, or an MCP server. Never a credential | shop_bigquery, meta_ads |
-| **Word** | `glossary.yaml` | What people say and which entity they mean | "basket" means Order |
-| **Metric** | `logic/` | What counts, and the recipe for where the number comes from | success = paid orders in shop_bigquery.orders |
-| **Function** | `logic/` | What an agent can run: inputs, outputs, and which tool does it | forecast_success → the measurement MCP |
+The page, the review screen, the YAML keys and what agents say all use these words. Each screen shows the plain hint the first time it names one.
+
+| Word on the page | Plain hint | In the files | What it is | Example |
+|---|---|---|---|---|
+| **Entity** | a kind of thing in your business | `type:` under `types/` | A noun of the business, with its fields in plain words and where its rows live | Order, Customer, Campaign |
+| **Field** | one fact about an entity, like a column | `properties:` of a type | One fact about an entity, with its type, unit and a sentence | `revenue`, money (USD) |
+| **Link** | how two entities connect | `relationships:` inline or under `relationships/` | How two entities connect, with a sentence and a cardinality | an Order *is placed by* one Customer |
+| **Metric** | a number every agent computes the same way | `logic/` | What counts, and the recipe for where the number comes from | success = paid orders in shop_bigquery.orders |
+| **Function** | an operation an agent can run with its own tools | `logic/` | What an agent can run: inputs, outputs, and which tool does it | forecast_success → the measurement MCP |
+| **Guardrail** | a rule an action must not break | `constraints/` | What must hold before an action, as a sentence first and an expression second, with a severity and an owner | only unshipped orders can be cancelled |
+| **Action** | something agents may do | `actions/` | What agents may do: inputs, what changes, which guardrails to check, who must approve | cancel_order |
+| **Source** | where an entity's rows come from | `sources/` | Where rows live: a warehouse, files, or an MCP server. Never a credential. An entity's `source:` says which one ("Promo sale's source") | shop_bigquery, meta_ads |
+| **Also called** | another word people use for an entity | `glossary.yaml` | What people say and which entity they mean | "basket" means Order |
 | **Space** | a folder of these folders | One ontology per brand, business unit or client; one server holds many | brand-one, brand-two, @ecommerce |
 | **Proposal** | `.lorefile/proposals/` | Something an agent learned and wants to save, waiting for a person to accept | "An agent learned: added metric success" |
 
@@ -453,7 +456,7 @@ To share the live server instead: run it for the team with a token (`LOREFILE_TO
 | **Sources** | Where rows live. Warehouses, files, MCP servers. Which entities and metrics use each. |
 | **Entities** | Each noun: fields with plain words, links, guardrails, data binding, the YAML. Empty boxes are highlighted; type into them. |
 | **Links** | A builder for new links and a sentence box for every existing one. |
-| **Logic** | Metrics and functions as cards: the recipe, the owner, the caveat, the file, the metric's `basis`, and its grade chip (grey ungraded, amber proposed, blue accepted, green checked, amber ✎ changed since graded) with Looks right or Mark as checked…. Data bindings, glossary words (on the entity, "People also say") and guardrails carry the same chip. |
+| **Logic** | Metrics and functions as cards led by a sentence ("Add up revenue, leaving out lines where refunded is true"), then a line in words saying who stands behind it ("Accepted by Vinay, 27 Nov: agents use it"; checking against real numbers is a quiet, optional link), then the owner, with a box to name one when there is none. The source, formula, kind and file are under Details. An entity's source, also-called words and guardrails carry the same grade line. A grade saved with no name says "a person (no name was given)" and offers Put your name on it, which only ever fills in a missing name. |
 | **Guardrails** | Every rule grouped by what it applies to, a builder that writes the expression, the expression one click away. |
 | **Actions** | What agents may do, with a try-it form that runs the same check an agent runs. |
 | **How to use it** | The questions this space can answer now, which tool answers each, and Try-it buttons. |
@@ -463,7 +466,7 @@ To share the live server instead: run it for the team with a token (`LOREFILE_TO
 | **History** | Every change to the space, newest first: who (agent or person), when, what. Show gives the diff; Undo puts it back through the compiler check. |
 | **Data & SQL** | One read-only SQL door across the ontology tables and any readable source, for engineers. |
 | **Files** | Every YAML file with a note on what its folder is for; `trust.yaml` is shown to read, never to edit ("Who stands behind what. Written by Lorefile."). Where a space is read-only (a shipped example, or a server without `--allow-edit`), every Edit YAML button on the page becomes View YAML: the file opens to read, copy, or jump to here. |
-| **Settings** | Your name (kept in the browser, shown on what you accept and check), history on or off and why, Share this space (any git address) with Push and Pull, what this server runs with, how agents connect (the stdio and HTTP commands, token masked, Copy), Sign out, and Export for other tools (Apache Ossie; OWL, SKOS and SHACL as Turtle or JSON-LD). |
+| **Settings** | Your name (kept in the browser, shown on what you accept and check; every decision on the page waits for one, and the sign-in page asks for it too), the words Lorefile uses, history on or off and why, Share this space (any git address) with Push and Pull, what this server runs with, how agents connect (the stdio and HTTP commands, token masked, Copy), Sign out, and Export for other tools (Apache Ossie; OWL, SKOS and SHACL as Turtle or JSON-LD). |
 
 ## What an agent can ask
 
