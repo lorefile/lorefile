@@ -271,3 +271,16 @@ Status: design only.
 - **A typed `type: string` over a parent's number field** reads as leaving the type out (string is the default), so it keeps the parent's type instead of giving E021. Loosening `required` can't be noticed for the same reason.
 - **Imports into an existing space** don't write `format: 2` into its `ontology.yaml`; W118 says so, and the next save that touches a kind writes it.
 - **Take it back leaves one small thing behind.** With history on, a `distinct:` said on Accept is its own commit, so Take it back keeps it. With history off, the `format: 2` line an Accept wrote stays. Both are harmless; History's Undo removes the first.
+
+### Left for later by people, areas and the Graph (2026-11-27, `specs/2026-11-27-people-areas-graph.md`)
+
+- **Accounts and sign-in**, so "who" is a signed-in person (item 1 above). The People screen and the owner pickers stay; they swap a typed name for a signed-in one.
+- **Team members, roles and "my things"** (what I own, across spaces), and **telling owners** when something of theirs changes.
+- **`iri:` on areas**, to keep an area's IRI through a rename (today the derived IRI follows the new name).
+- **Sub-areas**, and **dragging entities between areas** on Overview (moves are explicit: the area card, the entity's "Move…").
+- **A whole-space Graph mode**, **links between spaces**, and **adding a link by drawing it** in the Graph.
+- **The People list is worked out on every call**, not cached per space version and `.git/HEAD` as the spec suggested; `git log -500` and the activity log are read each time. Fast on the spaces tried; worth a cache for very large histories.
+- **Other spaces' names** for the owner picker are worked out with each space's stats and kept until it changes; a space never summarised (no `/api/spaces` call yet) is loaded once, compiled without DuckDB.
+- **The ontology.yaml `domains:` block is rewritten whole** by an area op (flow lists, one line per key); comments inside that block go, the rest of the file keeps them.
+- **The page has no automated tests.** The Graph, the pickers, the People screen and the panels were checked by hand in a browser on scratch copies; a headless browser suite would keep them honest.
+

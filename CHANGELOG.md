@@ -2,7 +2,7 @@
 
 ## 0.2.0 (not released yet)
 
-> **Kinds of entities.** An entity can now be a kind of another (`extends: Sale`), with `where:` to pick the parent's rows. A space that uses them says `format: 2` in ontology.yaml, and Lorefile 0.1.0 refuses to load it ("unknown field `format`"). Upgrade every copy that reads the space first.
+> **Kinds of entities, people and area colours need format 2.** An entity can now be a kind of another (`extends: Sale`), with `where:` to pick the parent's rows; a space can now keep `people.yaml` and area colours. A space that uses any of these says `format: 2` in ontology.yaml, and Lorefile 0.1.0 refuses to load it ("unknown field `format`"). Upgrade every copy that reads the space first. Plain area changes (add, rename, move) write no new key.
 
 Also new since 0.1.0, each tested end to end and not yet tried live:
 
@@ -12,7 +12,11 @@ Also new since 0.1.0, each tested end to end and not yet tried live:
 - **`learn_file`**: a file a user gives an agent is learned, not stored.
 - **The review screen**: what an agent proposes, by meaning, with a link from the chat.
 - **Page fixes**: one set of words across the page and what agents say; decisions carry a name; Put your name on it.
-- **Home and Map**: one picture of the space, with lights, reasons and waiting proposals.
+- **Home**: one picture of the space, with lights, reasons and waiting proposals, in three tabs: Overview, Graph and List. The flat Map is gone; `#map` links open the Graph.
+- **The Graph** ([README](README.md#the-web-page)): one entity in the middle, links in and out each in their own labelled row, its logic above, its rows and family below; click a neighbour to move there.
+- **People** ([README](README.md#people-and-areas)): owners are picked from a list that fills itself from owners, grades and history (names only). `set_owner` keeps a checked or accepted grade; rename and merge rewrite every spelling in one change and keep every grade. `people.yaml` for spellings, teams and who left. New codes W119 and W121.
+- **Areas you can make**: add, rename, describe, reorder, move entities between and delete empty areas, from Home and from agents (`add_area`, `rename_area`, `describe_area`, `move_to_area`, `order_areas`, `delete_area`). Deleting an entity takes it off its area's list. New code W120.
+- **Panels that fold** (the menu, the list column, the right panel; `[` and `]`) and a header that stays on one line.
 
 ## 0.1.0 (2026-11-27)
 

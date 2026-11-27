@@ -1,6 +1,6 @@
 # Spec: people instead of typed names, folding panels, areas you can make, and a Graph view
 
-Written 2026-11-27 for Vinay to decide on. **Status: not built.**
+Written 2026-11-27 for Vinay to decide on. **Status: built 2026-11-27** on `claude/learn-file-6a954e`, all 39 decisions as recommended, in five commits (people-core, areas-core, page shell, the Graph, docs). Not pushed. What differs from the text below is under [What changed during the build](#what-changed-during-the-build).
 
 Vinay tried the new page (Home, Map, kinds) on the shipped `@b2b-sales` example and on branda. He said, in short:
 
@@ -965,3 +965,36 @@ These go to learn-file-build on the same branch, one after another, because they
 - Drag to move entities between areas on Overview.
 - A whole-space Graph mode, and links between spaces.
 - Adding a link by drawing it in the Graph.
+
+---
+
+## What changed during the build
+
+Built in the hand-off plan's order, one commit per step: `cf5c17a` people-core, `930a23e` areas-core, `837ae7b` page shell, `0c1620b` the Graph, then this spec and the docs. Step 5 ("live") was done on scratch copies of branda and `@b2b-sales`; restarting 7171 is the parent session's.
+
+**Where it differs from the text above:**
+
+1. **The E010 test came first.** `tests/areas.rs` starts with deleting an entity that an area lists. Before the fix the delete was refused with `E010 domain \`Core\` lists unknown type \`Customer\``; now the name leaves every list in the same save.
+2. **Other spaces' names** are worked out with each space's stats (the picker's counts) and kept until the space changes, instead of loading every space on each `/api/people` call: loading a 2,000-entity space there held up `/api/plane` for 11 s. Addresses are left out: they can't be a new owner in another space.
+3. **The People list is worked out on every call**, not cached per space version and `.git/HEAD`. It is fast on the spaces tried.
+4. **`set_owner` takes a name already in the space as written**, an address included (`finance@…`); a new name must pass the owner name rule.
+5. **The review drops W113** ("changed since") for a grade that an owner-only change keeps, and says "… is checked by Priya and stays so: only its owner changes."
+6. **W120 for an unlisted area** fires only when `ontology.yaml` lists at least one area. A space with no `domains:` and `domain:` lines in its types gets no warning.
+7. **`ontology.yaml`'s `domains:` block is rewritten whole** by an area op (one line per key, flow lists). Comments inside that block go; the rest of the file keeps its comments.
+8. **A row with two labels grows 26, not 16**, because each label has two lines (name, cardinality). Labels sit above the line in their row.
+9. **Guardrail lights in the Graph come from their grade** (unverified or changed: amber; accepted or checked: green), since `/api/plane` sends no guardrail lights.
+10. **The rows twin** is out of sight on a wide screen until it gets focus ("Skip to rows"); on a phone it is the Graph.
+11. **The Overview label pass** labels the selected entity's six most important links, at the midpoint, then 35% or 65%; a label that would still overlap is left out. The card says "+N more links than the drawing labels: Open in graph".
+12. **Empty areas** are drawn only for areas `ontology.yaml` lists, as a dashed parallelogram over two cells at the end of the grid; the plane reaches under them.
+13. **Home's 30-second refresh** skips the card while a picker is open or a box in the card has focus.
+14. **The review's owner question** is the picker in a mode that doesn't save: the pick goes with Accept, as the old text box did.
+15. **The area card shows its colour by name** ("teal") or "the colour of its place in the list"; there is no colour picker (none was specified).
+16. **The menu's default** follows the window width (folded below 1100 px) until a choice is kept, and a resize re-checks it.
+17. **The page draws `entities`, not `entitys`**: `people::plural` handles the `-y` ending.
+
+**Tests added:** `tests/people.rs` (3: grades when an owner is set, rename with one commit and Undo, `people.yaml` and its warnings), `tests/areas.rs` (5: the E010 delete, the six ops, moves with kinds, deleting and colours, agents), unit tests in `src/people.rs` (3), `src/patch.rs` (`set_owner` line edits) and `src/review.rs` (area sentences). Changed: `tests/review.rs`'s owner test now expects decision 9 (an accepted grade stays in Priya's name), and `tests/kinds.rs` reads W118's wider message.
+
+**Checked in the in-app browser** (scratch copies, port 7186, desktop 1440 px and 375 px): the header at 1440, 1280, 1100, 1000 and 800 px and the ⋯ menu; `[` and `]`; the list column folding; nothing to fold at 375 px; the People screen (Give them owners for two guardrails as one change, rename with the plan's counts, Same person? → Yes, merge with the check kept, Left with its nudge, a shipped example without menus); the picker (never filled in, You first, no "also accepts" line on a checked metric, the check kept after Save, not redrawn by the refresh); areas (+ New area with its dashed frame, the card's rename, describe, Move here…, Delete disabled until empty, Move… from the entity card, PromoSale moved into a new area on the branda copy); the Graph (Quote matching the wireframe, moving the centre, Back, breadcrumbs, a self-link, two links to one entity, a link each way, a missing target, a kind family, a metric highlighting its fields, one more step, a hub of 70 links grouped then Show all with "60 of 70 shown", the arrow keys, Enter and Esc, the overlay from `?review=<id>` and from an old `#…/map` address); a field described inline in the Graph, after which the centre's fields loaded again (problem 5). Drawing the 70-link hub takes 6 ms with 60 rows and 1 ms grouped.
+
+**Not checked:** a live run against 7171 and ChatGPT (the parent session restarts 7171), VoiceOver, a real reduced-motion setting (only the code path), the generated 2,000-entity space in the Graph (its entities have at most 8 links), and the page has no automated tests.
+
