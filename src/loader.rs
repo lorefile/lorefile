@@ -23,6 +23,8 @@ pub struct Raw {
     pub functions: Vec<FunctionDef>,
     /// `trust.yaml`: who stands behind what. `None` when the space has no such file.
     pub trust: Option<TrustBook>,
+    /// `people.yaml`: other spellings, teams, who left. `None` when the space has no such file.
+    pub people: Option<PeopleFile>,
     pub files: Vec<String>,
     /// Problems found while loading (bad YAML, unrecognised files).
     pub problems: Vec<String>,
@@ -209,6 +211,12 @@ fn classify(raw: &mut Raw, rel: &str, value: Yaml) -> Result<()> {
             anyhow::bail!("second trust file found; only one trust.yaml is allowed");
         }
         raw.trust = Some(t.trust);
+    } else if has(&value, "people") {
+        if rel != crate::people::FILE {
+            anyhow::bail!("a `people:` file is written by Lorefile as people.yaml at the root of the space, not here (and not under another name)");
+        }
+        let f: PeopleFile = serde_yaml::from_value(value).context("parsing people.yaml")?;
+        raw.people = Some(f);
     } else if has(&value, "terms") {
         let g: Glossary = serde_yaml::from_value(value).context("parsing glossary")?;
         raw.glossary.extend(g.terms);
@@ -220,7 +228,7 @@ fn classify(raw: &mut Raw, rel: &str, value: Yaml) -> Result<()> {
         raw.manifest = Some(m);
     } else {
         anyhow::bail!(
-            "unrecognised file: expected one of type/types, relationship(s), constraints, action(s), connection/sources, metric(s), function(s), terms, trust, or ontology.yaml"
+            "unrecognised file: expected one of type/types, relationship(s), constraints, action(s), connection/sources, metric(s), function(s), terms, trust, people, or ontology.yaml"
         );
     }
     Ok(())

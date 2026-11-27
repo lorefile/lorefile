@@ -54,6 +54,14 @@ impl BatchPlan {
     }
 }
 
+/// Ops that write more than one file, so they go through `plan_many` and are saved as one change.
+pub const MULTI_FILE_OPS: [&str; 1] = ["make_parent"];
+
+/// Does this one op write several files?
+pub fn multi_file(op: &Json) -> bool {
+    MULTI_FILE_OPS.contains(&field(op, "op"))
+}
+
 pub fn plan_many(ont: &Ontology, ops: &[Json]) -> Result<BatchPlan, String> {
     plan_many_over(ont, &[], ops)
 }
@@ -459,6 +467,126 @@ fn set_key(entry: &mut Yaml) {
         }
         _ => {}
     }
+}
+
+/// The lines of one item in a file's text: `(first, end, key indent)`, `end` exclusive. A file of
+/// one item (`type: X` at the top) is the whole file; a list item is `- ` at the list's indent up
+/// to the next item or top-level key. `None` for a flow-style item (`- { … }`) or none found.
+fn item_block(text: &str, list: &str, id_key: &str, id: &str) -> Option<(usize, usize, usize)> {
+    let lines: Vec<&str> = text.lines().collect();
+    let value_is = |rest: &str| -> bool {
+        let v = rest.split(" #").next().unwrap_or("").trim().trim_matches('"').trim_matches('\'');
+        v == id
+    };
+    // a single-item file
+    if lines.iter().any(|l| l.strip_prefix(&format!("{}:", id_key)).map(value_is).unwrap_or(false)) && !lines.iter().any(|l| l.starts_with(&format!("{}:", list))) {
+        return Some((0, lines.len(), 0));
+    }
+    let start = lines.iter().position(|l| l.trim_end() == format!("{}:", list))?;
+    let mut i = start + 1;
+    let dash = lines.iter().skip(start + 1).find(|l| l.trim_start().starts_with("- ") || l.trim_start() == "-").map(|l| l.len() - l.trim_start().len())?;
+    while i < lines.len() {
+        let l = lines[i];
+        let ind = l.len() - l.trim_start().len();
+        let content = !l.trim().is_empty() && !l.trim_start().starts_with('#');
+        if content && ind < dash.max(1) && !(dash == 0 && l.starts_with("- ")) {
+            break; // the list ended
+        }
+        if ind == dash && l.trim_start().starts_with("- ") {
+            let first = i;
+            let mut j = i + 1;
+            while j < lines.len() {
+                let m = lines[j];
+                let mi = m.len() - m.trim_start().len();
+                if !m.trim().is_empty() && !m.trim_start().starts_with('#') && (mi < dash || (mi == dash && m.trim_start().starts_with("- ")) || (dash == 0 && mi == 0 && !m.starts_with("- "))) {
+                    break;
+                }
+                j += 1;
+            }
+            let key = dash + 2;
+            let head = l.trim_start()[2..].trim_start();
+            if head.starts_with('{') {
+                if head.contains(&format!("{}: {}", id_key, id)) {
+                    return None;
+                }
+            } else {
+                let mine = head.strip_prefix(&format!("{}:", id_key)).map(value_is).unwrap_or(false)
+                    || lines[first + 1..j].iter().any(|m| m.len() - m.trim_start().len() == key && m.trim_start().strip_prefix(&format!("{}:", id_key)).map(value_is).unwrap_or(false));
+                if mine {
+                    return Some((first, j, key));
+                }
+            }
+            i = j;
+            continue;
+        }
+        i += 1;
+    }
+    None
+}
+
+/// The item's text with its `owner:` line set to `owner` (or removed when empty), keeping every
+/// other line and comment. `None` when the item can't be found as block text.
+fn set_owner_line(text: &str, list: &str, id_key: &str, id: &str, owner: &str) -> Option<String> {
+    let (first, end, key) = item_block(text, list, id_key, id)?;
+    let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
+    let is_owner_line = |idx: usize, l: &str| -> bool {
+        let ind = l.len() - l.trim_start().len();
+        let t = l.trim_start();
+        (ind == key && t.starts_with("owner:")) || (idx == first && key >= 2 && t.strip_prefix("- ").map(|r| r.starts_with("owner:")).unwrap_or(false))
+    };
+    let at = (first..end).find(|i| is_owner_line(*i, &lines[*i]));
+    match (at, owner.is_empty()) {
+        (Some(i), true) => {
+            if i == first && key >= 2 {
+                return None; // `- owner: X` heads the item: leave that to the mapping
+            }
+            lines.remove(i);
+        }
+        (Some(i), false) => {
+            let l = lines[i].clone();
+            let head = l.find("owner:").map(|p| p + "owner:".len())?;
+            let comment = l.find(" #").filter(|p| *p > head).map(|p| l[l[..p].trim_end().len()..].to_string()).unwrap_or_default();
+            lines[i] = format!("{} {}{}", &l[..head], crate::people::yaml_scalar(owner), comment);
+        }
+        (None, true) => {}
+        (None, false) => {
+            // after the item's last line of content
+            let last = (first..end).rev().find(|i| !lines[*i].trim().is_empty() && !lines[*i].trim_start().starts_with('#')).unwrap_or(first);
+            lines.insert(last + 1, format!("{}owner: {}", " ".repeat(key), crate::people::yaml_scalar(owner)));
+        }
+    }
+    let mut out = lines.join("\n");
+    if text.ends_with('\n') || !out.ends_with('\n') {
+        out.push('\n');
+    }
+    Some(out)
+}
+
+/// The item's mapping in a parsed file: a single-item file, or the list entry with `id_key: id`.
+fn find_item<'a>(doc: &'a mut Yaml, list: &str, id_key: &str, id: &str) -> Option<&'a mut Mapping> {
+    let root = doc.as_mapping_mut()?;
+    if root.get(key(id_key)).and_then(|v| v.as_str()) == Some(id) {
+        return Some(root);
+    }
+    root.get_mut(key(list))?.as_sequence_mut()?.iter_mut().filter_map(|i| i.as_mapping_mut()).find(|m| m.get(key(id_key)).and_then(|v| v.as_str()) == Some(id))
+}
+
+/// The owner the item has in `text`, by parsing it.
+fn owner_in_text(text: &str, list: &str, id_key: &str, id: &str) -> Option<String> {
+    let mut doc: Yaml = serde_yaml::from_str(text).ok()?;
+    find_item(&mut doc, list, id_key, id)?.get(key("owner")).and_then(|v| v.as_str()).map(|s| s.to_string())
+}
+
+/// `set_owner` through the mapping: the fallback, which drops the file's comments.
+fn set_owner_mapping(text: &str, list: &str, id_key: &str, id: &str, owner: &str) -> Result<String, String> {
+    let mut doc: Yaml = serde_yaml::from_str(text).map_err(|e| format!("the file does not parse: {}", e))?;
+    let m = find_item(&mut doc, list, id_key, id).ok_or_else(|| format!("could not find `{}` in its file", id))?;
+    if owner.is_empty() {
+        m.remove(key("owner"));
+    } else {
+        insert_after(m, "description", "owner", Yaml::String(owner.to_string()));
+    }
+    serde_yaml::to_string(&doc).map_err(|e| e.to_string())
 }
 
 pub fn plan(ont: &Ontology, body: &Json) -> Result<Patch, String> {
@@ -1103,8 +1231,53 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             let how = match kind { "mcp" => format!("tool {} on {}", tool, server), "http" => url.to_string(), _ => "done by a person".to_string() };
             Ok(Patch { file: rel, text, kind: "function".into(), name: name.clone(), summary: format!("added function {} ({})", name, how) })
         }
+        "set_owner" => {
+            // who owns an entity, metric, function or guardrail (decision 8): one line where it can be
+            let kind = field(body, "kind");
+            let name = field(body, "name").to_string();
+            let given = body.get("owner").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+            let (file, list, id_key, pk, item) = match kind {
+                "entity" | "type" => {
+                    let t = ont.type_(&name).ok_or_else(|| format!("no entity called `{}`", name))?;
+                    (t.file.clone(), "types", "type", "type", t.name.clone())
+                }
+                "metric" => {
+                    let m = ont.metrics.get(&name).ok_or_else(|| format!("no metric named `{}`", name))?;
+                    (m.file.clone(), "metrics", "metric", "metric", m.name.clone())
+                }
+                "function" => {
+                    let f = ont.functions.get(&name).ok_or_else(|| format!("no function named `{}`", name))?;
+                    (f.file.clone(), "functions", "function", "function", f.name.clone())
+                }
+                "guardrail" | "constraint" => {
+                    let c = ont.constraint(&name).ok_or_else(|| format!("no guardrail with id `{}`", name))?;
+                    (c.file.clone(), "constraints", "id", "constraint", c.id.clone())
+                }
+                other => return Err(format!("set_owner's kind is entity, metric, function or guardrail, not `{}`", other)),
+            };
+            // a name already in the space (an existing team address included) is used as written;
+            // a new one must pass the owner name rule
+            let owner = if given.is_empty() {
+                String::new()
+            } else {
+                let known = crate::people::derive(ont, &[]);
+                match known.find(&given) {
+                    Some(_) if given.contains('@') || given.to_lowercase().contains("agent") => given.clone(),
+                    _ => crate::people::owner_ok(&given)?,
+                }
+            };
+            let text = ws.read(&file)?;
+            let noun = match pk { "type" => "entity", "constraint" => "guardrail", k => k };
+            let new = match set_owner_line(&text, list, id_key, &item, &owner) {
+                Some(t) if owner_in_text(&t, list, id_key, &item).as_deref() == Some(owner.as_str()) || (owner.is_empty() && owner_in_text(&t, list, id_key, &item).is_none()) => t,
+                // a flow-style item, or a line edit that didn't land: the mapping (comments in this file go)
+                _ => set_owner_mapping(&text, list, id_key, &item, &owner)?,
+            };
+            let summary = if owner.is_empty() { format!("removed the owner of {} {}", noun, item) } else { format!("made {} the owner of {} {}", crate::people::shown(&owner), noun, item) };
+            Ok(Patch { file, text: new, kind: pk.into(), name: item, summary })
+        }
         "record_check" => Err("record_check reports a check, it changes no file; send it on its own, not in `ops`".into()),
-        other => Err(format!("unknown op `{}`; one of add_type, add_property, set_type_description, set_metric, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
+        other => Err(format!("unknown op `{}`; one of add_type, add_property, set_type_description, set_metric, set_owner, set_property_description, add_relationship, set_relationship_description, add_constraint, set_source, add_source, add_term, add_metric, add_function, record_check", other)),
     }
 }
 
@@ -1251,5 +1424,41 @@ mod tests {
         assert!(plan(&ont, &json!({ "op": "add_metric", "metric": "bad", "connection": "meta_ads" })).is_err(), "an MCP source needs a tool");
         assert!(plan(&ont, &json!({ "op": "add_metric", "metric": "success", "connection": "shop_bigquery", "table": "orders" })).is_err(), "exists already");
         assert!(plan(&ont, &json!({ "op": "add_metric", "metric": "lonely" })).is_err(), "needs a source");
+    }
+    #[test]
+    fn set_owner_edits_one_line_and_keeps_comments() {
+        let dir = std::env::temp_dir().join(format!("lorefile-set-owner-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("types")).unwrap();
+        std::fs::create_dir_all(dir.join("logic")).unwrap();
+        std::fs::create_dir_all(dir.join("constraints")).unwrap();
+        std::fs::write(dir.join("ontology.yaml"), "name: shop\n").unwrap();
+        std::fs::write(dir.join("types/order.yaml"), "# orders\ntype: Order\ndescription: One checkout.\nproperties:\n  order_id: { type: string, key: true, description: The id. }\n").unwrap();
+        std::fs::write(dir.join("logic/metrics.yaml"), "metrics:\n  - metric: revenue # the one number\n    description: Money in.\n    sql: select 1\n    owner: vinay  # set in the trial\n  - metric: refunds\n    description: Money back.\n    sql: select 2\n  - { metric: orders, description: Orders., sql: select 3 }\n").unwrap();
+        std::fs::write(dir.join("constraints/order.yaml"), "constraints:\n  - id: OR-001\n    name: No negative totals\n    applies_to: Order\n    rule: |\n      true\n    severity: warn\n").unwrap();
+        let ont = load_ontology(&dir).unwrap().0;
+        let p = plan(&ont, &json!({ "op": "set_owner", "kind": "metric", "name": "revenue", "owner": "Vinay Karode" })).unwrap();
+        assert!(p.text.contains("    owner: Vinay Karode  # set in the trial\n") && p.text.contains("# the one number"), "{}", p.text);
+        assert_eq!(p.summary, "made Vinay Karode the owner of metric revenue");
+        let r = plan(&ont, &json!({ "op": "set_owner", "kind": "metric", "name": "refunds", "owner": "Priya" })).unwrap();
+        assert!(r.text.contains("    sql: select 2\n    owner: Priya\n  - { metric: orders"), "added after the item's last line: {}", r.text);
+        assert!(r.text.contains("# the one number"), "{}", r.text);
+        let f = plan(&ont, &json!({ "op": "set_owner", "kind": "metric", "name": "orders", "owner": "Priya" })).unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&f.text).unwrap();
+        assert_eq!(parsed["metrics"][2]["owner"], "Priya", "a flow item goes through the mapping: {}", f.text);
+        let e = plan(&ont, &json!({ "op": "set_owner", "kind": "entity", "name": "Order", "owner": "Growth team" })).unwrap();
+        assert!(e.text.starts_with("# orders\n") && e.text.ends_with("owner: Growth team\n"), "{}", e.text);
+        let g = plan(&ont, &json!({ "op": "set_owner", "kind": "guardrail", "name": "OR-001", "owner": "R&D" })).unwrap();
+        assert!(g.text.contains("      true\n    severity: warn\n    owner: R&D\n"), "after a block scalar: {}", g.text);
+        let x = plan(&ont, &json!({ "op": "set_owner", "kind": "metric", "name": "revenue", "owner": "" })).unwrap();
+        assert!(!x.text.contains("owner:") && x.text.contains("# the one number"), "removed: {}", x.text);
+        assert!(plan(&ont, &json!({ "op": "set_owner", "kind": "metric", "name": "revenue", "owner": "x@y.example" })).is_err(), "a new name is a name");
+        assert!(plan(&ont, &json!({ "op": "set_owner", "kind": "metric", "name": "revenue", "owner": "my agent" })).is_err());
+        assert!(plan(&ont, &json!({ "op": "set_owner", "kind": "metric", "name": "nope", "owner": "Priya" })).is_err());
+        assert!(plan(&ont, &json!({ "op": "set_owner", "kind": "action", "name": "revenue", "owner": "Priya" })).is_err());
+        for t in [&p.text, &r.text, &e.text, &g.text, &x.text] {
+            assert!(serde_yaml::from_str::<serde_yaml::Value>(t).is_ok(), "{}", t);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

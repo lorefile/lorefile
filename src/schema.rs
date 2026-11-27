@@ -63,6 +63,36 @@ pub struct Domain {
     pub description: String,
     #[serde(default)]
     pub types: Vec<String>,
+    /// One of eight named colours (blue, teal, violet, pink, slate, sky, green, rose). Absent: the
+    /// colour of its position. Lorefile writes it only when deleting or reordering areas would
+    /// otherwise recolour this one (format 2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+}
+
+/// `people.yaml`: who is who, for what can't be worked out from the space. Written by Lorefile only.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PeopleFile {
+    #[serde(default)]
+    pub people: Vec<Person>,
+    /// Pairs that look alike but are two people: "Same person?" doesn't come back for them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub not_same: Vec<[String; 2]>,
+}
+
+/// One person or team: a name and other spellings. No email, login or role.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Person {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team: Option<bool>,
+    /// The date they left: not offered as an owner any more; history keeps the name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub left: Option<String>,
 }
 
 /// A property can be written long-form (`{type: string, key: true}`) or as a

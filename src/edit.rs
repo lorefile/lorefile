@@ -74,6 +74,11 @@ pub struct Note<'a> {
     /// Leave `trust.yaml` as the files have it instead of stamping grades: Undo,
     /// where the file goes back with the facts it graded.
     pub keep_grades: bool,
+    /// A rename or merge of a person: grades follow `trust::restamp_keep`, and `people.yaml` may be
+    /// written (it is Lorefile's file, like trust.yaml).
+    pub rename: bool,
+    /// A People-screen action: `people.yaml` may be written.
+    pub people: bool,
 }
 
 impl<'a> Note<'a> {
@@ -401,7 +406,13 @@ pub fn format_2_text(text: &str) -> String {
 /// ("unknown field `format`") instead of misreading it.
 pub fn with_format_2(root: &Path, files: &[(String, Option<String>)]) -> Vec<(String, Option<String>)> {
     let mut out = files.to_vec();
-    if !files.iter().any(|(_, t)| t.as_deref().map(uses_kinds).unwrap_or(false)) {
+    // kinds, a people.yaml, or an area colour: what an older Lorefile would misread
+    let colours = |t: &str| serde_yaml::from_str::<Yaml>(t).ok().and_then(|v| v.get("domains").and_then(|d| d.as_sequence()).map(|ds| ds.iter().any(|d| d.get("color").is_some()))).unwrap_or(false);
+    let needs = files.iter().any(|(f, t)| match t.as_deref() {
+        Some(t) => uses_kinds(t) || is_people_file(f) || (f == "ontology.yaml" && colours(t)),
+        None => false,
+    });
+    if !needs {
         return out;
     }
     let current = files.iter().find(|(f, _)| f == "ontology.yaml").and_then(|(_, t)| t.clone()).or_else(|| std::fs::read_to_string(root.join("ontology.yaml")).ok());
@@ -440,6 +451,9 @@ pub fn apply_files(root: &Path, cfg: EditConfig, before: &Report, files: &[(Stri
         };
         if is_trust_file(&rel) && !note.keep_grades {
             return Outcome::refuse(&rel, trust::REFUSED);
+        }
+        if is_people_file(&rel) && !(note.keep_grades || note.rename || note.people) {
+            return Outcome::refuse(&rel, PEOPLE_REFUSED);
         }
         let full = match resolve_in_root(root, &rel) {
             Ok(p) => p,
@@ -593,6 +607,9 @@ pub fn apply(root: &Path, cfg: EditConfig, before: &Report, file: &str, change: 
     if is_trust_file(&rel) && !note.keep_grades {
         return Outcome::refuse(&rel, trust::REFUSED);
     }
+    if is_people_file(&rel) && !(note.keep_grades || note.rename || note.people) {
+        return Outcome::refuse(&rel, PEOPLE_REFUSED);
+    }
     let full = match resolve_in_root(root, &rel) {
         Ok(p) => p,
         Err(e) => return Outcome::refuse(&rel, e),
@@ -703,6 +720,15 @@ pub fn is_trust_file(rel: &str) -> bool {
     r == trust::FILE || r == "trust.yml"
 }
 
+/// `people.yaml` at the root, however it is spelled: Lorefile's own file, written from the People
+/// screen only. Agents can't edit it, and neither can a raw file edit.
+pub fn is_people_file(rel: &str) -> bool {
+    let r = rel.to_ascii_lowercase();
+    r == crate::people::FILE || r == "people.yml"
+}
+
+pub const PEOPLE_REFUSED: &str = "people.yaml is written by Lorefile from the People screen (rename, team, left, not the same person); it can't be edited directly";
+
 /// A lock file under `.lorefile/`: `trust.lock` around the read-modify-write of
 /// `trust.yaml`, `decide.lock` around a person's decision on a proposal (Accept,
 /// Not now, Look again, Take it back, and the replace rule). `mcp` on stdio and
@@ -770,7 +796,7 @@ fn stamp_for(root: &Path, note: &Note, after: &Ontology) -> Result<Stamp, String
     }
     let before = Ontology::from_raw(loader::load(root).map_err(|e| format!("{:#}", e))?);
     let (who, by) = note.grader();
-    let entries = trust::restamp(&before, after, who, by);
+    let entries = if note.rename { trust::restamp_keep(&before, after) } else { trust::restamp(&before, after, who, by) };
     if entries.is_empty() {
         return Ok(None);
     }
@@ -1606,6 +1632,19 @@ fn kind_of(author: &str) -> &'static str {
     } else {
         "person"
     }
+}
+
+/// The authors of the space's last `limit` changes, with when: names only, never the email.
+pub fn git_authors(root: &Path, limit: usize) -> Vec<(String, String)> {
+    let Some(repo) = git_root(root) else { return vec![] };
+    let scope = canon(root).to_string_lossy().to_string();
+    let n = format!("-n{}", limit.clamp(1, 500));
+    git_raw(&repo, &["log", &n, "--format=%an%x1f%aI", "--", &scope])
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| l.split_once('\u{1f}').map(|(a, t)| (a.trim().to_string(), t.trim().to_string())))
+        .filter(|(a, _)| !a.is_empty())
+        .collect()
 }
 
 /// The space's changes, newest first: id, author (agent or person), when,

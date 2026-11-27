@@ -540,6 +540,8 @@ pub fn restamp(before: &Ontology, after: &Ontology, who: Who, by: &str) -> Vec<E
                     let rec = match who {
                         Who::Agent => fresh(Grade::Proposed),
                         Who::Person => match (&st.grade, &st.record) {
+                            // who stands behind a definition doesn't change because someone else named its owner
+                            (Some(Grade::Checked | Grade::Accepted), Some(r)) if owner_only(old, v) => TrustRecord { of: of.clone(), ..r.clone() },
                             (Some(Grade::Checked), Some(r)) if fingerprint(&recipe(k, old)) == fingerprint(&recipe(k, v)) => TrustRecord { of: of.clone(), ..r.clone() },
                             _ => fresh(Grade::Accepted),
                         },
@@ -552,6 +554,34 @@ pub fn restamp(before: &Ontology, after: &Ontology, who: Who, by: &str) -> Vec<E
         for name in was.keys() {
             if !now.contains_key(name) {
                 out.push(Entry::Remove(k, name.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// Two versions of a thing differ in their `owner` and nothing else.
+pub fn owner_only(old: &Json, new: &Json) -> bool {
+    fingerprint(&without(old.clone(), &["owner"])) == fingerprint(&without(new.clone(), &["owner"]))
+}
+
+/// The entries a rename or merge of a person makes (Part 1, rename mode): every item that changed
+/// only in its owner and whose grade matched before keeps that record with a fresh fingerprint,
+/// whatever the grade; items with no record get none; a record already changed since is left as it
+/// is, so it stays changed since. A rename is a spelling fix, not a review.
+pub fn restamp_keep(before: &Ontology, after: &Ontology) -> Vec<Entry> {
+    let mut out = Vec::new();
+    for k in Kind::ALL {
+        let was = things(before, k);
+        for (name, v) in &things(after, k) {
+            let Some(old) = was.get(name) else { continue };
+            let of = fingerprint(v);
+            if fingerprint(old) == of || !owner_only(old, v) {
+                continue;
+            }
+            let st = before.graded.get(k, name);
+            if let (Some(_), Some(r)) = (st.grade, st.record) {
+                out.push(Entry::Set(k, name.clone(), TrustRecord { of, ..r }));
             }
         }
     }

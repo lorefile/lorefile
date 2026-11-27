@@ -608,7 +608,16 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
         match before.functions.get(&f.name) {
             None => out.push(json!({ "kind": "function", "op": "add", "name": f.name, "label": label(&f.name), "sentence": f.description })),
             Some(b) if same(b, f) => {}
-            Some(b) => out.push(json!({ "kind": "function", "op": "change", "name": f.name, "label": label(&f.name), "diffs": diff_text("description", &b.description, &f.description).map(|d| vec![d]).unwrap_or_else(|| vec![json!({ "what": "how it runs, its inputs or outputs", "before": "", "after": "changed" })]) })),
+            Some(b) => {
+                let mut diffs: Vec<Json> = diff_text("description", &b.description, &f.description).into_iter().chain(diff_text("owner", &b.owner, &f.owner)).collect();
+                let mut rest_b = b.clone();
+                rest_b.description = f.description.clone();
+                rest_b.owner = f.owner.clone();
+                if !same(&rest_b, f) || diffs.is_empty() {
+                    diffs.push(json!({ "what": "how it runs, its inputs or outputs", "before": "", "after": "changed" }));
+                }
+                out.push(json!({ "kind": "function", "op": "change", "name": f.name, "label": label(&f.name), "diffs": diffs }))
+            }
         }
     }
     for b in before.functions.values() {
@@ -1303,6 +1312,11 @@ pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json 
                 let touched = now.get(&name).map(|v| crate::trust::fingerprint(v) != crate::trust::fingerprint(&old)).unwrap_or(true);
                 if touched {
                     let by = st.record.as_ref().map(|r| crate::trust::who_said(&r.by)).unwrap_or_else(|| "a person".into());
+                    // only its owner changes: who stands behind it stays (decision 9)
+                    if now.get(&name).map(|v| crate::trust::owner_only(&old, v)).unwrap_or(false) {
+                        notes.push(json!({ "kind": "grade", "text": format!("{} is {} by {} and stays so: only its owner changes.", label(&name), g.word(), by) }));
+                        continue;
+                    }
                     let text = if g == Grade::Checked {
                         format!("{} is checked by {}. After you accept, it is accepted, not checked, until someone checks it again.", label(&name), by)
                     } else {
@@ -1311,6 +1325,19 @@ pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json 
                     notes.push(json!({ "kind": "grade", "text": text }));
                 }
             }
+        }
+    }
+    // a name nobody here has used yet: a note, not a question
+    if let Some((a, _)) = &after_pair {
+        let known = crate::people::derive(ont, &[]);
+        let mut new_names: Vec<String> = Vec::new();
+        for (_, _, who, _) in crate::people::owners(a) {
+            if known.find(&who).is_none() && !new_names.iter().any(|n| crate::people::fold(n) == crate::people::fold(&who)) {
+                new_names.push(who);
+            }
+        }
+        for n in new_names {
+            notes.push(json!({ "kind": "new_name", "text": format!("New name: nobody here is called {} yet.", crate::people::shown(&n)) }));
         }
     }
     // proposals stored before 2026-11-27 headed each file by position (a bug): say what each file holds from the comparison instead

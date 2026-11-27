@@ -94,7 +94,17 @@ pub fn validate(ont: &Ontology) -> Report {
         r.err_on(k.code, &k.file, ("entity", &k.entity), k.message.clone());
     }
     if ont.uses_format_2() && ont.format < 2 && ont.newer_format.is_none() {
-        r.warn("W118", "ontology.yaml", "this space uses extends, where or distinct: but ontology.yaml doesn't say format: 2; Lorefile 0.1.0 will not load it, and the next save that touches a kind writes it");
+        r.warn("W118", "ontology.yaml", "this space uses kinds, `distinct:`, area colours or people.yaml; add `format: 2` to ontology.yaml so older Lorefile says to upgrade (Lorefile 0.1.0 will not load it, and the next save through Lorefile writes it)");
+    }
+    // people: owners written as another spelling (W119), and people.yaml contradicting itself (W121)
+    for (kind, item, written, main, file) in crate::people::other_spellings(ont) {
+        let on: (&'static str, &str) = match kind { "entity" => ("entity", &item), "guardrail" => ("guardrail", &item), "function" => ("function", &item), _ => ("metric", &item) };
+        r.warn_on("W119", &file, on, format!("{} {}: owner `{}` is another spelling of {} (people.yaml)", kind, item, written, main));
+    }
+    if let Some(f) = &ont.people {
+        for m in crate::people::problems(f) {
+            r.warn("W121", crate::people::FILE, m);
+        }
     }
     for (kind, name, where_) in &ont.duplicates {
         r.err("E002", "", format!("duplicate {:?} `{}` {}", kind, name, where_));

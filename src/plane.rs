@@ -127,6 +127,8 @@ fn diag_reason(d: &Diag, ont: &Ontology) -> Option<Reason> {
     Some(match (d.code, subj.kind) {
         // W113 is said from the grade itself (who and when), not from the message
         ("W113", _) | ("W114", _) => return None,
+        // spellings and areas that don't add up are tidiness, not a risk to answers: they light nothing
+        ("W119", _) | ("W120", _) | ("W121", _) => return None,
         ("W109", "metric") => Reason::new(Light::Amber, "W109", "no owner. Who decides what it means?").fix(json!({ "op": "set_metric", "metric": n, "field": "owner" })),
         ("W101", "entity") => Reason::new(Light::Amber, "W101", "no description: agents have only its name to go on").fix(json!({ "op": "set_type_description", "type": n, "field": "description" })),
         ("W101", "metric") => Reason::new(Light::Amber, "W101", "no description: agents have only its name to go on").fix(json!({ "op": "set_metric", "metric": n, "field": "description" })),

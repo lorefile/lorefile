@@ -1254,7 +1254,7 @@ fn safe_rel(p: &str) -> Option<String> {
     }
     // the grades file is never a place an imported object may ask to be written:
     // a file from outside could otherwise carry a ready-made trust.yaml in
-    if crate::edit::is_trust_file(p) {
+    if crate::edit::is_trust_file(p) || crate::edit::is_people_file(p) {
         return None;
     }
     let ext = path.extension()?.to_str()?;

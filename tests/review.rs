@@ -649,7 +649,7 @@ fn review_words_name_entities_metrics_and_sources() {
 }
 
 #[test]
-fn naming_an_owner_accepts_what_was_accepted_unverified_or_changed() {
+fn naming_an_owner_keeps_an_accepted_grade_and_accepts_unverified_or_changed() {
     let sp = Space::new("ownergrades");
     let w = |rel: &str, text: &str| { let p = sp.0.join(rel); fs::create_dir_all(p.parent().unwrap()).unwrap(); fs::write(p, text).unwrap(); };
     w("sources/user_files.yaml", "connection: user_files\nkind: from_user\ndescription: Files people hand to an agent.\n");
@@ -673,7 +673,9 @@ fn naming_an_owner_accepts_what_was_accepted_unverified_or_changed() {
         let (status, r) = post(port, "/api/patch", json!({ "op": "set_metric", "metric": m, "owner": "Vinay", "by": "Vinay" }));
         assert_eq!(status, 200, "{}", r);
         let line = trust_line(&sp, m);
-        assert!(line.contains("grade: accepted") && line.contains("by: \"Vinay via page\""), "{} is accepted by whoever set the owner: {}", m, line);
+        // specs/2026-11-27-people-areas-graph.md decision 9: who stands behind it stays when only the owner changes
+        let by = if m == "kept" { "Priya via page" } else { "Vinay via page" };
+        assert!(line.contains("grade: accepted") && line.contains(&format!("by: \"{}\"", by)), "{}: {}", m, line);
     }
     let (_, sum) = get(port, "/api/summary");
     assert!(!sum["diagnostics"].as_array().unwrap().iter().any(|d| d["code"] == "W113"), "{}", sum["diagnostics"]);

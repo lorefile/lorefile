@@ -467,6 +467,25 @@ fn trust_json(ont: &crate::ontology::Ontology) -> Json {
     json!({ "file": ont.graded.has_file, "counts": ont.graded.counts(), "items": ont.graded.list(), "orphans": orphans })
 }
 
+/// The People list for a space: owners, grades, the activity log and, when history is on, the
+/// names of the last 500 commits' authors (never their email).
+fn people_derived(st: &crate::spaces::Loaded, history_on: bool) -> crate::people::Derived {
+    let mut seen: Vec<crate::people::Seen> = Vec::new();
+    for a in proposals::activity(&st.dir, 2000) {
+        if let Some(n) = a["who"].as_str().and_then(crate::people::person_from_by) {
+            seen.push(crate::people::Seen { name: n, source: "activity", at: a["at"].as_str().map(|s| s.to_string()) });
+        }
+    }
+    if history_on {
+        for (author, at) in edit::git_authors(&st.dir, 500) {
+            if let Some(n) = crate::people::person_from_by(&author) {
+                seen.push(crate::people::Seen { name: n, source: "history", at: Some(at) });
+            }
+        }
+    }
+    crate::people::derive(&st.ont, &seen)
+}
+
 /// The `by` words for a write from the page: "Priya via page" when the page sent a name (Settings), else "person via page".
 fn page_by(body: &Json) -> String {
     let name = body.get("by").and_then(|v| v.as_str());
@@ -575,13 +594,56 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
             Ok((rel, text)) => edit::apply(&st.dir, edit, &st.report, &rel, Change::Write(text), &Note::via(&by), Some((kind, name))),
             Err(e) => Outcome { file: file.unwrap_or("").to_string(), refused: Some(e), ..Default::default() },
         }
-    } else if path == "/api/patch" && str_field(body, "op") == "make_parent" {
-        // several files: the new parent and each child, one change
-        match patch::plan_many(&st.ont, std::slice::from_ref(body)) {
+    } else if path == "/api/people" {
+        let who = edit::sentence(&crate::trust::who_said(&by));
+        match str_field(body, "op") {
+            "rename" => match crate::people::rename_plan(&st.ont, str_field(body, "from"), str_field(body, "to")) {
+                Ok(plan) => {
+                    let summary = format!("{} {} {} {} {}: {}", who, if plan.merge { "merged" } else { "renamed" }, plan.from, if plan.merge { "into" } else { "to" }, plan.to, plan.counts_words());
+                    extra["summary"] = json!(summary);
+                    extra["merge"] = json!(plan.merge);
+                    extra["lossy"] = json!(plan.lossy);
+                    edit::apply_many(&st.dir, edit, &st.report, &plan.files, &Note { via: &by, summary: &summary, rename: true, ..Default::default() }, Some(("person", &plan.to)))
+                }
+                Err(e) => Outcome { file: crate::people::FILE.into(), refused: Some(e), ..Default::default() },
+            },
+            op => match crate::people::edit_file(&st.ont, op, str_field(body, "name"), str_field(body, "other")) {
+                Ok((f, what)) => {
+                    let summary = format!("{} {}", who, what);
+                    extra["summary"] = json!(summary);
+                    let empty = f.people.is_empty() && f.not_same.is_empty();
+                    let exists = st.dir.join(crate::people::FILE).is_file();
+                    let text = if empty { None } else { Some(crate::people::render(&f)) };
+                    if empty && !exists {
+                        Outcome { file: crate::people::FILE.into(), ok: true, ..Default::default() }
+                    } else {
+                        edit::apply_files(&st.dir, edit, &st.report, &[(crate::people::FILE.to_string(), text)], &Note { via: &by, summary: &summary, people: true, ..Default::default() }, Some(("person", str_field(body, "name"))))
+                    }
+                }
+                Err(e) => Outcome { file: crate::people::FILE.into(), refused: Some(e), ..Default::default() },
+            },
+        }
+    } else if path == "/api/patch" && (body.get("ops").is_some() || patch::multi_file(body)) {
+        // several ops, or one op that writes several files: one change
+        let ops: Vec<Json> = body.get("ops").and_then(|o| o.as_array()).cloned().unwrap_or_else(|| vec![body.clone()]);
+        match patch::plan_many(&st.ont, &ops) {
             Ok(plan) => {
-                let summary = format!("made {} the parent of {}", str_field(body, "name"), body.get("children").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default());
+                let summary = if str_field(body, "op") == "make_parent" {
+                    format!("made {} the parent of {}", str_field(body, "name"), body.get("children").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default())
+                } else {
+                    plan.summaries.join("; ")
+                };
                 extra["summary"] = json!(summary);
-                edit::apply_many(&st.dir, edit, &st.report, &plan.files, &Note { via: &by, summary: &summary, ..Default::default() }, Some(("type", str_field(body, "name"))))
+                extra["summaries"] = json!(plan.summaries);
+                let label = if ops.len() == 1 { plan.kinds.first().cloned() } else { None };
+                let label = label.as_ref().map(|(k, n)| (k.as_str(), n.as_str()));
+                let label = if str_field(body, "op") == "make_parent" { Some(("type", str_field(body, "name"))) } else { label };
+                if plan.files.len() == 1 {
+                    let (f, t) = plan.files[0].clone();
+                    edit::apply(&st.dir, edit, &st.report, &f, Change::Write(t), &Note { via: &by, summary: &summary, ..Default::default() }, label)
+                } else {
+                    edit::apply_files(&st.dir, edit, &st.report, &plan.files.iter().map(|(f, t)| (f.clone(), if t.is_empty() { None } else { Some(t.clone()) })).collect::<Vec<_>>(), &Note { via: &by, summary: &summary, ..Default::default() }, label)
+                }
             }
             Err(e) => Outcome { file: String::new(), refused: Some(e), ..Default::default() },
         }
@@ -597,7 +659,7 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
         edit::apply(&st.dir, edit, &st.report, str_field(body, "file"), Change::Write(str_field(body, "content").to_string()), &Note { via: &by, reason: str_field(body, "reason"), ..Default::default() }, None)
     };
     if outcome.written {
-        if path == "/api/patch" {
+        if path == "/api/patch" || path == "/api/people" {
             proposals::log(&st.dir, &by, extra["summary"].as_str().unwrap_or("edited"), &outcome.file);
         } else if path == "/api/edit" || path == "/api/create" {
             proposals::log(&st.dir, &by, &format!("edited {}", outcome.file), &outcome.file);
@@ -1447,6 +1509,46 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
         return;
     }
 
+    // the People screen: names from this space, plus (on the page only) names from the other spaces
+    // this server serves, never shipped examples
+    if method == Method::Get && (path == "/api/people" || path == "/api/people/plan") {
+        let mut other: Vec<String> = Vec::new();
+        if path == "/api/people" {
+            let ids: Vec<String> = reg.user_spaces().iter().filter(|s| s.id != space_id && !s.builtin).map(|s| s.id.clone()).collect();
+            for id in ids {
+                if let Ok(o) = reg.get(&id) {
+                    for p in crate::people::derive(&o.ont, &[]).people {
+                        if other.len() < 200 && !other.iter().any(|n| crate::people::fold(n) == crate::people::fold(&p.name)) {
+                            other.push(p.name);
+                        }
+                    }
+                }
+            }
+        }
+        let history_on = !space.builtin && space_edit().commit;
+        let editable = base_edit.allow && !space.builtin;
+        let resp = match reg.get(&space_id) {
+            Ok(st) if path == "/api/people/plan" => match crate::people::rename_plan(&st.ont, params.get("from").map(|s| s.as_str()).unwrap_or(""), params.get("to").map(|s| s.as_str()).unwrap_or("")) {
+                Ok(p) => json_response_private(200, &json!({ "from": p.from, "to": p.to, "merge": p.merge, "counts": p.counts, "counts_words": p.counts_words(), "lossy": p.lossy, "files": p.files.iter().map(|(f, _)| f.clone()).collect::<Vec<_>>() })),
+                Err(e) => json_response_private(400, &json!({ "error": e })),
+            },
+            Ok(st) => {
+                let d = people_derived(st, history_on);
+                let here: Vec<String> = d.people.iter().map(|p| crate::people::fold(&p.name)).collect();
+                other.retain(|n| !here.contains(&crate::people::fold(n)) && !d.people.iter().any(|p| p.also.iter().any(|a| crate::people::fold(a) == crate::people::fold(n))));
+                let mut j = d.to_json();
+                j["other_spaces"] = json!(other);
+                j["editable"] = json!(editable);
+                j["builtin"] = json!(space.builtin);
+                json_response_private(200, &j)
+            }
+            Err(e) => json_response(500, &json!({ "error": format!("{} could not be loaded: {:#}", space_id, e) })),
+        };
+        reg.touched(&space_id);
+        let _ = req.respond(resp);
+        return;
+    }
+
     let st = match reg.get(&space_id) {
         Ok(st) => st,
         Err(e) => {
@@ -1458,7 +1560,7 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
     // writes: edit, create, delete, and propose_change through /api/tool
     let as_tool = method == Method::Post && path == "/api/tool" && matches!(str_field(&body, "name"), "propose_change" | "propose_patch" | "learn_file");
     let is_write = as_tool
-        || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/proposals/reopen" || path == "/api/proposals/take_back" || path == "/api/proposals/sign" || path == "/api/trust"))
+        || (method == Method::Post && (path == "/api/edit" || path == "/api/create" || path == "/api/patch" || path == "/api/proposals/accept" || path == "/api/proposals/dismiss" || path == "/api/proposals/reopen" || path == "/api/proposals/take_back" || path == "/api/proposals/sign" || path == "/api/trust" || path == "/api/people"))
         || (method == Method::Delete && path == "/api/file");
     if is_write {
         let resp = if !write_allowed(&req) {

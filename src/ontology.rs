@@ -114,6 +114,8 @@ pub struct Ontology {
     pub iris: Iris,
     /// `trust.yaml` as written; `None` when the space has none.
     pub trust: Option<TrustBook>,
+    /// `people.yaml` as written; `None` when the space has none.
+    pub people: Option<crate::schema::PeopleFile>,
     /// Every grade, resolved against the fingerprints (see `trust::resolve`).
     pub graded: trust::Graded,
     /// What `resolve_kinds` found wrong with `extends` and `where` (E020–E024), for the validator.
@@ -290,6 +292,7 @@ impl Ontology {
             load_problems: raw.problems,
             glossary: raw.glossary,
             trust: raw.trust,
+            people: raw.people,
             newer_format: raw.newer_format,
             format: raw.format.unwrap_or(1),
             ..Default::default()
@@ -701,7 +704,10 @@ impl Ontology {
 
     /// Does the space use kinds at all (`extends`, `where`, or `distinct:` in trust.yaml)?
     pub fn uses_format_2(&self) -> bool {
-        self.types.values().any(|t| t.extends.is_some() || t.where_.is_some()) || self.trust.as_ref().map(|b| !b.distinct.is_empty()).unwrap_or(false)
+        self.types.values().any(|t| t.extends.is_some() || t.where_.is_some())
+            || self.trust.as_ref().map(|b| !b.distinct.is_empty()).unwrap_or(false)
+            || self.people.is_some()
+            || self.manifest.domains.iter().any(|d| d.color.is_some())
     }
 
     /// Swap in another trust book (the one a save is about to write) and resolve again.
@@ -1232,6 +1238,7 @@ impl Ontology {
             j["how"] = json!(function_runs_brief(f));
             j["iri"] = json!(self.iri_function(&f.name));
             j["used_by_actions"] = json!(self.actions.values().filter(|a| a.tags.iter().any(|t| t == &format!("does:{}", f.name))).map(|a| a.name.clone()).collect::<Vec<_>>());
+            crate::people::describe_owner(self, &mut j, &f.owner);
             return Some(j);
         }
         if let Some(m) = self.metrics.get(name) {
@@ -1246,6 +1253,7 @@ impl Ontology {
             if self.graded.has_file {
                 j["trust"] = self.grade_of(TKind::Metric, &m.name).to_json(TKind::Metric);
             }
+            crate::people::describe_owner(self, &mut j, &m.owner);
             return Some(j);
         }
         if let Some(t) = self.type_(name) {
@@ -1349,6 +1357,7 @@ impl Ontology {
             if !t.instances.is_empty() {
                 j["inline_instances"] = json!(t.instances.len());
             }
+            crate::people::describe_owner(self, &mut j, &t.owner);
             return Some(j);
         }
         let rels = self.relationship(name);
@@ -1394,6 +1403,7 @@ impl Ontology {
             }
             j["applies_to_kind"] = json!(self.kind_of(&c.applies_to));
             j["file"] = json!(c.file);
+            crate::people::describe_owner(self, &mut j, &c.owner);
             return Some(j);
         }
         if let Some(s) = self.sources.get(name) {
@@ -1528,6 +1538,9 @@ impl Ontology {
         md.push_str(&format!("IRIs: each name below is `{}<Name>` unless an IRI follows it.\n\n", self.iris.namespace));
         if self.graded.has_file {
             md.push_str(&format!("{}\n\n", self.graded.line()));
+        }
+        if let Some(line) = crate::people::owners_line(self) {
+            md.push_str(&format!("{}\n\n", line));
         }
         let mark = |k: TKind, n: &str| -> Option<String> { if self.graded.has_file { self.grade_of(k, n).mark() } else { None } };
 

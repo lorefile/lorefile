@@ -224,7 +224,7 @@ fn seven_levels_is_too_deep_and_the_format_is_said() {
     let _srv = serve(&sp.0, port);
     let ds = diags(port);
     assert!(has(&ds, "E020", "7 levels of kinds"), "{:?}", ds);
-    assert!(has(&ds, "W118", "doesn't say format: 2"), "extends without format 2: {:?}", ds);
+    assert!(has(&ds, "W118", "add `format: 2`"), "extends without format 2: {:?}", ds);
     // a format newer than this binary: one sentence, and no unknown-field noise
     sp.write("ontology.yaml", "name: deep\nversion: 0.1.0\nformat: 3\nicons: true\n");
     post(port, "/api/reload", json!({}));
