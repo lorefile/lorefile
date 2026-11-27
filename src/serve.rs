@@ -856,15 +856,19 @@ fn oauth_api(req: &Request, ctx: &Ctx, method: &Method, path: &str) -> Response<
             if !write_allowed(req) {
                 return json_response_private(403, &json!({ "error": WRITE_REFUSED }));
             }
-            let id = path["/api/oauth/connections/".len()..path.len() - "/revoke".len()].to_string();
-            match o.disconnect(&percent_decode(&id)) {
+            // /api/oauth/connections/<id>/revoke, with one non-empty id (or `all`)
+            let id = path.strip_prefix("/api/oauth/connections/").and_then(|r| r.strip_suffix("/revoke")).map(percent_decode).unwrap_or_default();
+            if id.is_empty() || id.contains('/') {
+                return json_response_private(400, &json!({ "error": "say which connection: POST /api/oauth/connections/<id>/revoke, or all" }));
+            }
+            match o.disconnect(&id) {
                 Ok(n) => {
                     let mut j = o.connections_json();
                     j["ok"] = json!(true);
                     j["disconnected"] = json!(n);
                     json_response_private(200, &j)
                 }
-                Err(e) => json_response_private(404, &json!({ "error": e })),
+                Err(e) => json_response_private(400, &json!({ "error": e })),
             }
         }
         _ => json_response(405, &json!({ "error": "method not allowed" })),
@@ -903,7 +907,13 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
                     return;
                 }
             }
-            let r = oauth::Req { method: method.as_str(), path: &full_path, query: &params, header: &get, body: &body, origin, signed_in: signed_in(&req, ctx, true) };
+            // how the request already proves the login: the bearer header is the token itself, the cookie a signed-in browser
+            let approver = match &ctx.token {
+                Some(want) if bearer(&req).map(|t| same_token(&t, want)).unwrap_or(false) => Some("login token"),
+                Some(want) if cookie_values(&req, &ctx.cookie).iter().any(|t| same_token(t, want)) => Some("signed-in browser"),
+                _ => None,
+            };
+            let r = oauth::Req { method: method.as_str(), path: &full_path, query: &params, header: &get, body: &body, origin, approver };
             let reply = o.handle(&r);
             let sign_in = reply.sign_in;
             let mut resp = reply_response(reply);
@@ -1316,6 +1326,7 @@ fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>
         Err(e) => return json_response(400, &json!({ "jsonrpc": "2.0", "id": null, "error": { "code": -32700, "message": format!("parse error: {}", e) } })),
     };
     let mut reg = reg.lock().unwrap_or_else(|e| e.into_inner());
+    let guest = matches!(who, Caller::Connection(_));
     let only = match space {
         None => None,
         Some(id) => match reg.resolve(Some(id)) {
@@ -1325,6 +1336,8 @@ fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>
                 reg.rescan();
                 match reg.resolve(Some(id)) {
                     Ok(s) => Some(s),
+                    // the owner is told which spaces there are; a connection is not
+                    Err(_) if guest => return json_response(404, &json!({ "error": format!("no space named '{}'", id) })),
                     Err(e) => return json_response(404, &json!({ "error": e })),
                 }
             }
@@ -1334,7 +1347,7 @@ fn mcp_http(req: &Request, reg: &Mutex<Registry>, ctx: &Ctx, space: Option<&str>
         Caller::Owner => (true, crate::mcp::VIA.to_string()),
         Caller::Connection(g) => (g.can_propose(), g.label()),
     };
-    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only, can_propose, via };
+    let mut hub = Hub { reg: &mut reg, edit: ctx.edit, only, can_propose, via, guest };
     match hub.handle_body(&msg) {
         Some(reply) => json_response(200, &reply),
         // notifications only: accepted, nothing to answer

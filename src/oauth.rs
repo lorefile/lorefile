@@ -49,7 +49,9 @@ const TRIES: usize = 10;
 const TRY_WINDOW: i64 = 600;
 const PAUSE: i64 = 600;
 const MAX_SEEN: usize = 50;
-const MAX_PENDING: usize = 500;
+/// Approval requests waiting at once, and per client: one app's flood cannot push out another's request.
+const MAX_PENDING: usize = 5000;
+const MAX_PENDING_PER_CLIENT: usize = 20;
 const MAX_CODES: usize = 500;
 const MAX_ACCESS: usize = 10;
 const MAX_RETIRED: usize = 20;
@@ -127,10 +129,14 @@ mod at_opt {
 // Small pieces: randomness, hashes, PKCE, encoding
 // ---------------------------------------------------------------------------
 
-fn random(bytes: usize) -> Option<String> {
+fn random_bytes(bytes: usize) -> Option<Vec<u8>> {
     let mut b = vec![0u8; bytes];
     getrandom::getrandom(&mut b).ok()?;
-    Some(base64url(&b))
+    Some(b)
+}
+
+fn random(bytes: usize) -> Option<String> {
+    random_bytes(bytes).map(|b| base64url(&b))
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -142,17 +148,36 @@ fn hash(token: &str) -> String {
     format!("sha256:{}", hex(&Sha256::digest(token.as_bytes())))
 }
 
-/// A salted fingerprint of the login token, so a changed token can be noticed without storing it.
-fn fingerprint(login: &str, salt: &str) -> String {
-    format!("sha256:{}:{}", salt, hex(&Sha256::digest(format!("{}:{}", salt, login).as_bytes())))
+/// HMAC-SHA256 (RFC 2104).
+fn hmac(key: &[u8], msg: &[u8]) -> [u8; 32] {
+    let mut k = [0u8; 64];
+    if key.len() > 64 {
+        k[..32].copy_from_slice(&Sha256::digest(key));
+    } else {
+        k[..key.len()].copy_from_slice(key);
+    }
+    let (mut ipad, mut opad) = ([0x36u8; 64], [0x5cu8; 64]);
+    for i in 0..64 {
+        ipad[i] ^= k[i];
+        opad[i] ^= k[i];
+    }
+    let inner = Sha256::new().chain_update(ipad).chain_update(msg).finalize();
+    Sha256::new().chain_update(opad).chain_update(inner).finalize().into()
 }
 
-fn fingerprint_matches(stored: &str, login: &str) -> bool {
-    let mut parts = stored.splitn(3, ':');
-    match (parts.next(), parts.next(), parts.next()) {
-        (Some("sha256"), Some(salt), Some(_)) => same_token(&fingerprint(login, salt), stored),
-        _ => false,
+/// The login token's fingerprint, so a changed token can be noticed without storing it: an
+/// HMAC keyed by a random secret kept in its own file (`oauth.key`). A leaked `oauth.json`
+/// alone gives nothing to test guesses against offline.
+fn fingerprint(login: &str, key: &[u8]) -> String {
+    format!("hmac-sha256:{}", hex(&hmac(key, login.as_bytes())))
+}
+
+fn hex_decode(s: &str) -> Option<Vec<u8>> {
+    let s = s.trim();
+    if s.len() % 2 != 0 {
+        return None;
     }
+    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(s.get(i..i + 2)?, 16).ok()).collect()
 }
 
 /// PKCE S256 (RFC 7636): BASE64URL(SHA256(verifier)) must equal the challenge.
@@ -550,9 +575,13 @@ impl Store {
 
 /// Written to a temporary file with mode 0600, then renamed into place.
 fn write_store(file: &Path, store: &Store) -> std::io::Result<()> {
-    use std::io::Write;
     let text = serde_json::to_string_pretty(store).map_err(std::io::Error::other)? + "\n";
-    let tmp = file.with_extension("json.tmp");
+    write_private(file, &text)
+}
+
+fn write_private(file: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let tmp = file.with_extension("tmp");
     let mut opts = std::fs::OpenOptions::new();
     opts.write(true).create(true).truncate(true);
     #[cfg(unix)]
@@ -610,8 +639,12 @@ impl Grant {
 }
 
 struct Pending {
+    /// Order of arrival: many requests share a second, so this decides which is oldest.
+    seq: u64,
     client: String,
     redirect: String,
+    /// Whether authorize named the return address (else the client's only one was used).
+    redirect_given: bool,
     challenge: String,
     resource: String,
     space: Option<String>,
@@ -624,6 +657,7 @@ struct Pending {
 struct Code {
     client: String,
     redirect: String,
+    redirect_given: bool,
     challenge: String,
     resource: String,
     scopes: Vec<String>,
@@ -637,12 +671,27 @@ struct Code {
 #[derive(Default)]
 struct State {
     store: Store,
+    /// Clients that registered and have no connection yet: memory only, written to
+    /// `oauth.json` with their first connection, so a registration costs no disk write.
+    fresh: Vec<Client>,
     pending: HashMap<String, Pending>,
+    seq: u64,
     codes: HashMap<String, Code>,
-    seen: Vec<String>,
-    hinted: HashSet<&'static str>,
     tries: Vec<i64>,
     paused_until: i64,
+}
+
+impl State {
+    fn client(&self, id: &str) -> Option<Client> {
+        self.store.clients.iter().chain(self.fresh.iter()).find(|c| c.id == id).cloned()
+    }
+}
+
+/// What has been printed once: kept apart from the store, so printing never waits on it.
+#[derive(Default)]
+struct Log {
+    seen: Vec<String>,
+    hinted: HashSet<&'static str>,
 }
 
 pub struct Server {
@@ -650,6 +699,7 @@ pub struct Server {
     cfg: Config,
     clock: Clock,
     state: Mutex<State>,
+    log: Mutex<Log>,
     /// Connections dropped at start because the login token changed.
     pub dropped: usize,
     /// Why `oauth.json` could not be read, if it could not.
@@ -665,8 +715,9 @@ pub struct Req<'a> {
     pub body: &'a str,
     /// The public address this request came through.
     pub origin: &'a str,
-    /// The page's cookie carries the login token.
-    pub signed_in: bool,
+    /// How the request already proves the login: `Some("login token")` for the bearer header,
+    /// `Some("signed-in browser")` for the page's cookie.
+    pub approver: Option<&'static str>,
 }
 
 /// What `serve` sends back. `sign_in`: also set the page's cookie (a correct token on the approval page).
@@ -710,6 +761,37 @@ pub fn is_route(path: &str) -> bool {
     path == "/.well-known/oauth-authorization-server" || path == "/.well-known/oauth-protected-resource" || path.starts_with("/.well-known/oauth-protected-resource/") || matches!(path, "/oauth/register" | "/oauth/authorize" | "/oauth/token" | "/oauth/revoke")
 }
 
+/// `{{name}}` → its value, in one pass: a value is never searched again, so a client's
+/// name cannot pull in another field.
+fn fill(template: &str, vars: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(template.len() + 4096);
+    let mut rest = template;
+    while let Some(i) = rest.find("{{") {
+        out.push_str(&rest[..i]);
+        let after = &rest[i + 2..];
+        match after.find("}}") {
+            Some(j) => {
+                let key = &after[..j];
+                match vars.iter().find(|(k, _)| *k == key) {
+                    Some((_, v)) => out.push_str(v),
+                    None => {
+                        out.push_str("{{");
+                        out.push_str(key);
+                        out.push_str("}}");
+                    }
+                }
+                rest = &after[j + 2..];
+            }
+            None => {
+                out.push_str(&rest[i..]);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// The return address with `params` added to its query.
 fn back_to(redirect: &str, params: &[(&str, &str)]) -> String {
     let mut out = redirect.to_string();
@@ -737,7 +819,16 @@ impl Server {
     /// Load `<root>/.lorefile/oauth.json` (or start empty), drop grants made under another
     /// login token, prune, and save.
     pub fn open(root: &Path, cfg: Config, clock: Clock) -> Server {
-        let file = crate::spaces::lorefile_dir(root).join("oauth.json");
+        let dir = crate::spaces::lorefile_dir(root);
+        let file = dir.join("oauth.json");
+        // the fingerprint's key lives in its own file: without it, a stored fingerprint cannot be trusted
+        let key_file = dir.join("oauth.key");
+        let kept = std::fs::read_to_string(&key_file).ok().and_then(|t| hex_decode(&t)).filter(|k| k.len() == 32);
+        let had_key = kept.is_some();
+        let key = kept.unwrap_or_else(|| random_bytes(32).unwrap_or_default());
+        if !had_key {
+            let _ = write_private(&key_file, &format!("{}\n", hex(&key)));
+        }
         let mut load_error = None;
         let mut store = match std::fs::read_to_string(&file) {
             Ok(text) => match serde_json::from_str::<Store>(&text) {
@@ -752,16 +843,17 @@ impl Server {
         store.version = 1;
         let mut dropped = 0;
         let mut changed = false;
-        if store.login.is_empty() || !fingerprint_matches(&store.login, &cfg.login) {
+        let want = fingerprint(&cfg.login, &key);
+        if !had_key || !same_token(&store.login, &want) {
             if !store.login.is_empty() {
                 dropped = store.connections.len();
                 store.connections.clear();
             }
-            store.login = fingerprint(&cfg.login, &random(16).unwrap_or_default());
+            store.login = want;
             changed = true;
         }
         changed |= store.prune(clock.now());
-        let srv = Server { file, cfg, clock, state: Mutex::new(State { store, ..Default::default() }), dropped, load_error };
+        let srv = Server { file, cfg, clock, state: Mutex::new(State { store, ..Default::default() }), log: Mutex::new(Log::default()), dropped, load_error };
         if changed {
             let st = srv.lock();
             let _ = srv.save(&st);
@@ -788,22 +880,23 @@ impl Server {
     // --- the address -------------------------------------------------------
 
     /// The public address OAuth answers on for this request, or `None` (plain HTTP,
-    /// a hidden name, or not the pinned address). Prints the one-time `Seen` line
-    /// for a new address, and the one-time hints.
+    /// a hidden name, or not the pinned address). Prints the one-time hints, and the
+    /// `Seen` line for the pinned address. An address read from a request is printed
+    /// only once someone holding the login token approved a connection on it.
     pub fn public_origin(&self, get: &dyn Fn(&'static str) -> Option<String>) -> Option<String> {
         let a = asked(get);
         let name = a.name?;
         if let Some(pin) = &self.cfg.pinned {
             let o = origin_of(&name, a.https);
             if o == *pin {
-                self.seen(&o);
+                self.seen_pinned(&o);
                 return Some(o);
             }
             return None;
         }
         if !a.https {
             if !loopback_name(&name) {
-                self.hint_once("http", format!("OAuth   a request reached this server as http://{}: ChatGPT and Claude need HTTPS, so OAuth answers only on an HTTPS address (a tunnel, or a proxy that sets X-Forwarded-Proto: https)", name));
+                self.hint_once("http", "OAuth   a request reached this server over plain HTTP under a public name: ChatGPT and Claude need HTTPS, so OAuth answers only on an HTTPS address (a tunnel, or a proxy that sets X-Forwarded-Proto: https)".to_string());
             }
             return None;
         }
@@ -811,36 +904,55 @@ impl Server {
             self.hint_once("proxy", "OAuth   a proxy is hiding the public address (a request marked HTTPS arrived for a loopback name); have it pass Host and X-Forwarded-Proto (nginx: proxy_set_header Host $host; proxy_set_header X-Forwarded-Proto $scheme;), or start with --public-url".to_string());
             return None;
         }
-        let o = origin_of(&name, true);
-        self.seen(&o);
-        Some(o)
+        Some(origin_of(&name, true))
+    }
+
+    fn log(&self) -> std::sync::MutexGuard<'_, Log> {
+        self.log.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     fn hint_once(&self, key: &'static str, text: String) {
-        let mut st = self.lock();
-        if st.hinted.insert(key) {
+        if self.log().hinted.insert(key) {
             eprintln!("{}", text);
         }
     }
 
-    fn seen(&self, origin: &str) {
-        let mut st = self.lock();
-        if st.seen.iter().any(|s| s == origin) {
-            return;
+    /// Whether this address gets its `Seen` line now (once each, at most `MAX_SEEN`).
+    fn first_sight(&self, origin: &str) -> bool {
+        let mut log = self.log();
+        if log.seen.iter().any(|s| s == origin) {
+            return false;
         }
-        if st.seen.len() >= MAX_SEEN {
-            if st.hinted.insert("seen-cap") {
+        if log.seen.len() >= MAX_SEEN {
+            if log.hinted.insert("seen-cap") {
                 eprintln!("Seen    more than {} addresses; not printing more", MAX_SEEN);
             }
+            return false;
+        }
+        log.seen.push(origin.to_string());
+        true
+    }
+
+    /// The first request on the pinned address: the operator named it (`--public-url`), so the
+    /// sign-in link follows the start-up lines' rule (the token only when it came from the file).
+    fn seen_pinned(&self, origin: &str) {
+        if !self.first_sight(origin) {
             return;
         }
-        st.seen.push(origin.to_string());
         let link = match &self.cfg.link_note {
             None => format!("{}/?token={}", origin, url_token(&self.cfg.login)),
             Some(words) => format!("{}/   {}", origin, words),
         };
         eprintln!("Seen    {}   connectors: {}/mcp (choose OAuth, leave the client ID empty)", origin, origin);
         eprintln!("        sign in there: {}", link);
+    }
+
+    /// The first approval on an address read from requests. It took the login token, so the
+    /// address is real; the line never carries the token.
+    fn approved_on(&self, origin: &str) {
+        if self.cfg.pinned.is_none() && self.first_sight(origin) {
+            eprintln!("Seen    {}   a connection was approved on this address; its connector URL is {}/mcp", origin, origin);
+        }
     }
 
     /// The `WWW-Authenticate` value for a 401 from `/mcp` on an OAuth address.
@@ -1014,20 +1126,19 @@ impl Server {
         let id = format!("lfc_{}", id);
         let secret = (auth != "none").then(|| format!("lfs_{}", secret));
         let mut st = self.lock();
-        st.store.prune(now);
-        if st.store.clients.len() >= MAX_CLIENTS {
-            let used: HashSet<String> = st.store.connections.iter().map(|c| c.client.clone()).collect();
-            match st.store.clients.iter().enumerate().filter(|(_, c)| !used.contains(&c.id)).min_by_key(|(_, c)| c.registered).map(|(i, _)| i) {
+        st.fresh.retain(|c| now - c.registered < CLIENT_UNUSED);
+        if st.fresh.len() >= MAX_CLIENTS {
+            // only a client past the 10-minute sign-in window makes room; one still signing in is never pushed out
+            match st.fresh.iter().position(|c| now - c.registered >= REQUEST_LIFE) {
                 Some(i) => {
-                    st.store.clients.remove(i);
+                    let gone = st.fresh.remove(i);
+                    st.pending.retain(|_, p| p.client != gone.id);
                 }
-                None => return Reply::error(400, "invalid_client_metadata", "this server holds as many clients as it takes (200); disconnect one in Settings"),
+                None => return Reply::error(429, "temporarily_unavailable", "too many apps are signing in to this server right now; try again in a few minutes"),
             }
         }
-        st.store.clients.push(Client { id: id.clone(), name: name.clone(), redirect_uris: uris.clone(), auth: auth.clone(), secret: secret.as_deref().map(hash), registered: now });
-        if let Err(e) = self.save(&st) {
-            return Reply::error(500, "server_error", &e);
-        }
+        // memory only: written to oauth.json with the client's first connection
+        st.fresh.push(Client { id: id.clone(), name: name.clone(), redirect_uris: uris.clone(), auth: auth.clone(), secret: secret.as_deref().map(hash), registered: now });
         let mut out = json!({
             "client_id": id, "client_id_issued_at": now, "client_name": name, "redirect_uris": uris,
             "grant_types": ["authorization_code", "refresh_token"], "response_types": ["code"],
@@ -1046,9 +1157,10 @@ impl Server {
         let q = |k: &str| r.query.get(k).map(|s| s.as_str());
         let now = self.clock.now();
         let mut st = self.lock();
-        let Some(client) = q("client_id").and_then(|id| st.store.clients.iter().find(|c| c.id == id)).cloned() else {
+        let Some(client) = q("client_id").and_then(|id| st.client(id)) else {
             return error_page(400, "This sign-in link names an app this server does not know (its client_id is unknown or was removed). Nothing was sent back. Add the connector again in ChatGPT or Claude.");
         };
+        let redirect_given = q("redirect_uri").is_some();
         let redirect = match q("redirect_uri") {
             Some(u) => u.to_string(),
             None if client.redirect_uris.len() == 1 => client.redirect_uris[0].clone(),
@@ -1085,18 +1197,28 @@ impl Server {
         };
         let Some(id) = random(32) else { return error_page(500, "The operating system gave no random bytes. Try again.") };
         st.pending.retain(|_, p| now - p.created < REQUEST_LIFE);
-        if st.pending.len() >= MAX_PENDING {
-            if let Some(oldest) = st.pending.iter().min_by_key(|(_, p)| p.created).map(|(k, _)| k.clone()) {
+        // one client keeps at most 20 waiting, its own oldest dropped first: a flood under one
+        // client_id never pushes out another client's request
+        let mine: Vec<(u64, String)> = st.pending.iter().filter(|(_, p)| p.client == client.id).map(|(k, p)| (p.seq, k.clone())).collect();
+        if mine.len() >= MAX_PENDING_PER_CLIENT {
+            if let Some((_, oldest)) = mine.into_iter().min() {
                 st.pending.remove(&oldest);
             }
         }
+        if st.pending.len() >= MAX_PENDING {
+            return error_page(429, "Too many sign-ins are waiting on this server right now. Wait a few minutes, then press Connect again.");
+        }
+        st.seq += 1;
+        let seq = st.seq;
         let space = match &resource {
             Resource::Space(s) => Some(s.clone()),
             Resource::All => None,
         };
         let pending = Pending {
+            seq,
             client: client.id.clone(),
             redirect,
+            redirect_given,
             challenge: q("code_challenge").unwrap_or("").to_string(),
             resource: resource.url(r.origin),
             space,
@@ -1122,16 +1244,20 @@ impl Server {
             String::new()
         };
         let err = error.map(|e| format!("<div class=\"err\">{}</div>", html_escape(e))).unwrap_or_default();
-        let html = APPROVE_HTML
-            .replace("{{style}}", crate::serve::PAGE_STYLE)
-            .replace("{{logo}}", LOGO)
-            .replace("{{error}}", &err)
-            .replace("{{client}}", &html_escape(client))
-            .replace("{{what}}", &what)
-            .replace("{{propose}}", &propose)
-            .replace("{{host}}", &html_escape(&redirect_host(&p.redirect)))
-            .replace("{{age}}", &(now - p.created).max(0).to_string())
-            .replace("{{request}}", &html_escape(id));
+        let html = fill(
+            APPROVE_HTML,
+            &[
+                ("style", crate::serve::PAGE_STYLE),
+                ("logo", LOGO),
+                ("error", &err),
+                ("client", &html_escape(client)),
+                ("what", &what),
+                ("propose", &propose),
+                ("host", &html_escape(&redirect_host(&p.redirect))),
+                ("age", &(now - p.created).max(0).to_string()),
+                ("request", &html_escape(id)),
+            ],
+        );
         Reply::html(if error.is_some() { 401 } else { 200 }, html)
     }
 
@@ -1164,16 +1290,19 @@ impl Server {
             let p = st.pending.remove(&id).expect("checked above");
             return Reply::redirect(back(&p, &mut vec![("error", "access_denied".into()), ("error_description", "the person denied the request".into())]));
         }
-        let client_name = st.pending.get(&id).and_then(|p| st.store.clients.iter().find(|c| c.id == p.client)).map(|c| c.name.clone()).unwrap_or_default();
-        // the failed-try limiter: 10 wrong tokens in 10 minutes pause the form for everyone
-        if st.paused_until > now {
-            let mins = (st.paused_until - now + 59) / 60;
-            let msg = format!("Too many wrong tokens: approvals are paused for everyone for {} more minute{}. Try again then.", mins, if mins == 1 { "" } else { "s" });
-            return self.approval_page(&st.pending[&id], &id, &client_name, Some(&msg), now).with_status(429);
-        }
+        let client_name = st.pending.get(&id).and_then(|p| st.client(&p.client)).map(|c| c.name).unwrap_or_default();
         let given = f("token").trim().to_string();
         let by_token = !given.is_empty() && same_token(&given, &self.cfg.login);
-        if !by_token && !r.signed_in {
+        // the login token (typed, or in a bearer header) or a signed-in browser always gets through
+        let approved_with = if by_token { Some("login token") } else { r.approver };
+        if approved_with.is_none() && st.paused_until > now {
+            // the failed-try pause: wrong tokens are refused without being counted. The 32-character
+            // minimum is what stops guessing; this only slows the noise down and says so in the log.
+            let mins = (st.paused_until - now + 59) / 60;
+            let msg = format!("Too many wrong tokens: approvals with a typed token are paused for {} more minute{}. A browser already signed in to this server can still approve.", mins, if mins == 1 { "" } else { "s" });
+            return self.approval_page(&st.pending[&id], &id, &client_name, Some(&msg), now).with_status(429);
+        }
+        let Some(approved_with) = approved_with else {
             let msg = if given.is_empty() {
                 "Paste the login token to allow this (or deny it)."
             } else {
@@ -1187,7 +1316,7 @@ impl Server {
                 crate::serve::WRONG_TOKEN
             };
             return self.approval_page(&st.pending[&id], &id, &client_name, Some(msg), now);
-        }
+        };
         let p = st.pending.remove(&id).expect("checked above");
         let mut scopes = vec![READ.to_string()];
         if p.scopes.iter().any(|s| s == PROPOSE) && f("propose") == "on" {
@@ -1200,10 +1329,11 @@ impl Server {
                 st.codes.remove(&oldest);
             }
         }
-        let approved_with = if by_token { "login token" } else { "signed-in browser" };
-        st.codes.insert(hash(&code), Code { client: p.client.clone(), redirect: p.redirect.clone(), challenge: p.challenge.clone(), resource: p.resource.clone(), scopes, origin: p.origin.clone(), created: now, approved_with: approved_with.into(), used_by: None });
+        st.codes.insert(hash(&code), Code { client: p.client.clone(), redirect: p.redirect.clone(), redirect_given: p.redirect_given, challenge: p.challenge.clone(), resource: p.resource.clone(), scopes, origin: p.origin.clone(), created: now, approved_with: approved_with.into(), used_by: None });
         let mut reply = Reply::redirect(back(&p, &mut vec![("code", code)]));
         reply.sign_in = by_token;
+        drop(st);
+        self.approved_on(r.origin);
         reply
     }
 
@@ -1222,7 +1352,7 @@ impl Server {
         let id = basic.as_ref().map(|(i, _)| i.clone()).or_else(|| form.get("client_id").cloned());
         let Some(id) = id.filter(|i| !i.is_empty()) else { return Ok(None) };
         let unknown = || Reply::error(401, "invalid_client", "unknown client; add the connector again");
-        let client = st.store.clients.iter().find(|c| c.id == id).cloned().ok_or_else(unknown)?;
+        let client = st.client(&id).ok_or_else(unknown)?;
         if let Some(want) = &client.secret {
             let given = basic.as_ref().map(|(_, s)| s.clone()).or_else(|| form.get("client_secret").cloned()).unwrap_or_default();
             if given.is_empty() || !same_token(&hash(&given), want) {
@@ -1266,19 +1396,27 @@ impl Server {
         match f("grant_type") {
             "authorization_code" => {
                 let h = hash(f("code"));
-                let Some(code) = st.codes.get_mut(&h) else { return grant() };
+                let Some(code) = st.codes.get(&h) else { return grant() };
                 if let Some(conn) = code.used_by.clone() {
-                    // a second use: revoke what the first one issued
-                    st.store.connections.retain(|c| c.id != conn);
-                    let _ = self.save(&st);
+                    // a second use revokes what the first issued, but only when it is the same client
+                    // with the right verifier: anyone else replaying a code just gets invalid_grant
+                    if code.client == client.id && pkce_ok(f("code_verifier"), &code.challenge) {
+                        st.store.connections.retain(|c| c.id != conn);
+                        let _ = self.save(&st);
+                    }
                     return grant();
                 }
                 let resource_ok = match form.get("resource").map(|s| s.trim()).filter(|s| !s.is_empty()) {
                     None => true,
                     Some(s) => parse_resource(r.origin, s).map(|res| res.url(r.origin) == code.resource).unwrap_or(false),
                 };
+                // redirect_uri must match when authorize named it; when it was left out there, it may be left out here
+                let redirect_ok = match form.get("redirect_uri") {
+                    Some(u) => *u == code.redirect,
+                    None => !code.redirect_given,
+                };
                 let fresh = now - code.created < CODE_LIFE;
-                if !fresh || code.client != client.id || code.redirect != f("redirect_uri") || code.origin != r.origin || !resource_ok || !pkce_ok(f("code_verifier"), &code.challenge) {
+                if !fresh || code.client != client.id || !redirect_ok || code.origin != r.origin || !resource_ok || !pkce_ok(f("code_verifier"), &code.challenge) {
                     return grant();
                 }
                 let (Some(cid), Some(a), Some(rt)) = (random(6), random(32), random(32)) else { return Reply::error(500, "server_error", "no random bytes") };
@@ -1295,7 +1433,14 @@ impl Server {
                     access: vec![Access { hash: hash(&access), expires: now + ACCESS_LIFE }],
                     last_used: None,
                 };
-                code.used_by = Some(conn.id.clone());
+                if let Some(c) = st.codes.get_mut(&h) {
+                    c.used_by = Some(conn.id.clone());
+                }
+                // the client's first connection: now it is written to oauth.json
+                if let Some(i) = st.fresh.iter().position(|c| c.id == client.id) {
+                    let c = st.fresh.remove(i);
+                    st.store.clients.push(c);
+                }
                 let scopes = conn.scopes.clone();
                 st.store.connections.push(conn);
                 if let Err(e) = self.save(&st) {
@@ -1386,7 +1531,7 @@ impl Reply {
 }
 
 fn error_page(status: u16, message: &str) -> Reply {
-    let html = ERROR_HTML.replace("{{style}}", crate::serve::PAGE_STYLE).replace("{{logo}}", LOGO).replace("{{message}}", &html_escape(message));
+    let html = fill(ERROR_HTML, &[("style", crate::serve::PAGE_STYLE), ("logo", LOGO), ("message", &html_escape(message))]);
     Reply::html(status, html)
 }
 
@@ -1590,7 +1735,7 @@ mod tests {
         fn run(&self, method: &str, path: &str, query: &[(&str, &str)], hdrs: &[(&'static str, &str)], body: &str, signed_in: bool) -> Reply {
             let q: HashMap<String, String> = query.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
             let get = headers(hdrs);
-            self.srv.handle(&Req { method, path, query: &q, header: &get, body, origin: ORIGIN, signed_in })
+            self.srv.handle(&Req { method, path, query: &q, header: &get, body, origin: ORIGIN, approver: if signed_in { Some("signed-in browser") } else { None } })
         }
 
         fn register(&self) -> String {
@@ -1654,19 +1799,161 @@ mod tests {
         let srv = server(&dir, LOGIN, clock.clone());
         assert_eq!(srv.dropped, 0);
         assert!(srv.check(&access, ORIGIN, &Resource::All).is_some(), "survives a restart");
-        // a client with no connection is pruned after a day
+        // a client with no connection lives in memory only, and goes after a day
         let call = Call { srv: &srv };
+        let before = std::fs::read_to_string(&file).unwrap();
         let idle = call.register();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), before, "a registration writes nothing to disk");
+        assert!(srv.lock().fresh.iter().any(|c| c.id == idle));
         t.fetch_add(CLIENT_UNUSED + 1, Ordering::SeqCst);
-        srv.lock().store.prune(clock.now());
-        assert!(!srv.lock().store.clients.iter().any(|c| c.id == idle), "an unused client is gone");
-        assert!(srv.lock().store.clients.iter().any(|c| c.id == client), "a connected one stays");
+        call.register();
+        assert!(!srv.lock().fresh.iter().any(|c| c.id == idle), "an unused client is gone");
+        assert!(srv.lock().store.clients.iter().any(|c| c.id == client), "a connected one was saved and stays");
         drop(srv);
 
         // another login token: every grant goes
-        let srv = server(&dir, "another-login-token-that-is-long-enough-xyz", clock);
+        let srv = server(&dir, "another-login-token-that-is-long-enough-xyz", clock.clone());
         assert_eq!(srv.dropped, 1);
         assert_eq!(srv.connection_count(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_login_fingerprint_is_keyed_by_a_secret_in_its_own_file() {
+        // RFC 4231, test case 2
+        assert_eq!(hex(&hmac(b"Jefe", b"what do ya want for nothing?")), "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843");
+        let dir = scratch("key");
+        let (clock, _) = Clock::fake(1_800_000_000);
+        let srv = server(&dir, LOGIN, clock.clone());
+        let call = Call { srv: &srv };
+        let client = call.register();
+        let code = call.approve(&client, ORIGIN);
+        assert_eq!(call.exchange(&client, &code).status, 200);
+        drop(srv);
+        let key_file = dir.join(".lorefile/oauth.key");
+        let key = hex_decode(&std::fs::read_to_string(&key_file).unwrap()).unwrap();
+        assert_eq!(key.len(), 32);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(std::fs::metadata(&key_file).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        let store: Json = serde_json::from_str(&std::fs::read_to_string(dir.join(".lorefile/oauth.json")).unwrap()).unwrap();
+        let stored = store["login"].as_str().unwrap();
+        assert_eq!(stored, fingerprint(LOGIN, &key), "an HMAC under the key");
+        assert_ne!(stored, fingerprint(LOGIN, &[0u8; 32]), "without the key the fingerprint cannot be reproduced");
+        assert!(!stored.contains(&hex(&Sha256::digest(LOGIN.as_bytes()))), "not a plain hash of the token");
+        // the same token and key: connections stay
+        let srv = server(&dir, LOGIN, clock.clone());
+        assert_eq!((srv.dropped, srv.connection_count()), (0, 1));
+        drop(srv);
+        // the key file gone: the fingerprint cannot be trusted, so connections go (the safe side)
+        std::fs::remove_file(&key_file).unwrap();
+        let srv = server(&dir, LOGIN, clock);
+        assert_eq!((srv.dropped, srv.connection_count()), (1, 0));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn templates_are_filled_in_one_pass() {
+        assert_eq!(fill("a {{x}} b {{y}} c", &[("x", "{{y}}"), ("y", "Y")]), "a {{y}} b Y c", "a value is never searched again");
+        assert_eq!(fill("{{unknown}} {{", &[]), "{{unknown}} {{");
+        let dir = scratch("tpl");
+        let (clock, _) = Clock::fake(1_800_000_000);
+        let srv = server(&dir, LOGIN, clock);
+        let call = Call { srv: &srv };
+        let r = call.run("POST", "/oauth/register", &[], &[("Content-Type", "application/json")], &json!({ "client_name": "{{host}} {{request}} {{propose}}", "redirect_uris": [LOOPBACK] }).to_string(), false);
+        let client = serde_json::from_str::<Json>(&r.body).unwrap()["client_id"].as_str().unwrap().to_string();
+        let page = call.run("GET", "/oauth/authorize", &[("response_type", "code"), ("client_id", &client), ("redirect_uri", LOOPBACK), ("code_challenge", CHALLENGE), ("code_challenge_method", "S256")], &[], "", false);
+        assert!(page.body.contains("Connect “{{host}} {{request}} {{propose}}” to Lorefile?"), "the name is shown as given: {}", page.body);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_replayed_code_revokes_only_for_its_own_client_with_the_right_verifier() {
+        let dir = scratch("replay");
+        let (clock, _) = Clock::fake(1_800_000_000);
+        let srv = server(&dir, LOGIN, clock);
+        let call = Call { srv: &srv };
+        let client = call.register();
+        let code = call.approve(&client, ORIGIN);
+        let (access, _) = tokens(&call.exchange(&client, &code));
+        // someone else replays it: another client, or the right client with a wrong verifier
+        let other = call.register();
+        assert_eq!(call.exchange(&other, &code).status, 400);
+        let wrong = call.run("POST", "/oauth/token", &[], &[("Content-Type", "application/x-www-form-urlencoded")], &format!("grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&code_verifier={}", code, enc(LOOPBACK), client, "x".repeat(43)), false);
+        assert_eq!(wrong.status, 400);
+        assert!(srv.check(&access, ORIGIN, &Resource::All).is_some(), "the connection survives both");
+        // the same client with the right verifier: the code leaked from its own exchange, so what it issued goes
+        assert_eq!(call.exchange(&client, &code).status, 400);
+        assert!(srv.check(&access, ORIGIN, &Resource::All).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn floods_never_push_out_a_client_or_a_request_that_is_signing_in() {
+        let dir = scratch("flood");
+        let (clock, t) = Clock::fake(1_800_000_000);
+        let srv = server(&dir, LOGIN, clock);
+        let call = Call { srv: &srv };
+        let victim = call.register();
+        let page = |client: &str| call.run("GET", "/oauth/authorize", &[("response_type", "code"), ("client_id", client), ("redirect_uri", LOOPBACK), ("code_challenge", CHALLENGE), ("code_challenge_method", "S256")], &[], "", false);
+        let request_id = |r: &Reply| r.body.split("name=\"request\" value=\"").nth(1).map(|s| s.split('"').next().unwrap().to_string()).unwrap_or_default();
+        let waiting = request_id(&page(&victim));
+
+        // pending requests: a flood under another client_id, and its own oldest go first
+        let attacker = call.register();
+        let first = request_id(&page(&attacker));
+        for _ in 0..MAX_PENDING_PER_CLIENT {
+            page(&attacker);
+        }
+        assert!(!srv.lock().pending.contains_key(&first), "the flooding client's own oldest request went");
+        assert_eq!(srv.lock().pending.values().filter(|p| p.client == attacker).count(), MAX_PENDING_PER_CLIENT);
+        let ok = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow&token={}", waiting, LOGIN), false);
+        assert_eq!(ok.status, 302, "the other client's request survived the flood: {}", ok.body);
+
+        // clients: 200 in ten minutes fill the room, and none of them is pushed out
+        let victim = call.register();
+        let waiting = request_id(&page(&victim));
+        while srv.lock().fresh.len() < MAX_CLIENTS {
+            call.register();
+        }
+        let refused = call.run("POST", "/oauth/register", &[], &[("Content-Type", "application/json")], &json!({ "client_name": "x", "redirect_uris": [LOOPBACK] }).to_string(), false);
+        assert_eq!(refused.status, 429, "refused at the cap, nobody evicted: {}", refused.body);
+        let ok = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow&token={}", waiting, LOGIN), false);
+        assert_eq!(ok.status, 302, "the client signing in was kept");
+        // past the 10-minute sign-in window, the oldest unconnected client makes room
+        t.fetch_add(REQUEST_LIFE, Ordering::SeqCst);
+        let oldest = srv.lock().fresh[0].id.clone();
+        call.register();
+        assert!(srv.lock().client(&oldest).is_none(), "the oldest went");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn redirect_uri_may_be_left_out_at_the_token_endpoint_when_authorize_left_it_out() {
+        let dir = scratch("redirect");
+        let (clock, _) = Clock::fake(1_800_000_000);
+        let srv = server(&dir, LOGIN, clock);
+        let call = Call { srv: &srv };
+        let client = call.register();
+        let form = |code: &str, redirect: Option<&str>| {
+            let ru = redirect.map(|u| format!("&redirect_uri={}", enc(u))).unwrap_or_default();
+            call.run("POST", "/oauth/token", &[], &[("Content-Type", "application/x-www-form-urlencoded")], &format!("grant_type=authorization_code&code={}&client_id={}&code_verifier={}{}", code, client, VERIFIER, ru), false)
+        };
+        let approve_without = || {
+            let page = call.run("GET", "/oauth/authorize", &[("response_type", "code"), ("client_id", &client), ("code_challenge", CHALLENGE), ("code_challenge_method", "S256")], &[], "", false);
+            let id = page.body.split("name=\"request\" value=\"").nth(1).unwrap().split('"').next().unwrap().to_string();
+            let r = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow", id), true);
+            let loc = r.headers.iter().find(|(k, _)| k == "Location").unwrap().1.clone();
+            loc.split("code=").nth(1).unwrap().split('&').next().unwrap().to_string()
+        };
+        assert_eq!(form(&approve_without(), None).status, 200, "left out at both");
+        assert_eq!(form(&approve_without(), Some(LOOPBACK)).status, 200, "named only here, and it matches");
+        assert_eq!(form(&approve_without(), Some("http://127.0.0.1:1/other")).status, 400, "named here, and wrong");
+        // named at authorize: it must come back
+        let code = call.approve(&client, ORIGIN);
+        assert_eq!(form(&code, None).status, 400);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1745,7 +2032,7 @@ mod tests {
     }
 
     #[test]
-    fn wrong_tokens_pause_the_form_for_everyone() {
+    fn wrong_tokens_pause_typed_tokens_but_not_the_login_itself() {
         let dir = scratch("tries");
         let (clock, t) = Clock::fake(1_800_000_000);
         let srv = server(&dir, LOGIN, clock);
@@ -1757,9 +2044,22 @@ mod tests {
             let r = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow&token=wrong", id), false);
             assert_eq!(r.status, 401);
         }
-        let r = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow&token={}", id, LOGIN), false);
-        assert_eq!(r.status, 429, "paused, even with the right token: {}", r.body);
-        assert!(r.body.contains("paused"));
+        let r = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow&token=still-wrong", id), false);
+        assert_eq!(r.status, 429, "paused for wrong tokens: {}", r.body);
+        assert!(r.body.contains("paused") && r.body.contains("signed in to this server can still approve"));
+        assert_eq!(srv.lock().tries.len(), 0, "wrong tokens during the pause are not counted");
+        // a signed-in browser, and the login token itself, still get through
+        let r = call.run("POST", "/oauth/authorize", &[], &[], &format!("request={}&decision=allow", id), true);
+        assert_eq!(r.status, 302, "a signed-in browser approves during the pause");
+        let page = call.run("GET", "/oauth/authorize", &[("response_type", "code"), ("client_id", &client), ("redirect_uri", LOOPBACK), ("code_challenge", CHALLENGE), ("code_challenge_method", "S256")], &[], "", false);
+        let id = page.body.split("name=\"request\" value=\"").nth(1).unwrap().split('"').next().unwrap().to_string();
+        let q: HashMap<String, String> = HashMap::new();
+        let get = headers(&[]);
+        let r = srv.handle(&Req { method: "POST", path: "/oauth/authorize", query: &q, header: &get, body: &format!("request={}&decision=allow", id), origin: ORIGIN, approver: Some("login token") });
+        assert_eq!(r.status, 302, "the bearer header approves during the pause");
+        let code = r.headers.iter().find(|(k, _)| k == "Location").unwrap().1.split("code=").nth(1).unwrap().split('&').next().unwrap().to_string();
+        assert_eq!(call.exchange(&client, &code).status, 200);
+        assert!(srv.lock().store.connections.iter().any(|c| c.approved_with == "login token"), "recorded as the login token, not a browser");
         t.fetch_add(PAUSE, Ordering::SeqCst);
         let page = call.run("GET", "/oauth/authorize", &[("response_type", "code"), ("client_id", &client), ("redirect_uri", LOOPBACK), ("code_challenge", CHALLENGE), ("code_challenge_method", "S256")], &[], "", false);
         let id = page.body.split("name=\"request\" value=\"").nth(1).unwrap().split('"').next().unwrap().to_string();

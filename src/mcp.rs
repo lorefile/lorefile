@@ -169,12 +169,14 @@ pub struct Server<'a> {
     pub history_root: Option<PathBuf>,
     /// The author of proposals and activity lines: `agent via MCP`, or a named connection.
     pub via: String,
+    /// An OAuth connection: answers leave out where things are on this machine.
+    pub guest: bool,
 }
 
 impl<'a> Server<'a> {
     /// Share a data layer (and its open DuckDB) instead of opening a fresh one.
     pub fn with_data(ont: &'a Ontology, data: DataLayer<'a>) -> Self {
-        Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false), history_root: None, via: VIA.to_string() }
+        Server { ont, data, edit: EditConfig::default(), reload_needed: Cell::new(false), history_root: None, via: VIA.to_string(), guest: false }
     }
 
     /// Add the one History line to `summary`, reading the space's git history.
@@ -190,6 +192,11 @@ impl<'a> Server<'a> {
 
     pub fn with_via(mut self, via: &str) -> Self {
         self.via = via.to_string();
+        self
+    }
+
+    pub fn with_guest(mut self, guest: bool) -> Self {
+        self.guest = guest;
         self
     }
 
@@ -440,7 +447,12 @@ impl<'a> Server<'a> {
             "summary" => {
                 let mut md = ont.summary_markdown();
                 if let Some(sr) = &self.history_root {
-                    md.push_str(&format!("\n\n{}\n", edit::history_line(&ont.root, sr)));
+                    let mut line = edit::history_line(&ont.root, sr);
+                    if self.guest && line.starts_with("History: kept by the repository at ") {
+                        // an OAuth connection is not told where things are on this machine
+                        line = "History: kept by a repository outside the ontology; accepted changes stay uncommitted unless the server runs with --commit-edits.".to_string();
+                    }
+                    md.push_str(&format!("\n\n{}\n", line));
                 }
                 Self::text(md, false)
             }
@@ -549,6 +561,8 @@ pub struct Hub<'r> {
     pub can_propose: bool,
     /// The author of what this caller proposes: `VIA`, or a named connection.
     pub via: String,
+    /// An OAuth connection (a guest): `spaces` leaves out the folders, and errors name no other space.
+    pub guest: bool,
 }
 
 impl Hub<'_> {
@@ -582,11 +596,28 @@ impl Hub<'_> {
         }
     }
 
+    /// `spaces`: every space, or only the one this server serves (`--space`, `/s/<id>/mcp`).
+    /// A guest is not told the folders they live in.
     fn spaces_text(&mut self) -> String {
-        let list = self.reg.summaries();
-        let mut j = json!({ "root": self.reg.root.display().to_string(), "spaces": list });
-        if let Some(d) = self.reg.default_id() {
-            j["implied"] = json!(d);
+        let mut list = self.reg.summaries();
+        if let Some(o) = &self.only {
+            list.retain(|s| s["id"].as_str() == Some(o.as_str()));
+        }
+        if self.guest {
+            for s in list.iter_mut() {
+                if let Some(m) = s.as_object_mut() {
+                    m.remove("dir");
+                }
+            }
+        }
+        let mut j = if self.guest { json!({ "spaces": list }) } else { json!({ "root": self.reg.root.display().to_string(), "spaces": list }) };
+        match &self.only {
+            Some(o) => j["implied"] = json!(o),
+            None => {
+                if let Some(d) = self.reg.default_id() {
+                    j["implied"] = json!(d);
+                }
+            }
         }
         Server::pretty(&j)
     }
@@ -620,6 +651,10 @@ impl Hub<'_> {
         let rest = uri.strip_prefix("ontology://")?;
         let (first, tail) = rest.split_once('/').unwrap_or((rest, ""));
         if self.reg.spaces.contains_key(first) {
+            // a server for one space reads that space only
+            if self.only.as_deref().map(|o| o != first).unwrap_or(false) {
+                return None;
+            }
             return Some((first.to_string(), format!("ontology://{}", tail)));
         }
         let id = self.pick(None).ok()?;
@@ -633,7 +668,7 @@ impl Hub<'_> {
             _ => None,
         };
         let l = self.reg.get(id).map_err(|e| format!("{:#}", e))?;
-        let srv = Server::with_data(&l.ont, l.data()).with_edit(edit).with_history(history).with_via(&self.via);
+        let srv = Server::with_data(&l.ont, l.data()).with_edit(edit).with_history(history).with_via(&self.via).with_guest(self.guest);
         let out = f(&srv);
         let reload = srv.reload_needed.get();
         drop(srv);
@@ -782,7 +817,7 @@ pub fn run_stdio(mut reg: Registry, edit: EditConfig, only: Option<String>) -> R
         only.as_ref().map(|o| format!(", serving only {}", o)).unwrap_or_default(),
         if edit.allow { ", edit mode on" } else { "" }
     );
-    let mut hub = Hub { reg: &mut reg, edit, only, can_propose: true, via: VIA.to_string() };
+    let mut hub = Hub { reg: &mut reg, edit, only, can_propose: true, via: VIA.to_string(), guest: false };
     for line in stdin.lock().lines() {
         let line = match line {
             Ok(l) => l,

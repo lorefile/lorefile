@@ -70,9 +70,21 @@ impl Server {
 
 /// `serve` on `dir` with `--token TOKEN` unless `env` sets LOREFILE_TOKEN or `extra` says --no-auth.
 fn start(dir: &Path, port: u16, extra: &[&str], env: &[(&str, &str)]) -> Server {
+    spawn(dir, port, extra, env, env.is_empty() && !extra.contains(&"--no-auth"))
+}
+
+/// `serve` with the token it makes and saves in `.lorefile/auth.toml`: the laptop default.
+fn start_with_file_token(dir: &Path, port: u16, extra: &[&str]) -> (Server, String) {
+    let srv = spawn(dir, port, extra, &[], false);
+    let saved = fs::read_to_string(dir.join(".lorefile/auth.toml")).unwrap();
+    let token = saved.lines().find(|l| l.starts_with("token")).unwrap().split('"').nth(1).unwrap().to_string();
+    (srv, token)
+}
+
+fn spawn(dir: &Path, port: u16, extra: &[&str], env: &[(&str, &str)], flag_token: bool) -> Server {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_lorefile"));
     cmd.args(["serve", "--dir", dir.to_str().unwrap(), "--port", &port.to_string()]).env_remove("LOREFILE_TOKEN").env_remove("LOREFILE_PUBLIC_URL");
-    if env.is_empty() && !extra.contains(&"--no-auth") {
+    if flag_token {
         cmd.args(["--token", TOKEN]);
     }
     for (k, v) in env {
@@ -181,10 +193,14 @@ fn param(location: &str, key: &str) -> Option<String> {
 
 /// Register, approve with the token, return (client, code).
 fn approve(port: u16, name: &str, resource: &str, propose: bool) -> (String, String) {
+    approve_with(port, name, resource, propose, TOKEN)
+}
+
+fn approve_with(port: u16, name: &str, resource: &str, propose: bool, token: &str) -> (String, String) {
     let client = register(port, name, "Test client");
     let (page, id) = authorize(port, name, &client, resource, "lorefile:read lorefile:propose");
     assert_eq!(page.status, 200, "{}", page.body);
-    let r = decide(port, name, &id, &format!("decision=allow&token={}{}", enc(TOKEN), if propose { "&propose=on" } else { "" }));
+    let r = decide(port, name, &id, &format!("decision=allow&token={}{}", enc(token), if propose { "&propose=on" } else { "" }));
     assert_eq!(r.status, 302, "{}", r.body);
     let loc = r.header("Location").unwrap();
     (client, param(&loc, "code").unwrap())
@@ -300,10 +316,9 @@ fn https_marked_requests_get_metadata_for_their_own_address() {
     );
     let r = http(srv.port, "POST", "/s/brand-two/mcp", &with(&tunnel(OTTER), &[("Content-Type", "application/json")]), "{}");
     assert!(r.header("WWW-Authenticate").unwrap().contains("/.well-known/oauth-protected-resource/s/brand-two/mcp\""), "{}", r.head);
-    // the one-time Seen line, with the connector URL; a --token token is not echoed
+    // an address read from requests is not printed until someone approves a connection on it
     let text = srv.text();
-    assert_eq!(text.matches("Seen    https://quiet-otter.example").count(), 1, "{}", text);
-    assert!(text.contains("connectors: https://quiet-otter.example/mcp (choose OAuth") && text.contains("sign in there: https://quiet-otter.example/   sign in with the token given to --token"), "{}", text);
+    assert!(!text.contains("Seen"), "{}", text);
     assert!(!text.contains(TOKEN), "{}", text);
     // the page is unchanged: /.well-known/openid-configuration is not served
     assert_eq!(get(srv.port, OTTER, "/.well-known/openid-configuration").status, 401);
@@ -537,9 +552,25 @@ fn refusals() {
     for _ in 0..9 {
         decide(port, OTTER, &id, "decision=allow&token=wrong-token");
     }
-    let r = decide(port, OTTER, &id, &format!("decision=allow&token={}", enc(TOKEN)));
-    assert_eq!(r.status, 429, "paused, even for the right token: {}", r.body);
-    assert!(r.body.contains("paused for everyone"));
+    let r = decide(port, OTTER, &id, "decision=allow&token=wrong-again");
+    assert_eq!(r.status, 429, "paused for typed tokens: {}", r.body);
+    assert!(r.body.contains("paused"));
+    // a signed-in browser still approves during the pause
+    let cookie = format!("lorefile-{}={}", port, TOKEN);
+    let origin = format!("https://{}", OTTER);
+    let r = http(port, "POST", "/oauth/authorize", &with(&tunnel(OTTER), &[("Content-Type", "application/x-www-form-urlencoded"), ("Origin", &origin), ("Cookie", &cookie)]), &format!("request={}&decision=allow", id));
+    assert_eq!(r.status, 302, "the cookie gets through: {}", r.body);
+    // and so does the login token itself
+    let (_, id) = authorize(port, OTTER, &client, resource, "lorefile:read");
+    assert_eq!(decide(port, OTTER, &id, &format!("decision=allow&token={}", enc(TOKEN))).status, 302);
+
+    // a replayed code from another client changes nothing (the review's case)
+    let (client, code) = approve(port, OTTER, resource, true);
+    let access = exchange(port, OTTER, &client, &code, resource).json()["access_token"].as_str().unwrap().to_string();
+    let intruder = register(port, OTTER, "Intruder");
+    let r = form_post(port, OTTER, "/oauth/token", &format!("grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&code_verifier={}", code, enc(LOOPBACK), intruder, "y".repeat(43)));
+    assert_eq!((r.status, r.json()["error"].as_str()), (400, Some("invalid_grant")));
+    assert_eq!(mcp(port, OTTER, "/mcp", &access, &tools_list()).status, 200, "the real connection survives");
 }
 
 #[test]
@@ -612,7 +643,7 @@ fn restarts_keep_tokens_and_a_new_login_token_disconnects_everything() {
     let srv = start(&folder.0, port, &["--no-examples"], &env);
     let resource = "https://quiet-otter.example/mcp";
     let (client, access, rt) = connect(port, OTTER, resource, true);
-    assert!(srv.text().contains("sign in there: https://quiet-otter.example/   sign in with the token in LOREFILE_TOKEN"), "{}", srv.text());
+    assert!(srv.text().contains("Seen    https://quiet-otter.example   a connection was approved on this address; its connector URL is https://quiet-otter.example/mcp"), "{}", srv.text());
     drop(srv);
 
     // the same token: access and refresh still work
@@ -675,4 +706,229 @@ fn no_auth_and_a_short_token_leave_oauth_off() {
     assert_eq!(get(srv.port, OTTER, "/.well-known/oauth-authorization-server").status, 401, "the login gate as before");
     let r = http(srv.port, "GET", "/api/oauth/connections", &[("Authorization", "Bearer twenty-chars-0123456")], "").json();
     assert_eq!(r["reason"], "short-token");
+}
+
+/// Standard base64, for an `Authorization: Basic` header.
+fn b64(input: &str) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let b = input.as_bytes();
+    let mut out = String::new();
+    for chunk in b.chunks(3) {
+        let n = (chunk[0] as u32) << 16 | (*chunk.get(1).unwrap_or(&0) as u32) << 8 | *chunk.get(2).unwrap_or(&0) as u32;
+        for i in 0..4 {
+            out.push(if i <= chunk.len() { A[((n >> (18 - 6 * i)) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
+fn rpc_result(r: &Resp) -> Json {
+    assert_eq!(r.status, 200, "{}", r.body);
+    r.json()
+}
+
+#[test]
+fn a_one_space_token_stays_in_its_space_and_is_not_told_where_files_live() {
+    let folder = Folder::new(7155);
+    let port = 7155;
+    let _srv = start(&folder.0, port, &[], &[]);
+    let one = "https://quiet-otter.example/s/%40ecommerce/mcp";
+    let (_, access, _) = connect(port, OTTER, one, false);
+    let read = |uri: &str| rpc_result(&mcp(port, OTTER, "/s/%40ecommerce/mcp", &access, &json!({"jsonrpc":"2.0","id":1,"method":"resources/read","params":{"uri": uri}})));
+    assert_eq!(read("ontology://@supply-chain/summary")["error"]["code"], -32002, "another space's resource is not found");
+    let named = read("ontology://@ecommerce/summary")["result"]["contents"][0]["text"].as_str().unwrap().to_string();
+    assert!(named.contains("lumen"), "its own space, named: {}", &named[..named.len().min(200)]);
+    assert_eq!(read("ontology://summary")["result"]["contents"][0]["text"].as_str().unwrap(), named, "the flat form means its own space");
+    let spaces = rpc_result(&mcp(port, OTTER, "/s/%40ecommerce/mcp", &access, &json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"spaces","arguments":{}}})));
+    let text = spaces["result"]["content"][0]["text"].as_str().unwrap();
+    let j: Json = serde_json::from_str(text).unwrap();
+    let ids: Vec<&str> = j["spaces"].as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["@ecommerce"], "only its own space: {}", text);
+    assert!(j.get("root").is_none() && !text.contains("\"dir\"") && !text.contains(folder.0.to_str().unwrap()), "no folders: {}", text);
+
+    // an all-spaces connection sees every space, still without folders
+    let (_, all, _) = connect(port, OTTER, "https://quiet-otter.example/mcp", false);
+    let text = rpc_result(&mcp(port, OTTER, "/mcp", &all, &json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"spaces","arguments":{}}})))["result"]["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(text.contains("@supply-chain") && !text.contains("\"dir\"") && !text.contains("\"root\""), "{}", text);
+    // the owner's header still gets the folders
+    let text = rpc_result(&mcp(port, OTTER, "/mcp", TOKEN, &json!({"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"spaces","arguments":{}}})))["result"]["content"][0]["text"].as_str().unwrap().to_string();
+    assert!(text.contains("\"root\"") && text.contains("\"dir\""), "{}", text);
+
+    // a connection to a space that does not exist gets a 404 that names no other space
+    let (_, nowhere, _) = connect(port, OTTER, "https://quiet-otter.example/s/nowhere/mcp", false);
+    let r = mcp(port, OTTER, "/s/nowhere/mcp", &nowhere, &tools_list());
+    assert_eq!(r.status, 404);
+    assert!(!r.body.contains("@supply-chain") && !r.body.contains("@ecommerce"), "{}", r.body);
+    let r = mcp(port, OTTER, "/s/nowhere/mcp", TOKEN, &tools_list());
+    assert!(r.body.contains("@supply-chain"), "the owner is still told which spaces there are: {}", r.body);
+}
+
+#[test]
+fn seen_never_puts_the_token_next_to_a_name_read_from_a_request() {
+    let folder = Folder::new(7156);
+    let (srv, token) = start_with_file_token(&folder.0, 7156, &["--no-examples"]);
+    let port = srv.port;
+    // sixty forged names, the review's attack: nothing is printed for them
+    for i in 0..60 {
+        let name = format!("lorefile-signin-{}.evil.example", i);
+        get(port, &name, "/.well-known/oauth-authorization-server");
+    }
+    let text = srv.text();
+    assert!(!text.contains("Seen") && !text.contains("evil.example"), "{}", text);
+    // the token appears only on the start-up lines, next to 127.0.0.1, as before
+    assert!(text.lines().filter(|l| l.contains(&token)).all(|l| l.contains("127.0.0.1")), "{}", text);
+    // the first approval on the real address prints it, without the token
+    let (client, code) = approve_with(port, OTTER, "https://quiet-otter.example/mcp", true, &token);
+    assert_eq!(exchange(port, OTTER, &client, &code, "https://quiet-otter.example/mcp").status, 200);
+    let text = srv.text();
+    let seen: Vec<&str> = text.lines().filter(|l| l.starts_with("Seen")).collect();
+    assert_eq!(seen, ["Seen    https://quiet-otter.example   a connection was approved on this address; its connector URL is https://quiet-otter.example/mcp"], "{}", text);
+    assert!(!seen[0].contains(&token));
+    drop(srv);
+
+    // pinned: the operator named the address, so its first request prints the sign-in link there,
+    // following the start-up rule (a file token is shown); a forged name prints nothing
+    let (srv, token) = start_with_file_token(&folder.0, 7157, &["--no-examples", "--public-url", "https://a.example"]);
+    get(srv.port, "evil.example", "/.well-known/oauth-authorization-server");
+    get(srv.port, "a.example", "/.well-known/oauth-authorization-server");
+    let text = srv.text();
+    assert!(text.contains(&format!("sign in there: https://a.example/?token={}", token)) && !text.contains("evil.example"), "{}", text);
+}
+
+#[test]
+fn confidential_clients_prove_their_secret() {
+    let folder = Folder::new(7158);
+    let port = 7158;
+    let _srv = start(&folder.0, port, &["--no-examples"], &[]);
+    let resource = "https://quiet-otter.example/mcp";
+    let reg = |method: &str| -> (String, String) {
+        let body = json!({ "client_name": "Confidential", "redirect_uris": [LOOPBACK], "token_endpoint_auth_method": method }).to_string();
+        let r = http(port, "POST", "/oauth/register", &with(&tunnel(OTTER), &[("Content-Type", "application/json")]), &body);
+        assert_eq!(r.status, 201, "{}", r.body);
+        let j = r.json();
+        assert_eq!(j["token_endpoint_auth_method"], method);
+        (j["client_id"].as_str().unwrap().to_string(), j["client_secret"].as_str().unwrap().to_string())
+    };
+    let code_for = |client: &str| {
+        let (_, id) = authorize(port, OTTER, client, resource, "lorefile:read");
+        let loc = decide(port, OTTER, &id, &format!("decision=allow&token={}", enc(TOKEN))).header("Location").unwrap();
+        param(&loc, "code").unwrap()
+    };
+    let exchange_form = |client: &str, code: &str| format!("grant_type=authorization_code&code={}&redirect_uri={}&client_id={}&code_verifier={}", code, enc(LOOPBACK), client, VERIFIER);
+
+    // client_secret_post
+    let (client, secret) = reg("client_secret_post");
+    assert!(secret.starts_with("lfs_"));
+    let r = form_post(port, OTTER, "/oauth/token", &exchange_form(&client, &code_for(&client)));
+    assert_eq!((r.status, r.json()["error"].as_str()), (401, Some("invalid_client")), "no secret");
+    let r = form_post(port, OTTER, "/oauth/token", &format!("{}&client_secret=lfs_wrong", exchange_form(&client, &code_for(&client))));
+    assert_eq!(r.status, 401, "a wrong secret");
+    let r = form_post(port, OTTER, "/oauth/token", &format!("{}&client_secret={}", exchange_form(&client, &code_for(&client)), secret));
+    assert_eq!(r.status, 200, "{}", r.body);
+    let rt = r.json()["refresh_token"].as_str().unwrap().to_string();
+    assert_eq!(refresh(port, OTTER, &client, &rt).status, 401, "a refresh needs the secret too");
+    assert_eq!(form_post(port, OTTER, "/oauth/token", &format!("grant_type=refresh_token&refresh_token={}&client_id={}&client_secret={}", rt, client, secret)).status, 200);
+
+    // client_secret_basic
+    let (client, secret) = reg("client_secret_basic");
+    let basic = |s: &str| format!("Basic {}", b64(&format!("{}:{}", client, s)));
+    let wrong = basic("lfs_wrong");
+    let r = http(port, "POST", "/oauth/token", &with(&tunnel(OTTER), &[("Content-Type", "application/x-www-form-urlencoded"), ("Authorization", &wrong)]), &exchange_form(&client, &code_for(&client)));
+    assert_eq!(r.status, 401);
+    assert!(r.header("WWW-Authenticate").unwrap_or_default().starts_with("Basic"), "{}", r.head);
+    let right = basic(&secret);
+    let code = code_for(&client);
+    let r = http(port, "POST", "/oauth/token", &with(&tunnel(OTTER), &[("Content-Type", "application/x-www-form-urlencoded"), ("Authorization", &right)]), &format!("grant_type=authorization_code&code={}&redirect_uri={}&code_verifier={}", code, enc(LOOPBACK), VERIFIER));
+    assert_eq!(r.status, 200, "{}", r.body);
+}
+
+#[test]
+fn revoking_an_access_token_keeps_the_connection() {
+    let folder = Folder::new(7159);
+    let port = 7159;
+    let _srv = start(&folder.0, port, &["--no-examples"], &[]);
+    let (client, access, rt) = connect(port, OTTER, "https://quiet-otter.example/mcp", true);
+    let r = form_post(port, OTTER, "/oauth/revoke", &format!("token={}&token_type_hint=access_token&client_id={}", access, client));
+    assert_eq!(r.status, 200);
+    assert_eq!(mcp(port, OTTER, "/mcp", &access, &tools_list()).status, 401, "that access token is gone");
+    let r = refresh(port, OTTER, &client, &rt);
+    assert_eq!(r.status, 200, "the connection is not: {}", r.body);
+    let fresh = r.json()["access_token"].as_str().unwrap().to_string();
+    assert_eq!(mcp(port, OTTER, "/mcp", &fresh, &tools_list()).status, 200);
+    // an unknown token is a 200 too, and changes nothing
+    assert_eq!(form_post(port, OTTER, "/oauth/revoke", "token=lfa_nothing").status, 200);
+    assert_eq!(mcp(port, OTTER, "/mcp", &fresh, &tools_list()).status, 200);
+}
+
+#[test]
+fn the_approval_post_takes_no_origin_but_refuses_origin_null() {
+    let folder = Folder::new(7160);
+    let port = 7160;
+    let _srv = start(&folder.0, port, &["--no-examples"], &[]);
+    let client = register(port, OTTER, "Test client");
+    let form = |id: &str| format!("request={}&decision=allow&token={}", id, enc(TOKEN));
+    let (_, id) = authorize(port, OTTER, &client, "https://quiet-otter.example/mcp", "lorefile:read");
+    let r = http(port, "POST", "/oauth/authorize", &with(&tunnel(OTTER), &[("Content-Type", "application/x-www-form-urlencoded"), ("Origin", "null")]), &form(&id));
+    assert_eq!(r.status, 403, "Origin: null is not this address");
+    let r = http(port, "POST", "/oauth/authorize", &with(&tunnel(OTTER), &[("Content-Type", "application/x-www-form-urlencoded")]), &form(&id));
+    assert_eq!(r.status, 302, "no Origin at all (not a browser, or an old one): the request ID and the token decide: {}", r.body);
+    // an approval sent with the bearer header is recorded as the login token
+    let (_, id) = authorize(port, OTTER, &client, "https://quiet-otter.example/mcp", "lorefile:read");
+    let bearer = format!("Bearer {}", TOKEN);
+    let r = http(port, "POST", "/oauth/authorize", &with(&tunnel(OTTER), &[("Content-Type", "application/x-www-form-urlencoded"), ("Authorization", &bearer)]), &format!("request={}&decision=allow", id));
+    assert_eq!(r.status, 302, "{}", r.body);
+    let code = param(&r.header("Location").unwrap(), "code").unwrap();
+    assert_eq!(exchange(port, OTTER, &client, &code, "https://quiet-otter.example/mcp").status, 200);
+    let list = http(port, "GET", "/api/oauth/connections", &[("Authorization", &bearer)], "").json();
+    let ways: Vec<&str> = list["connections"].as_array().unwrap().iter().map(|c| c["approved_with"].as_str().unwrap()).collect();
+    assert_eq!(ways, ["login token"], "{}", list);
+}
+
+#[test]
+fn concurrent_refreshes_keep_the_connection() {
+    let folder = Folder::new(7161);
+    let port = 7161;
+    let _srv = start(&folder.0, port, &["--no-examples"], &[]);
+    let (client, _, rt) = connect(port, OTTER, "https://quiet-otter.example/mcp", true);
+    let both: Vec<std::thread::JoinHandle<(u16, String, String)>> = (0..2)
+        .map(|_| {
+            let (client, rt) = (client.clone(), rt.clone());
+            std::thread::spawn(move || {
+                let r = refresh(port, OTTER, &client, &rt);
+                let j: Json = serde_json::from_str(&r.body).unwrap_or(Json::Null);
+                (r.status, j["access_token"].as_str().unwrap_or("").to_string(), j["refresh_token"].as_str().unwrap_or("").to_string())
+            })
+        })
+        .collect();
+    let results: Vec<(u16, String, String)> = both.into_iter().map(|h| h.join().unwrap()).collect();
+    assert!(results.iter().all(|(s, _, _)| *s == 200), "both refreshes succeed (one inside the grace window): {:?}", results.iter().map(|r| r.0).collect::<Vec<_>>());
+    for (_, access, _) in &results {
+        assert_eq!(mcp(port, OTTER, "/mcp", access, &tools_list()).status, 200);
+    }
+    // whichever reply the client kept, its refresh token works now
+    for (_, _, rt) in &results {
+        assert_eq!(refresh(port, OTTER, &client, rt).status, 200);
+    }
+    let bearer = format!("Bearer {}", TOKEN);
+    assert_eq!(http(port, "GET", "/api/oauth/connections", &[("Authorization", &bearer)], "").json()["connections"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn disconnect_needs_a_real_id() {
+    let folder = Folder::new(7162);
+    let port = 7162;
+    let _srv = start(&folder.0, port, &["--no-examples"], &[]);
+    let bearer = format!("Bearer {}", TOKEN);
+    let write = |path: &str| http(port, "POST", path, &[("Authorization", &bearer), ("X-Lorefile", "write"), ("Content-Type", "application/json")], "{}");
+    for path in ["/api/oauth/connections/revoke", "/api/oauth/connections//revoke", "/api/oauth/connections/no-such/revoke", "/api/oauth/connections/a/b/revoke"] {
+        let r = write(path);
+        assert_eq!(r.status, 400, "{}: {}", path, r.body);
+    }
+    let (_, access, _) = connect(port, OTTER, "https://quiet-otter.example/mcp", true);
+    let id = http(port, "GET", "/api/oauth/connections", &[("Authorization", &bearer)], "").json()["connections"][0]["id"].as_str().unwrap().to_string();
+    assert_eq!(http(port, "POST", &format!("/api/oauth/connections/{}/revoke", id), &[("Authorization", &bearer)], "{}").status, 403, "the write header is still needed");
+    let r = write(&format!("/api/oauth/connections/{}/revoke", id));
+    assert_eq!((r.status, r.json()["disconnected"].as_u64()), (200, Some(1)));
+    assert_eq!(mcp(port, OTTER, "/mcp", &access, &tools_list()).status, 401);
+    assert_eq!(write("/api/oauth/connections/all/revoke").status, 200, "all, with nothing left, is fine");
 }
