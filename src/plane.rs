@@ -141,6 +141,11 @@ fn diag_reason(d: &Diag, ont: &Ontology) -> Option<Reason> {
             Reason::new(Light::Amber, "W106", format!("Lorefile can't find {}", file))
         }
         ("W102", _) => Reason::new(Light::Amber, "W102", "stops actions but doesn't say why"),
+        // said twice: a person may say the two are different on purpose, right on the card
+        ("W115", _) | ("W116", _) | ("W117", _) if d.pair.is_some() => {
+            let p = d.pair.as_ref().unwrap();
+            Reason::new(Light::Amber, d.code, clean(&d.message)).fix(json!({ "op": "distinct", "a": p[0], "b": p[1] }))
+        }
         (_, "entity") | (_, "metric") | (_, "guardrail") | (_, "source") => Reason::new(Light::Amber, d.code, clean(&d.message)),
         _ => {
             let _ = ont;
@@ -236,13 +241,44 @@ pub fn metric_entities(m: &MetricDef, ont: &Ontology) -> Vec<String> {
         for t in ont.types.values() {
             if let Some(b) = &t.source {
                 let same = b.connection == s.connection && ((!s.table.is_empty() && b.table == s.table) || (s.table.is_empty() && !s.tool.is_empty() && b.tool == s.tool));
-                if same && !out.contains(&t.name) {
-                    out.push(t.name.clone());
+                if same {
+                    // over Sale's table with every equality of a `where` kind in its filter: the kind's
+                    let name = deepest_kind_for(ont, &t.name, &s.filter);
+                    if !out.contains(&name) {
+                        out.push(name);
+                    }
                 }
             }
         }
     }
     out
+}
+
+/// The deepest `where` kind of `entity` whose every `field = value` appears among the filter's
+/// AND-ed equalities, else the entity itself.
+fn deepest_kind_for(ont: &Ontology, entity: &str, filter: &str) -> String {
+    let kinds = ont.all_kinds_of(entity);
+    if kinds.is_empty() || filter.trim().is_empty() {
+        return entity.to_string();
+    }
+    let eq = Regex::new(r#"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*==?\s*['"]?([^'"]*?)['"]?\s*$"#).unwrap();
+    let and = Regex::new(r"(?i)\s+and\s+").unwrap();
+    let terms: Vec<(String, String)> = and.split(filter).filter_map(|p| eq.captures(p).map(|c| (c[1].to_lowercase(), c[2].to_lowercase()))).collect();
+    let mut best = entity.to_string();
+    let mut depth = 0;
+    for k in kinds {
+        let Some(t) = ont.types.get(&k) else { continue };
+        if !t.is_where_kind() || t.rows_of.as_deref() != Some(entity) {
+            continue;
+        }
+        let all = t.where_all.iter().all(|(f, vs)| vs.len() == 1 && terms.iter().any(|(tf, tv)| *tf == f.to_lowercase() && *tv == crate::ontology::yaml_words(&vs[0]).to_lowercase()));
+        let d = ont.ancestors(&k).len();
+        if all && d > depth {
+            best = k;
+            depth = d;
+        }
+    }
+    best
 }
 
 const SQL_WORDS: [&str; 24] = ["sum", "count", "avg", "min", "max", "distinct", "and", "or", "not", "is", "in", "like", "between", "null", "true", "false", "case", "when", "then", "else", "end", "as", "coalesce", "round"];
@@ -297,6 +333,8 @@ pub fn metric_uses(m: &MetricDef, ont: &Ontology, entities: &[String]) -> Vec<(S
 
 pub struct Signals {
     pub metrics: usize,
+    /// How many entities are kinds of this one.
+    pub kinds: usize,
     pub links: usize,
     pub light: Light,
     pub waiting: bool,
@@ -331,6 +369,11 @@ pub fn importance(s: &Signals) -> (i64, Vec<String>) {
     if s.waiting {
         score += 4;
         why.push("a waiting proposal changes it (+4)".into());
+    }
+    if s.kinds > 0 {
+        let n = s.kinds.min(3) as i64;
+        score += n;
+        why.push(format!("has {} (+{})", review::plural(s.kinds, "kind"), n));
     }
     if s.has_data {
         score += 1;
@@ -446,7 +489,10 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
             "guardrail" => ont.constraints.contains_key(&s.name),
             _ => true,
         });
+        // a word that means two things shows on the entity it names first ("term:promo=PromoSale")
+        let word_on = d.subject.as_ref().filter(|s| s.kind == "term").and(d.pair.as_ref()).and_then(|p| p[0].rsplit_once('=').map(|(_, e)| e.to_string())).filter(|e| ont.types.contains_key(e));
         match (known, diag_reason(d, ont)) {
+            (Some(true), Some(r)) if word_on.is_some() => own.entry(("entity".to_string(), word_on.unwrap())).or_default().push(r),
             (Some(true), Some(r)) => {
                 let s = d.subject.as_ref().unwrap();
                 own.entry((s.kind.to_string(), s.name.clone())).or_default().push(r);
@@ -605,7 +651,8 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
     }
     for t in ont.types.values() {
         let mut rs = take(&mut own, "entity", &t.name);
-        let undescribed = t.properties.values().filter(|p| p.normalize().description.trim().is_empty()).count();
+        // a field a kind gets from its parent is the parent's to describe
+        let undescribed = t.own_properties().filter(|(_, p)| p.normalize().description.trim().is_empty()).count();
         if undescribed > 0 {
             rs.push(Reason::new(Light::Amber, "fields", format!("{} {} no plain words", review::plural(undescribed, "field"), if undescribed == 1 { "has" } else { "have" })));
         }
@@ -646,8 +693,10 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
         *lights.entry(light.word()).or_insert(0) += 1;
         let links = link_count.get(t.name.as_str()).copied().unwrap_or(0);
         let changed = changed_of(t);
-        let has_data = t.source.is_some() || !t.instances.is_empty();
-        let (score, why) = importance(&Signals { metrics: metrics.len(), links, light, waiting: touched.contains_key(&("entity".to_string(), t.name.clone())), has_data, changed: changed.is_some() });
+        // a kind that picks its parent's rows has data when its parent does
+        let has_data = t.source.is_some() || !t.instances.is_empty() || t.rows_of.as_ref().and_then(|b| ont.types.get(b)).map(|b| b.source.is_some() || !b.instances.is_empty()).unwrap_or(false);
+        let kinds = ont.kinds_of(&t.name);
+        let (score, why) = importance(&Signals { metrics: metrics.len(), kinds: kinds.len(), links, light, waiting: touched.contains_key(&("entity".to_string(), t.name.clone())), has_data, changed: changed.is_some() });
         let source_kind = source_conn.as_ref().and_then(|c| ont.sources.get(c)).map(|s| s.kind.clone());
         let (icon, icon_why) = icon_for(&t.name, source_kind.as_deref());
         let units: Vec<String> = t.properties.values().filter_map(|p| p.normalize().unit.clone()).filter(|u| !u.trim().is_empty()).fold(Vec::new(), |mut v, u| {
@@ -721,6 +770,15 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
         }
         if let Some((id, _)) = touched.get(&("entity".to_string(), t.name.clone())) {
             j["waiting"] = json!(id);
+        }
+        if let Some(p) = &t.parent {
+            j["extends"] = json!(p);
+            if t.is_where_kind() {
+                j["where"] = json!(Ontology::where_words(&t.where_all));
+            }
+        }
+        if !kinds.is_empty() {
+            j["kinds"] = json!(kinds);
         }
         entity_json.push(j);
     }
@@ -866,6 +924,7 @@ pub fn plane(inp: &Input, ghost_of: &mut dyn FnMut(&Proposal) -> Json) -> Json {
         "areas": areas,
         "entities": entity_json,
         "links": links,
+        "kind_links": ont.types.values().filter_map(|t| t.parent.as_ref().map(|p| json!({ "kind": t.name, "of": p }))).collect::<Vec<_>>(),
         "metrics": metric_json,
         "sources": source_json,
         "agents": agents,
@@ -936,10 +995,10 @@ mod tests {
 
     #[test]
     fn importance_adds_up_with_reasons() {
-        let (score, why) = importance(&Signals { metrics: 1, links: 0, light: Light::Amber, waiting: false, has_data: true, changed: true });
+        let (score, why) = importance(&Signals { metrics: 1, kinds: 0, links: 0, light: Light::Amber, waiting: false, has_data: true, changed: true });
         assert_eq!(score, 10);
         assert_eq!(why, vec!["counted by a metric (+4)", "needs a look (+3)", "has data (+1)", "changed this week (+2)"]);
-        assert_eq!(importance(&Signals { metrics: 0, links: 9, light: Light::None, waiting: false, has_data: false, changed: false }).0, 6, "links count up to 6");
+        assert_eq!(importance(&Signals { metrics: 0, kinds: 0, links: 9, light: Light::None, waiting: false, has_data: false, changed: false }).0, 6, "links count up to 6");
     }
 
     #[test]
@@ -978,6 +1037,28 @@ mod tests {
         assert_eq!(metric_uses(m("orders"), &ont, &["Order".to_string()]), vec![("order_id".to_string(), "counts")]);
         assert_eq!(metric_entities(m("earned"), &ont), vec!["Order", "Payout"], "a variant on each source: both");
         assert!(metric_entities(m("margin"), &ont).is_empty(), "SQL only: tied to no entity");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_metric_over_a_kinds_slice_belongs_to_the_deepest_kind_it_filters_to() {
+        let mut files = TWO.to_vec();
+        files[0] = ("ontology.yaml", "name: t\nformat: 2\n");
+        files.push(("types/shop_order.yaml", "type: ShopOrder\ndescription: s\nextends: Order\nwhere: { channel: shop }\n"));
+        files.push(("types/wholesale_order.yaml", "type: WholesaleOrder\ndescription: w\nextends: Order\nsource: { connection: wh, table: wholesale, key: order_id }\n"));
+        files.push(("types/big_shop_order.yaml", "type: BigShopOrder\ndescription: b\nextends: ShopOrder\nproperties: { total: { type: number, description: big } }\nwhere: { total: 100 }\n"));
+        files.push(("logic/m.yaml", "metrics:\n  - metric: shop\n    description: s\n    owner: x\n    source: { connection: wh, table: orders, measure: sum(total), filter: \"channel = 'shop' and refunded = false\" }\n  - metric: all\n    description: a\n    owner: x\n    source: { connection: wh, table: orders, measure: sum(total) }\n  - metric: other\n    description: o\n    owner: x\n    source: { connection: wh, table: orders, measure: sum(total), filter: \"channel = 'affiliate'\" }\n  - metric: big\n    description: b\n    owner: x\n    source: { connection: wh, table: orders, measure: sum(total), filter: \"total = 100 AND channel = 'shop'\" }\n"));
+        let (d, ont) = space("kinds", &files);
+        let m = |n: &str| ont.metrics.get(n).unwrap();
+        assert_eq!(metric_entities(m("shop"), &ont), vec!["ShopOrder"], "every equality of the kind is in the filter");
+        assert_eq!(metric_entities(m("all"), &ont), vec!["Order"], "no filter: the parent");
+        assert_eq!(metric_entities(m("other"), &ont), vec!["Order"], "another value: the parent");
+        assert_eq!(metric_entities(m("big"), &ont), vec!["BigShopOrder"], "the deepest kind wins");
+        // describe of the metric says which kinds its number already includes (decision 11)
+        let all = ont.metric_kinds_note(m("all")).unwrap();
+        assert!(all.starts_with("Counts Order's rows, so it includes ShopOrders (where channel is shop) and BigShopOrders"), "{}", all);
+        assert!(all.ends_with("It does not include WholesaleOrder's separate rows: never add the two."), "{}", all);
+        assert!(ont.metric_kinds_note(m("big")).is_none(), "BigShopOrder has no kinds");
         let _ = std::fs::remove_dir_all(&d);
     }
 

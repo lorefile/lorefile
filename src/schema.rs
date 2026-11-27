@@ -26,6 +26,33 @@ pub struct Manifest {
     /// `{schema: https://schema.org/}`. Common ones (schema, owl, skos …) are built in.
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub prefixes: IndexMap<String, String>,
+    /// The file format this space is written in. Absent is format 1; Lorefile writes `2` the
+    /// first time a space uses `extends`, `where` or `distinct:`, so an older binary refuses it
+    /// with a clear "unknown field `format`" instead of misreading it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<u32>,
+}
+
+/// The newest file format this binary reads.
+pub const FORMAT: u32 = 2;
+
+/// One name or several: `extends: Sale`, or the mistake `extends: [A, B]`, which the
+/// compiler refuses in words instead of a parse error.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany<T> {
+    // a list first: tried the other way round, a YAML value would swallow the whole list as "one"
+    Many(Vec<T>),
+    One(T),
+}
+
+impl<T: Clone> OneOrMany<T> {
+    pub fn all(&self) -> Vec<T> {
+        match self {
+            OneOrMany::One(x) => vec![x.clone()],
+            OneOrMany::Many(v) => v.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -185,12 +212,44 @@ pub struct TypeDef {
     /// namespace and the name when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iri: Option<String>,
+    /// This entity is a kind of another: every field, link and guardrail of that one applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extends: Option<OneOrMany<String>>,
+    /// Which of the parent's rows are this kind's: a parent field → one value or a list of
+    /// values, all to match. Only with `extends`, never with an own `source`.
+    #[serde(default, rename = "where", skip_serializing_if = "Option::is_none")]
+    pub where_: Option<IndexMap<String, OneOrMany<Yaml>>>,
     /// Set by the loader: which file this came from.
     #[serde(skip_deserializing)]
     pub file: String,
+    /// Set by the compiler: the parent's real name, when `extends` resolves.
+    #[serde(skip)]
+    pub parent: Option<String>,
+    /// Set by the compiler: each field copied from an ancestor → the entity it comes from.
+    /// Never written to a file; writers and exporters use own fields only.
+    #[serde(skip)]
+    pub inherited: IndexMap<String, String>,
+    /// Set by the compiler: every `where` from this kind up its chain, combined (all must match).
+    #[serde(skip)]
+    pub where_all: IndexMap<String, Vec<Yaml>>,
+    /// Set by the compiler for a `where` kind: the ancestor whose rows it picks from.
+    #[serde(skip)]
+    pub rows_of: Option<String>,
 }
 
 impl TypeDef {
+    /// The name `extends` gives, as written (the first of several).
+    pub fn extends_name(&self) -> Option<String> {
+        self.extends.as_ref().and_then(|e| e.all().into_iter().next())
+    }
+    /// The fields written in this entity's own file, not copied from a parent.
+    pub fn own_properties(&self) -> impl Iterator<Item = (&String, &PropertySpec)> {
+        self.properties.iter().filter(|(n, _)| !self.inherited.contains_key(*n))
+    }
+    /// A `where` kind: its rows are its parent's that match.
+    pub fn is_where_kind(&self) -> bool {
+        self.where_.as_ref().map(|w| !w.is_empty()).unwrap_or(false)
+    }
     pub fn key_property(&self) -> Option<String> {
         self.properties
             .iter()
@@ -553,6 +612,28 @@ pub struct TrustBook {
     pub terms: IndexMap<String, TrustRecord>,
     #[serde(default, skip_serializing_if = "IndexMap::is_empty")]
     pub guardrails: IndexMap<String, TrustRecord>,
+    /// Pairs a person said are different on purpose, so W115–W117 stay quiet about them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub distinct: Vec<Distinct>,
+}
+
+/// "These two are different on purpose": `a` and `b` are `metric:name`, `entity:Name` or
+/// `term:word`, with both fingerprints, so a change in meaning brings the warning back.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Distinct {
+    pub a: String,
+    pub b: String,
+    #[serde(default)]
+    pub by: String,
+    #[serde(default)]
+    pub at: String,
+    #[serde(default)]
+    pub of_a: String,
+    #[serde(default)]
+    pub of_b: String,
+    #[serde(default)]
+    pub why: String,
 }
 
 /// `trust.yaml` at the root of a space. Written by Lorefile only.

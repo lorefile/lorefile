@@ -375,6 +375,49 @@ pub fn check_many(root: &Path, ov: &Overrides) -> anyhow::Result<(Ontology, Repo
 /// Several files as one change: compiled together, judged by the diagnostics
 /// that are new or about one of these files, written together, committed as
 /// one commit. The way a batch of `propose_patch` ops lands.
+/// Does this YAML text say `extends` or `where` on a type (or on any type of a `types:` list)?
+fn uses_kinds(text: &str) -> bool {
+    let Ok(v) = serde_yaml::from_str::<Yaml>(text) else { return false };
+    let on = |m: &Yaml| m.get("type").is_some() && (m.get("extends").is_some() || m.get("where").is_some());
+    on(&v) || v.get("types").and_then(|t| t.as_sequence()).map(|l| l.iter().any(on)).unwrap_or(false)
+}
+
+/// `ontology.yaml`'s text with `format: 2` set: after `version:` (or `name:`), keeping every comment.
+pub fn format_2_text(text: &str) -> String {
+    let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
+    if let Some(i) = lines.iter().position(|l| l.starts_with("format:")) {
+        lines[i] = "format: 2".into();
+    } else {
+        let at = lines.iter().position(|l| l.starts_with("version:")).or_else(|| lines.iter().position(|l| l.starts_with("name:"))).map(|i| i + 1).unwrap_or(lines.len());
+        lines.insert(at, "format: 2".into());
+    }
+    let mut out = lines.join("\n");
+    out.push('\n');
+    out
+}
+
+/// The files of a save, plus `ontology.yaml` with `format: 2` when the save brings in `extends`
+/// or `where` and the space is still format 1: an older Lorefile then refuses the space plainly
+/// ("unknown field `format`") instead of misreading it.
+pub fn with_format_2(root: &Path, files: &[(String, Option<String>)]) -> Vec<(String, Option<String>)> {
+    let mut out = files.to_vec();
+    if !files.iter().any(|(_, t)| t.as_deref().map(uses_kinds).unwrap_or(false)) {
+        return out;
+    }
+    let current = files.iter().find(|(f, _)| f == "ontology.yaml").and_then(|(_, t)| t.clone()).or_else(|| std::fs::read_to_string(root.join("ontology.yaml")).ok());
+    let Some(text) = current else { return out };
+    let format = serde_yaml::from_str::<Yaml>(&text).ok().and_then(|v| v.get("format").and_then(|f| f.as_u64())).unwrap_or(1);
+    if format >= 2 {
+        return out;
+    }
+    let new = format_2_text(&text);
+    match out.iter_mut().find(|(f, _)| f == "ontology.yaml") {
+        Some(e) => e.1 = Some(new),
+        None => out.push(("ontology.yaml".into(), Some(new))),
+    }
+    out
+}
+
 pub fn apply_many(root: &Path, cfg: EditConfig, before: &Report, files: &[(String, String)], note: &Note, label: Option<(&str, &str)>) -> Outcome {
     let set: Vec<(String, Option<String>)> = files.iter().map(|(f, t)| (f.clone(), Some(t.clone()))).collect();
     apply_files(root, cfg, before, &set, note, label)
@@ -386,6 +429,8 @@ pub fn apply_files(root: &Path, cfg: EditConfig, before: &Report, files: &[(Stri
     if files.is_empty() {
         return Outcome::refuse("", "nothing to change");
     }
+    let with_format = with_format_2(root, files);
+    let files: &[(String, Option<String>)] = &with_format;
     let mut rels: Vec<String> = Vec::new();
     let mut fulls: Vec<PathBuf> = Vec::new();
     for (file, text) in files {
@@ -534,6 +579,13 @@ fn write_atomic(full: &Path, text: &str) -> Result<(), String> {
 /// says who asked and what the change is, for the commit; `label` overrides
 /// the kind/name derived from the content.
 pub fn apply(root: &Path, cfg: EditConfig, before: &Report, file: &str, change: Change, note: &Note, label: Option<(&str, &str)>) -> Outcome {
+    // a save that brings in `extends` or `where` writes `format: 2` into ontology.yaml with it
+    if let Change::Write(text) = &change {
+        let both = with_format_2(root, &[(file.to_string(), Some(text.clone()))]);
+        if both.len() > 1 {
+            return apply_files(root, cfg, before, &both, note, label);
+        }
+    }
     let rel = match safe_rel_path(file) {
         Ok(r) => r,
         Err(e) => return Outcome::refuse(file, e),
@@ -774,6 +826,9 @@ pub enum GradeOp {
     /// grade, date, fingerprint, source and note stay. A named, changed or missing record is
     /// refused: a name only fills in a missing one, on the version a person saw.
     Sign { items: Vec<(TKind, String)> },
+    /// "Different on purpose": a pair W115–W117 named (`metric:x`, `entity:X`, `term:w=X`),
+    /// with why, so the warning stays quiet until either side changes in meaning.
+    Distinct { a: String, b: String, why: String },
 }
 
 /// Why a grade can't take a name, or `None` when it can: it was saved with no name.
@@ -899,6 +954,24 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
             out.name = n.to_string();
             format!("Vouched for {} definition{}", n, if n == 1 { "" } else { "s" })
         }
+        GradeOp::Distinct { a, b, why } => {
+            let (fa, fb) = match (trust::pair_fingerprint(&ont, a), trust::pair_fingerprint(&ont, b)) {
+                (Some(x), Some(y)) => (x, y),
+                (None, _) => return Outcome::refuse(trust::FILE, format!("there is no {} here", a.replace(':', " "))),
+                (_, None) => return Outcome::refuse(trust::FILE, format!("there is no {} here", b.replace(':', " "))),
+            };
+            if let Some(d) = trust::distinct_of(&book, a, b) {
+                if d.of_a == fa || d.of_a == fb {
+                    return Outcome::refuse(trust::FILE, format!("{} said these were different on {}", trust::who_said(&d.by), trust::short_date(&d.at)));
+                }
+                book.distinct.retain(|x| !((x.a == *a && x.b == *b) || (x.a == *b && x.b == *a)));
+            }
+            book.distinct.push(crate::schema::Distinct { a: a.clone(), b: b.clone(), by: by.to_string(), at: at.clone(), of_a: fa, of_b: fb, why: trust::clean_note(why) });
+            out.kind = "distinct".into();
+            out.name = format!("{} and {}", a, b);
+            let side = trust::side_words;
+            format!("{} said {} and {} are different on purpose{}", trust::who_said(by), side(a), side(b), if why.trim().is_empty() { String::new() } else { format!(": {}", why.trim()) })
+        }
         GradeOp::Sign { items } => {
             let who = trust::who_said(by);
             if who == "a person" || who == "an agent" {
@@ -928,9 +1001,15 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
             format!("{} put their name on {}", who, list)
         }
     };
+    trust::prune_distinct(&mut book, &ont);
     let new_text = trust::render(&book);
     let mut ov = Overrides::new();
     ov.insert(trust::FILE.to_string(), Some(new_text.clone()));
+    // `distinct:` is format 2: ontology.yaml says so in the same save
+    let manifest_text = if !book.distinct.is_empty() && ont.format < 2 { std::fs::read_to_string(root.join("ontology.yaml")).ok().map(|t| format_2_text(&t)) } else { None };
+    if let Some(m) = &manifest_text {
+        ov.insert("ontology.yaml".to_string(), Some(m.clone()));
+    }
     let (_, after) = match check_many(root, &ov) {
         Ok(x) => x,
         Err(e) => return Outcome::refuse(trust::FILE, format!("{:#}", e)),
@@ -949,10 +1028,19 @@ pub fn grade(root: &Path, cfg: EditConfig, before: &Report, op: &GradeOp, by: &s
         out.refused = Some(format!("could not write {}: {}", trust::FILE, e));
         return out;
     }
+    let mut fulls = vec![full.clone()];
+    if let Some(m) = &manifest_text {
+        if let Ok(mf) = resolve_in_root(root, "ontology.yaml") {
+            if write_atomic(&mf, m).is_ok() {
+                out.files.push("ontology.yaml".into());
+                fulls.push(mf);
+            }
+        }
+    }
     out.written = true;
     if cfg.commit {
         let note = Note { via: by, summary: &summary, ..Default::default() };
-        match commit_many(root, std::slice::from_ref(&full), &message(&note, &summary), &note) {
+        match commit_many(root, &fulls, &message(&note, &summary), &note) {
             Ok(h) => out.commit = h,
             Err(e) => out.git_error = Some(e),
         }

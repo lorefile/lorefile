@@ -300,6 +300,9 @@ fn word_in(text: &str, name: &str) -> bool {
 /// Everything in `ont` that mentions entity `name`, as short phrases.
 fn uses_of_entity(ont: &Ontology, name: &str) -> Vec<String> {
     let mut out = Vec::new();
+    for k in ont.kinds_of(name) {
+        out.push(format!("the entity {}, a kind of {}", k, name));
+    }
     for r in &ont.relationships {
         if r.from == name || r.to == name {
             out.push(format!("the link {} ({} → {})", r.name, r.from, r.to));
@@ -384,14 +387,22 @@ pub fn compare(before: &Ontology, after: &Ontology) -> Vec<Json> {
             None => {
                 let ps = props(t);
                 let key = ps.iter().find(|(_, p)| p.key).map(|(n, _)| n.clone());
-                out.push(json!({
+                let mut j = json!({
                     "kind": "entity", "op": "add", "name": t.name, "label": label(&t.name),
                     "description": t.description, "key": key,
                     "grain": key.as_ref().map(|k| grain_words(k)),
                     "binding": binding_words(after, t),
-                    "fields": ps.iter().map(|(n, p)| field_json("add", n, p)).collect::<Vec<_>>(),
+                    "fields": ps.iter().filter(|(n, _)| !t.inherited.contains_key(n)).map(|(n, p)| field_json("add", n, p)).collect::<Vec<_>>(),
                     "structural": true,
-                }));
+                });
+                // a kind: its own fields listed, its parent's folded into one line
+                if let Some(p) = &t.parent {
+                    let inh: Vec<String> = t.inherited.keys().cloned().collect();
+                    j["kind_of"] = json!(p);
+                    j["inherited"] = json!({ "from": p, "count": inh.len(), "names": inh });
+                    j["rows"] = json!(after.kind_rows_words(t));
+                }
+                out.push(j);
             }
             Some(b) if same(b, t) => {}
             Some(b) => out.push(entity_change(before, after, b, t)),
@@ -707,6 +718,27 @@ fn entity_change(before: &Ontology, after: &Ontology, b: &TypeDef, t: &TypeDef) 
     }
     diffs.extend(diff_text("domain", b.domain.as_deref().unwrap_or(""), t.domain.as_deref().unwrap_or("")));
     diffs.extend(diff_text("owner", &b.owner, &t.owner));
+    // a kind: "is now a kind of Sale", "now picks Sale's rows where kind is promo"
+    let mut kind_said: Vec<String> = Vec::new();
+    if b.parent != t.parent {
+        structural = true;
+        let s = match (&b.parent, &t.parent) {
+            (None, Some(p)) => format!("{} is now a kind of {}", label(&t.name), p),
+            (Some(p), None) => format!("{} is no longer a kind of {}", label(&t.name), p),
+            (Some(a), Some(p)) => format!("{} is now a kind of {} (was {})", label(&t.name), p, a),
+            _ => String::new(),
+        };
+        diffs.push(json!({ "what": "a kind of", "before": b.parent.clone().unwrap_or_default(), "after": t.parent.clone().unwrap_or_default() }));
+        kind_said.push(s);
+    }
+    if b.where_all != t.where_all {
+        structural = true;
+        let base = t.rows_of.clone().or(t.parent.clone()).unwrap_or_default();
+        kind_said.push(if t.where_all.is_empty() { format!("{} no longer picks {}'s rows", label(&t.name), base) } else { format!("{} now picks {}'s rows where {}", label(&t.name), base, crate::ontology::Ontology::where_words(&t.where_all)) });
+    }
+    // fields that a kind now gets from its parent are not removals
+    let now_from: Vec<String> = fields.iter().filter(|f| f["op"] == "remove" && t.inherited.contains_key(f["name"].as_str().unwrap_or(""))).filter_map(|f| f["name"].as_str().map(|x| x.to_string())).collect();
+    fields.retain(|f| !(f["op"] == "remove" && now_from.iter().any(|n| f["name"] == n.as_str())));
     let added_n = fields.iter().filter(|f| f["op"] == "add").count();
     let removed_n = fields.iter().filter(|f| f["op"] == "remove").count();
     let changed_n = fields.iter().filter(|f| f["op"] == "change" || f["op"] == "rename").count();
@@ -729,7 +761,12 @@ fn entity_change(before: &Ontology, after: &Ontology, b: &TypeDef, t: &TypeDef) 
     if said.is_empty() && fields.is_empty() && diffs.is_empty() {
         said.push("changed in ways this screen does not list (see the files)".into());
     }
-    json!({ "kind": "entity", "op": "change", "name": t.name, "label": label(&t.name), "fields": fields, "diffs": diffs, "summary": said.join(", "), "structural": structural })
+    let mut j = json!({ "kind": "entity", "op": "change", "name": t.name, "label": label(&t.name), "fields": fields, "diffs": diffs, "summary": said.join(", "), "structural": structural });
+    if !kind_said.is_empty() {
+        j["sentence"] = json!(kind_said.join("; "));
+        j["summary"] = json!(format!("{}{}", kind_said.join("; "), if said.is_empty() { String::new() } else { format!("; {}", said.join(", ")) }));
+    }
+    j
 }
 
 pub fn plural(n: usize, word: &str) -> String {
@@ -906,6 +943,11 @@ pub fn questions(before_report: &Report, after: &Ontology, after_report: &Report
             "W107" => json!({ "code": d.code, "text": format!("{} links the wrong way round for its inputs.", n) }),
             "W108" => json!({ "code": d.code, "text": format!("\"{}\" points at {}, which doesn't exist.", n, d.message.split('`').nth(3).unwrap_or("")) }),
             "W111" => json!({ "code": d.code, "text": format!("Nobody can run {}: it doesn't say where.", n) }),
+            // said twice: usually Not now (the agent should reuse what exists), or different on purpose with a why
+            "W115" | "W116" | "W117" => match &d.pair {
+                Some([a, b]) => json!({ "code": d.code, "text": d.message, "ask": "Accept anyway: they are different on purpose", "fix": { "op": "distinct", "a": a, "b": b } }),
+                None => json!({ "code": d.code, "text": d.message }),
+            },
             _ => json!({ "code": d.code, "text": d.message }),
         };
         qs.push(q);
@@ -946,6 +988,17 @@ pub fn fix_op(fix: &Json, questions: &[Json], after: &Ontology) -> Result<(Json,
         }
     };
     match op {
+        "distinct" => {
+            only(&["op", "a", "b", "why"])?;
+            let (a, b) = (fix["a"].as_str().unwrap_or(""), fix["b"].as_str().unwrap_or(""));
+            if !questions.iter().any(|q| q["fix"]["op"] == "distinct" && ((q["fix"]["a"] == a && q["fix"]["b"] == b) || (q["fix"]["a"] == b && q["fix"]["b"] == a))) {
+                return Err("this screen did not ask whether those two are different".into());
+            }
+            let side = crate::trust::side_words;
+            let why = text("why").unwrap_or_default();
+            let _ = after;
+            Ok((fix.clone(), format!("{} and {} are different on purpose{}", side(a), side(b), if why.is_empty() { String::new() } else { format!(": \"{}\"", why) })))
+        }
         "set_metric" => {
             only(&["op", "metric", "owner", "description"])?;
             let metric = fix["metric"].as_str().unwrap_or("");
@@ -1215,6 +1268,14 @@ pub fn review(ont: &Ontology, report: &Report, p: &Proposal, ctx: &Ctx) -> Json 
         Some((a, r)) => questions(report, a, r, p),
         None => (vec![], vec![], report.diags.iter().filter(|d| d.level == Level::Warning).count()),
     };
+    // the rule of three: a suggestion, not a problem, when this proposal makes the third
+    if let Some((a, _)) = &after_pair {
+        let added: Vec<&str> = changes.iter().filter(|c| c["kind"] == "entity" && c["op"] == "add").filter_map(|c| c["name"].as_str()).collect();
+        let advice: Vec<crate::validate::Advice> = crate::validate::advise(a).into_iter().filter(|x| x.entities.iter().any(|e| added.contains(&e.as_str()))).collect();
+        if !advice.is_empty() {
+            j["advice"] = json!(advice);
+        }
+    }
     if !errors.is_empty() {
         can_accept = false;
         why_not = why_not.or(Some("This can't be accepted as it is: it leaves errors in the space.".into()));
@@ -1368,7 +1429,7 @@ const CODES: [&str; 33] = [
 /// An error remembered at Accept, as the diagnostic it was.
 pub fn known_diag(k: &crate::proposals::KnownError) -> Option<Diag> {
     let code = CODES.iter().find(|c| **c == k.code)?;
-    Some(Diag { level: Level::Error, code, message: k.message.clone(), file: k.file.clone(), subject: None })
+    Some(Diag { level: Level::Error, code, message: k.message.clone(), file: k.file.clone(), subject: None, pair: None })
 }
 
 /// Who last changed these files, from the activity log: "Vinay".

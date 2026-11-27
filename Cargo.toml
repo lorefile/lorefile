@@ -1,6 +1,6 @@
 [package]
 name = "lorefile"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Lorefile: a file-based, AI-agent-first business ontology. YAML in; MCP, CLI and a web page out."
 license = "Apache-2.0"

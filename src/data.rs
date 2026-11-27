@@ -217,8 +217,32 @@ impl<'a> DataLayer<'a> {
         self.ont.sources.get(&b.connection).map(move |s| (s, b))
     }
 
+    /// Does a row match a kind's `where` (every field one of its values, after the usual coercion)?
+    pub fn where_matches(rec: &Record, w: &IndexMap<String, Vec<serde_yaml::Value>>, props: &IndexMap<String, Property>) -> bool {
+        w.iter().all(|(f, vals)| {
+            let Some(got) = rec.get(f) else { return false };
+            vals.iter().any(|v| {
+                let raw = match v {
+                    serde_yaml::Value::String(x) => x.clone(),
+                    other => serde_yaml::to_string(other).unwrap_or_default().trim().to_string(),
+                };
+                let want = match props.get(f) {
+                    Some(p) => coerce(&raw, p),
+                    None => yaml_to_json(v),
+                };
+                match (got, &want) {
+                    (Json::String(a), Json::String(b)) => a.eq_ignore_ascii_case(b.as_str()),
+                    (a, b) => a == b || a.to_string().trim_matches('"').eq_ignore_ascii_case(b.to_string().trim_matches('"')),
+                }
+            })
+        })
+    }
+
     /// Can rows of this type be read here (inline, csv, or a kind DuckDB reads)?
     pub fn is_local(&self, t: &TypeDef) -> bool {
+        if let Some(base) = t.rows_of.as_ref().filter(|_| t.is_where_kind()).and_then(|b| self.ont.types.get(b)) {
+            return self.is_local(base);
+        }
         if !t.instances.is_empty() {
             return true;
         }
@@ -280,6 +304,14 @@ impl<'a> DataLayer<'a> {
             return Ok(rows.clone());
         }
         let props = Self::props_of(t);
+        // a kind that picks its parent's rows: the parent's rows that match, never a union
+        if t.is_where_kind() {
+            let base = t.rows_of.clone().unwrap_or_default();
+            let rows: Vec<Record> = if self.ont.types.contains_key(&base) { self.instances(&base)? } else { vec![] };
+            let rows: Vec<Record> = rows.into_iter().filter(|r| Self::where_matches(r, &t.where_all, &props)).collect();
+            self.cache.borrow_mut().insert(t.name.clone(), rows.clone());
+            return Ok(rows);
+        }
         let mut rows = Self::inline_rows(t);
         if let Some((src, binding)) = self.binding_of(t) {
             if src.kind.eq_ignore_ascii_case("csv") {
@@ -318,6 +350,15 @@ impl<'a> DataLayer<'a> {
                 .cloned()
         };
 
+        // a `where` kind: the key among its parent's rows, then its `where`
+        if t.is_where_kind() {
+            let base = t.rows_of.clone().unwrap_or_default();
+            if !self.ont.types.contains_key(&base) {
+                return Ok(None);
+            }
+            let props = Self::props_of(t);
+            return Ok(self.find(&base, key)?.filter(|r| Self::where_matches(r, &t.where_all, &props)));
+        }
         #[cfg(feature = "duckdb")]
         if let Some((src, binding)) = self.binding_of(t) {
             if duck_kind(&src.kind) {
@@ -411,6 +452,34 @@ impl<'a> DataLayer<'a> {
     pub fn where_is(&self, type_name: &str) -> Result<Json> {
         let t = self.ont.type_(type_name).ok_or_else(|| anyhow!("unknown type {}", type_name))?;
         let mut j = json!({ "type": t.name, "key": t.key_property() });
+        // a kind that picks its parent's rows: where those are, and which to keep
+        if t.is_where_kind() {
+            let base = t.rows_of.clone().unwrap_or_default();
+            let words = crate::ontology::Ontology::where_words(&t.where_all);
+            let mut parent = if self.ont.types.contains_key(&base) { self.where_is(&base)? } else { json!({}) };
+            j["kind_of"] = json!(t.parent);
+            j["rows_of"] = json!(base);
+            j["where"] = json!(t.where_all);
+            for k in ["connection", "kind", "table", "readable_here", "path"] {
+                if let Some(v) = parent.get(k) {
+                    j[k] = v.clone();
+                }
+            }
+            if self.ont.graded.has_file {
+                j["trust"] = self.ont.grade_of(crate::trust::Kind::Binding, &t.name).to_json(crate::trust::Kind::Binding);
+            }
+            if parent["readable_here"] == true {
+                j["row_count"] = json!(self.instances(&t.name)?.len());
+                j["hint"] = json!(format!("{}'s rows where {}: readable here with `instances` or `query`.", base, words));
+            } else {
+                let at = parent["table"].as_str().map(|tb| format!(" (in {}.{})", parent["connection"].as_str().unwrap_or(""), tb)).unwrap_or_default();
+                j["hint"] = json!(format!("{}'s rows{} where {}: fetch them with your own connector and keep those.", base, at, words));
+            }
+            if let Some(o) = parent.as_object_mut() {
+                o.clear();
+            }
+            return Ok(j);
+        }
         match &t.source {
             Some(b) => {
                 let src = self.ont.sources.get(&b.connection);

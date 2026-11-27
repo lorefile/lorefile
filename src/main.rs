@@ -210,6 +210,9 @@ enum Cmd {
         /// matches its definition. Only for your own export: by default imported facts start ungraded.
         #[arg(long)]
         keep_grades: bool,
+        /// With --from-rdf: keep rdfs:subClassOf as subclass-of: tags instead of `extends`, and do not bring parent classes along.
+        #[arg(long)]
+        no_parents: bool,
     },
 }
 
@@ -317,9 +320,9 @@ fn main() -> Result<()> {
         let target = path.clone().unwrap_or_else(|| PathBuf::from("ontology"));
         return init(&target);
     }
-    if let Cmd::Import { from_ossie, from_rdf, ontology, mapping, into, only, depth, report, keep_grades } = &cli.cmd {
+    if let Cmd::Import { from_ossie, from_rdf, ontology, mapping, into, only, depth, report, keep_grades, no_parents } = &cli.cmd {
         if let Some(file) = from_rdf {
-            return import_rdf(file, into.as_deref(), only, *depth, *report, *keep_grades, cli.json);
+            return import_rdf(file, into.as_deref(), only, *depth, *report, *keep_grades, *no_parents, cli.json);
         }
         let Some(sm) = from_ossie else { bail!("say what to import: --from-ossie <semantic model> or --from-rdf <file>") };
         let Some(into) = into else { bail!("--into <folder> says which space to create or extend") };
@@ -630,6 +633,7 @@ fn trust_cmd(ont: &Ontology, report: &validate::Report, dir: &Path, spaces_root:
             edit::GradeOp::Check { kind, name, against, .. } => format!("{} is checked against {}, by {}", kind.name_words(name), against, by),
             edit::GradeOp::VouchAll => format!("vouched for {} definitions, by {}", out.name, by),
             edit::GradeOp::Sign { .. } => format!("{} signed, by {}", out.stamped.join(", "), by),
+            edit::GradeOp::Distinct { a, b, .. } => format!("{} and {} are different on purpose, by {}", a, b, by),
         };
         eprintln!("✓ {}{}", what, out.commit.as_ref().map(|h| format!(" (saved to history as {})", h)).unwrap_or_else(|| " (trust.yaml written, not committed)".into()));
     }
@@ -712,7 +716,7 @@ fn export_rdf(_: &Ontology, _: &validate::Report, _: Option<&str>, _: Option<Pat
 /// `lorefile import --from-rdf`: read the graph, build the files, compile, write only if clean.
 #[cfg(feature = "rdf")]
 #[allow(clippy::too_many_arguments)]
-fn import_rdf(file: &Path, into: Option<&Path>, only: &[String], depth: usize, report: bool, keep_grades: bool, as_json: bool) -> Result<()> {
+fn import_rdf(file: &Path, into: Option<&Path>, only: &[String], depth: usize, report: bool, keep_grades: bool, no_parents: bool, as_json: bool) -> Result<()> {
     let into = match into {
         Some(p) => p.to_path_buf(),
         None => {
@@ -720,7 +724,7 @@ fn import_rdf(file: &Path, into: Option<&Path>, only: &[String], depth: usize, r
             PathBuf::from(stem)
         }
     };
-    let w = rdf::import_into(file, &into, &rdf::ImportOptions { only: only.to_vec(), depth, keep_grades })?;
+    let w = rdf::import_into(file, &into, &rdf::ImportOptions { only: only.to_vec(), depth, keep_grades, no_parents })?;
     let im = &w.imported;
     if as_json {
         print_json(&json!({ "into": w.dir, "files": w.files, "counts": im.counts, "warnings": w.warnings, "notes": im.notes }));
@@ -744,7 +748,7 @@ fn import_rdf(file: &Path, into: Option<&Path>, only: &[String], depth: usize, r
 
 #[cfg(not(feature = "rdf"))]
 #[allow(clippy::too_many_arguments)]
-fn import_rdf(_: &Path, _: Option<&Path>, _: &[String], _: usize, _: bool, _: bool, _: bool) -> Result<()> {
+fn import_rdf(_: &Path, _: Option<&Path>, _: &[String], _: usize, _: bool, _: bool, _: bool, _: bool) -> Result<()> {
     bail!("this lorefile was built without RDF support (the `rdf` feature); use a full or slim release build, or `cargo build --features rdf`")
 }
 

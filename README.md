@@ -4,7 +4,7 @@ Your business, written down once, so every AI agent reads the same thing and act
 
 **Lore** is what a team knows and newcomers have to be told: what counts as a sale, where the orders live, which number the business is run on, what an agent may never do. A **Lorefile** is that lore written down in plain files that agents read.
 
-> Status, 2026-11-27: version 0.1.0 is out, open source under Apache-2.0. Built and tested: the format and its strict compiler (an unknown key in any file is an error), the web page, the MCP server over stdio and over HTTP, a login token, spaces, the save-what-you-learned loop, metrics and functions, evidence grades (proposed, accepted, checked, kept in `trust.yaml`; the gate, the API, the CLI and the exports are covered by tests, the page's grade buttons were checked by hand in a browser), local git history from day one (every change a commit, History with Undo, Share / Push / Pull to any git address), Apache Ossie import and export, OWL, SKOS and SHACL import and export with an IRI on everything, tests and CI. Install it with `npx lorefile`, the Docker image `ghcr.io/lorefile/lorefile`, `cargo install lorefile` or the install script ([Install](#install)); binaries for macOS, Linux and Windows are on the [releases page](https://github.com/lorefile/lorefile/releases). New since 0.1.0, not in a release yet: an OAuth sign-in so ChatGPT's and Claude's connectors (claude.ai, Desktop, mobile) can connect through any HTTPS tunnel; it is covered by tests that script the whole flow, but not yet tried with real ChatGPT and Claude accounts or with each tunnel service ([§4](#4-connect-your-ai-tool)). Also new: `learn_file` for a file a user gives an agent ([§6](#6-teach-it-a-file)), and a review screen that shows what an agent proposes by meaning, with a link from the chat ([§7](#7-review-what-it-learned)); both tested end to end, not yet tried live. Not yet: accounts and single sign-on (one shared token for now). A hosted version may come later. [BACKLOG.md](BACKLOG.md) has the honest list; [PRODUCTION.md](PRODUCTION.md) has what a team server still needs. This file is also a web page: `python3 scripts/build-tutorial.py` writes [docs/tutorial.html](docs/tutorial.html).
+> Status, 2026-11-27: version 0.1.0 is out, open source under Apache-2.0. Built and tested: the format and its strict compiler (an unknown key in any file is an error), the web page, the MCP server over stdio and over HTTP, a login token, spaces, the save-what-you-learned loop, metrics and functions, evidence grades (proposed, accepted, checked, kept in `trust.yaml`; the gate, the API, the CLI and the exports are covered by tests, the page's grade buttons were checked by hand in a browser), local git history from day one (every change a commit, History with Undo, Share / Push / Pull to any git address), Apache Ossie import and export, OWL, SKOS and SHACL import and export with an IRI on everything, tests and CI. Install it with `npx lorefile`, the Docker image `ghcr.io/lorefile/lorefile`, `cargo install lorefile` or the install script ([Install](#install)); binaries for macOS, Linux and Windows are on the [releases page](https://github.com/lorefile/lorefile/releases). New since 0.1.0, not in a release yet: an OAuth sign-in so ChatGPT's and Claude's connectors (claude.ai, Desktop, mobile) can connect through any HTTPS tunnel; it is covered by tests that script the whole flow, but not yet tried with real ChatGPT and Claude accounts or with each tunnel service ([§4](#4-connect-your-ai-tool)). Also new: `learn_file` for a file a user gives an agent ([§6](#6-teach-it-a-file)), and a review screen that shows what an agent proposes by meaning, with a link from the chat ([§7](#7-review-what-it-learned)); both tested end to end, not yet tried live. Also new, for 0.2.0: [kinds of entities](#kinds-of-entities) (`extends: Sale`, with `where:` to pick the parent's rows) and warnings when the same thing is said twice (W115–W117); tested end to end and on the page, not yet tried live. A space that uses kinds says `format: 2`, which 0.1.0 refuses to load. Not yet: accounts and single sign-on (one shared token for now). A hosted version may come later. [BACKLOG.md](BACKLOG.md) has the honest list; [PRODUCTION.md](PRODUCTION.md) has what a team server still needs. This file is also a web page: `python3 scripts/build-tutorial.py` writes [docs/tutorial.html](docs/tutorial.html).
 
 ## The problem, in one Monday
 
@@ -58,6 +58,7 @@ The page, the review screen, the YAML keys and what agents say all use these wor
 | **Guardrail** | a rule an action must not break | `constraints/` | What must hold before an action, as a sentence first and an expression second, with a severity and an owner | only unshipped orders can be cancelled |
 | **Action** | something agents may do | `actions/` | What agents may do: inputs, what changes, which guardrails to check, who must approve | cancel_order |
 | **Source** | where an entity's rows come from | `sources/` | Where rows live: a warehouse, files, or an MCP server. Never a credential. An entity's `source:` says which one ("Promo sale's source") | shop_bigquery, meta_ads |
+| **a kind of Sale** / **Kinds of Sale** | an entity that is a narrower version of another, with all its fields | `extends:` (and `where:`) in a type | An entity that gets every field, link and guardrail of its parent and adds its own, and may pick the parent's rows | PromoSale, a kind of Sale where kind is promo |
 | **Also called** | another word people use for an entity | `glossary.yaml` | What people say and which entity they mean | "basket" means Order |
 | **Space** | a folder of these folders | One ontology per brand, business unit or client; one server holds many | brand-one, brand-two, @ecommerce |
 | **Proposal** | `.lorefile/proposals/` | Something an agent learned and wants to save, waiting for a person to accept | "An agent learned: added metric success" |
@@ -520,7 +521,7 @@ lorefile import --from-rdf schemaorg.ttl --only schema:Order,schema:Product --de
 | Actions, metrics, functions, sources, owners, data bindings | a small `lorefile:` vocabulary in the same graph: other tools store it, Lorefile reads it back |
 | Grades (`trust.yaml`) | `lorefile:trust lorefile:Checked` (or `Accepted`, `Proposed`) on the graded thing, `lorefile:bindingTrust` on an entity for its data binding, and a record that is also a PROV-O `prov:Activity`: `prov:wasAssociatedWith` the person or agent, `prov:endedAtTime`, `prov:used` the thing and the source it was checked against, the note as `rdfs:comment`. In Ossie the whole of `trust.yaml` rides in the `lorefile` extension, and a proposed metric or dataset also says "Unverified: …" in `ai_context.instructions`, where other tools' AI reads it |
 
-Coming in from another tool's file, classes become entities, datatype properties fields, object properties links, `owl:hasKey` the key, `skos:altLabel` glossary words, and SHACL property shapes guardrails (`sh:minCount`, `sh:in`, ranges, lengths and patterns become CEL). A class hierarchy (`rdfs:subClassOf`) becomes a tag, because Lorefile has no sub-kinds yet. Statements that exist only for reasoning engines are counted and dropped, and SHACL that has no CEL form (SPARQL, `sh:or` …) is listed for a person. `--report` says what was guessed, dropped or kept. Like every import, nothing is written unless the result compiles, and no existing file is overwritten. Lorefile has no reasoner and no triple store: the Turtle is just a file.
+Coming in from another tool's file, classes become entities, datatype properties fields, object properties links, `owl:hasKey` the key, `skos:altLabel` glossary words, and SHACL property shapes guardrails (`sh:minCount`, `sh:in`, ranges, lengths and patterns become CEL). A class hierarchy (`rdfs:subClassOf`) becomes `extends`, with the parents brought along ([Kinds of entities](#kinds-of-entities)); `--no-parents` makes it a tag instead. Statements that exist only for reasoning engines are counted and dropped, and SHACL that has no CEL form (SPARQL, `sh:or` …) is listed for a person. `--report` says what was guessed, dropped or kept. Like every import, nothing is written unless the result compiles, and no existing file is overwritten. Lorefile has no reasoner and no triple store: the Turtle is just a file.
 
 An import starts with every definition ungraded, whatever grades the file claims: a grade is a statement by this team about this copy. The report says how many arrived with a grade, and how many claims it could not read. An object in the file that asks to be written as `trust.yaml` is never written there. `--keep-grades` brings back the grades of a team's own export where each still matches its definition, and lists the ones dropped.
 
@@ -561,6 +562,32 @@ source:
   key: supplier_id
 owner: procurement@acme.example
 ```
+
+### Kinds of entities
+
+An entity can be a kind of another. A promo sale is a sale: it has every field, link and guardrail a sale has, plus a few of its own.
+
+```yaml
+# types/promo_sale.yaml
+type: PromoSale
+extends: Sale
+description: A sale made with a promo code.
+where: { kind: promo }              # optional: its rows are Sale's rows where kind is promo
+properties:
+  revenue:    { description: What was paid after the promo. }   # Sale's field, described for promo sales
+  promo_code: { type: string, description: The code used. }      # its own
+```
+
+- **What it gets.** Sale's fields first, in Sale's order, then its own; Sale's key; Sale's links; the guardrails on Sale; Sale's domain. `describe` marks each one `from: Sale`, and the page shows them under "From Sale". The file holds only the kind's own fields: Lorefile never writes the inherited ones back.
+- **What it may change.** A field it repeats may get a new description, become required, or allow fewer values. It may not change the field's type or unit, widen its values, or pick another key (E021, E022). A link name Sale already has is E023.
+- **Rows.** With `where:` the kind's rows are the parent's rows that match (`instances`, `find`, the DuckDB view `PromoSale` for SQL, and the actions check all follow it). `where` is a map of fields to a value or a list of values, never SQL, and it can't sit beside a `source:` (E024). Without `where`, a kind may have a `source:` of its own (a separate table), or none.
+- **Agents.** `validate` takes `kinds: {line: PromoSale}`, and a guardrail that needs a PromoSale refuses a Sale that isn't one ("`promo` needs a PromoSale; L-2 is a Sale whose kind is wholesale"). The summary tells agents never to add a kind's numbers to its parent's: the kind's rows are already among them.
+- **Limits.** One parent, at most 6 levels, no loops (E020). `extends` names an entity, not a word from the glossary.
+- **The format.** A space that uses `extends`, `where` or `distinct:` says `format: 2` in `ontology.yaml`. Lorefile writes it in the same save; a hand edit without it gets W118. **Lorefile 0.1.0 refuses to load a format 2 space** ("unknown field `format`"), so upgrade every copy that reads the space first. A space newer than the binary gets one sentence saying to upgrade (E019).
+
+**The same thing said twice.** The compiler warns when two metrics have the same recipe (W115), two entities read the same rows, share most of their fields, or pick overlapping rows of one parent (W116), or one word means two things (W117). A parent and its kind are never flagged. When it is on purpose, say so on the review screen or with These are different on the Home card (or `POST /api/trust {op: distinct}`): Lorefile keeps the pair, who said it and why under `distinct:` in `trust.yaml`, and asks again only if either side changes. When three entities share a core of fields, the summary and the review screen suggest making a parent (the rule of three); the `make_parent` op creates it and makes the three kinds of it.
+
+**From other tools.** RDF and SHACL import turn `rdfs:subClassOf` into `extends` and bring the parents along (up to 6 levels, never `owl:Thing`), so `name` on schema.org's `Thing` reaches `Person`; `--no-parents` keeps the old tags. Export writes `rdfs:subClassOf`, own fields only, and a SHACL shape per kind that points at its parent's (`sh:node`). Ossie's `extends` comes in and goes out the same way. When a file has every column of an entity plus a few more, and that entity already has a kind, `match_file` asks whether the file is another kind of it; `answers.kind_of` on `learn_file` learns it as one, with the file as its rows.
 
 ### IRIs
 
@@ -835,6 +862,12 @@ lorefile import --from-rdf <file> [--into <folder>] [--only A,B] [--depth N] [--
 | E016 | One IRI names two things (fields of different entities may share one) |
 | E017 | An IRI, namespace or prefix that does not resolve (an undeclared prefix, a namespace not ending in `#` or `/`) |
 | E018 | A grade in `trust.yaml` that makes no sense: `checked` without `against`, `by` or `at`, `against` that is no source, a word marked checked, an empty `of` |
+| E019 | The space needs a newer Lorefile (its `format` is newer than this binary reads); it replaces the unknown-field errors |
+| E020 | `extends` names nothing, a word, itself, two entities, a loop, or more than 6 levels |
+| E021 | A kind changes a parent's field: its type, unit, wider values, or makes it the key |
+| E022 | A kind picks a different key from its parent's |
+| E023 | A kind adds a link whose name already comes from its parent |
+| E024 | A `where` that can't work: no `extends`, beside a `source:`, a field the parent lacks, or a value the field can't hold |
 | W101 | Missing description |
 | W109 | Metric has no owner |
 | W111 | Function does not say where it runs |
@@ -848,6 +881,10 @@ lorefile import --from-rdf <file> [--into <folder>] [--only A,B] [--depth N] [--
 | W112 | Two things get the same derived IRI; set `iri:` on one |
 | W113 | A graded definition changed since it was graded; a person has to accept it again |
 | W114 | `trust.yaml` grades something that no longer exists |
+| W115 | Two metrics with the same recipe |
+| W116 | Two entities that read the same rows, share most fields, or pick overlapping rows of one parent |
+| W117 | One word meaning two things, or a word that is another entity's name |
+| W118 | `extends`, `where` or `distinct:` without `format: 2` in `ontology.yaml` |
 
 ## Packs
 
@@ -874,7 +911,7 @@ The three read-out guards (`read_performance`, `compare_conversions`, `attribute
 1. **Core** (done) — format, compiler, graph, CLI, MCP, UI, CSV data door.
 2. **Doors** (this) — DuckDB inside the binary: Parquet, `.duckdb`, Postgres, S3/HTTP; `query(sql)` and the ontology as SQL tables; SQL box in the UI. Editing from the page and `propose_change` for agents, both compiler-checked. Still open: MySQL, `init --from <db>` to draft types from an existing schema, opening a PR from an edit.
 3. **Any MCP is a source** — designed in [ARCHITECTURE.md §17](ARCHITECTURE.md#17-phase-3-design-any-mcp-is-a-source-the-ontology-keeps-what-matters). Step 1 is built: `propose_patch`, metrics in `logic/`, the Logic step, the offer-to-save instruction. Still to come: derived fields in `logic/`; `does` on actions and `mutable: false` on entities, checked by `validate`; a table browser and `init --from` for warehouses. A hosted version that keeps the one copy with SSO, roles and audit may come later ([BACKLOG.md](BACKLOG.md), "Hosted version, later"). The ontology never executes and never holds credentials.
-4. **Ecosystem** — Apache Ossie and OWL / SKOS / SHACL import and export are built. Next: more packs (TikTok Ads, GA4, Klaviyo), Python/TS SDKs, sub-kinds (`extends`) so imported class hierarchies stop being tags, LinkML, dbt/LookML import.
+4. **Ecosystem** — Apache Ossie and OWL / SKOS / SHACL import and export are built. Kinds of entities (`extends`) are built for 0.2.0, so imported class hierarchies come in as what they are. Next: more packs (TikTok Ads, GA4, Klaviyo), Python/TS SDKs, LinkML, dbt/LookML import.
 
 ## License
 

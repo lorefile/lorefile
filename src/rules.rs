@@ -140,6 +140,10 @@ pub struct ResolvedInput {
     pub key: String,
     pub resolved: bool,
     pub record: Record,
+    /// The kinds of the action's type this input was checked as (the row matched their `where`,
+    /// or the agent said so with `kinds`): their guardrails apply too.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub checked_as: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -203,10 +207,41 @@ fn label_of(rec: &Record, t: &TypeDef) -> String {
 }
 
 /// Turn raw inputs (key strings or inline records) into records.
-fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &IndexMap<String, Json>, notes: &mut Vec<String>, read: &mut Vec<String>) -> Result<Vec<ResolvedInput>> {
+/// The `where` kinds below `declared` that a record matches, deepest first (siblings both, when their `where`s overlap).
+fn where_kinds_matching(ont: &Ontology, declared: &str, rec: &Record) -> Vec<String> {
+    let mut hits: Vec<String> = ont
+        .all_kinds_of(declared)
+        .into_iter()
+        .filter(|k| {
+            let Some(t) = ont.types.get(k) else { return false };
+            if !t.is_where_kind() || !t.rows_of.as_ref().map(|b| ont.is_a(declared, b) || ont.is_a(b, declared)).unwrap_or(false) {
+                return false;
+            }
+            let props: IndexMap<String, crate::schema::Property> = t.properties.iter().map(|(k, v)| (k.clone(), v.normalize())).collect();
+            DataLayer::where_matches(rec, &t.where_all, &props)
+        })
+        .collect();
+    // keep the deepest: a kind whose own kind also matched says less
+    let all = hits.clone();
+    hits.retain(|k| !all.iter().any(|o| o != k && ont.is_a(o, k)));
+    hits.sort();
+    hits
+}
+
+fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &IndexMap<String, Json>, kinds: &IndexMap<String, String>, notes: &mut Vec<String>, read: &mut Vec<String>) -> Result<Vec<ResolvedInput>> {
     let mut out = Vec::new();
     for (input, type_name) in &action.inputs {
-        let t = ont.type_(type_name).ok_or_else(|| anyhow!("action input `{}` has unknown type `{}`", input, type_name))?;
+        let declared = ont.type_(type_name).ok_or_else(|| anyhow!("action input `{}` has unknown type `{}`", input, type_name))?;
+        // producer extends: the agent may say this input is a kind of the type the action takes
+        let mut said: Option<String> = None;
+        if let Some(k) = kinds.get(input) {
+            let kt = ont.type_(k).ok_or_else(|| anyhow!("`kinds.{}` names {}, which is no entity here", input, k))?;
+            if !ont.is_a(&kt.name, &declared.name) {
+                return Err(anyhow!("{} is not a kind of {}, so it can't be passed as `{}`", kt.name, declared.name, input));
+            }
+            said = Some(kt.name.clone());
+        }
+        let t = said.as_ref().and_then(|k| ont.types.get(k)).unwrap_or(declared);
         let Some(v) = raw.get(input) else {
             return Err(anyhow!("missing input `{}` ({}). Inputs: {}", input, type_name,
                 action.inputs.iter().map(|(k, v)| format!("{}: {}", k, v)).collect::<Vec<_>>().join(", ")));
@@ -214,7 +249,8 @@ fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &In
         match v {
             Json::Object(o) => {
                 let rec: Record = o.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                out.push(ResolvedInput { name: input.clone(), type_name: t.name.clone(), key: key_of(&rec, t), resolved: true, record: rec });
+                let checked_as = checked_kinds(ont, &declared.name, said.as_deref(), &rec, input, notes);
+                out.push(ResolvedInput { name: input.clone(), type_name: declared.name.clone(), key: key_of(&rec, t), resolved: true, record: rec, checked_as });
             }
             other => {
                 let key = match other {
@@ -223,10 +259,19 @@ fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &In
                 };
                 match data.find(&t.name, &key)? {
                     Some(rec) => {
-                        if t.source.is_some() && !read.contains(&t.name) {
-                            read.push(t.name.clone());
+                        let reads = if t.is_where_kind() { t.rows_of.clone().unwrap_or(t.name.clone()) } else { t.name.clone() };
+                        if ont.types.get(&reads).map(|x| x.source.is_some()).unwrap_or(false) && !read.contains(&reads) {
+                            read.push(reads);
                         }
-                        out.push(ResolvedInput { name: input.clone(), type_name: t.name.clone(), key, resolved: true, record: rec })
+                        let checked_as = checked_kinds(ont, &declared.name, said.as_deref(), &rec, input, notes);
+                        out.push(ResolvedInput { name: input.clone(), type_name: declared.name.clone(), key, resolved: true, record: rec, checked_as })
+                    }
+                    None if t.is_where_kind() && t.rows_of.as_ref().map(|b| data.find(b, &key).ok().flatten().is_some()).unwrap_or(false) => {
+                        // consumer super: a row of the parent that is not this kind
+                        let base = t.rows_of.clone().unwrap_or_default();
+                        let rec = data.find(&base, &key)?.unwrap_or_default();
+                        let what: Vec<String> = t.where_all.keys().map(|f| format!("{} is {}", f, rec.get(f).map(|v| v.as_str().map(|x| x.to_string()).unwrap_or_else(|| v.to_string())).unwrap_or_else(|| "empty".into()))).collect();
+                        return Err(anyhow!("`{}` needs a {}; {} is a {} whose {}", input, t.name, key, base, what.join(" and ")));
                     }
                     None => {
                         let kp = t.key_property().unwrap_or_else(|| "id".into());
@@ -237,7 +282,7 @@ fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &In
                         } else {
                             notes.push(format!("`{}` = {} could not be loaded ({} data is not readable here); fetch the row with your own connector and pass it inline, e.g. {}", input, key, t.name, example_record(t)));
                         }
-                        out.push(ResolvedInput { name: input.clone(), type_name: t.name.clone(), key, resolved: false, record: rec });
+                        out.push(ResolvedInput { name: input.clone(), type_name: declared.name.clone(), key, resolved: false, record: rec, checked_as: said.clone().into_iter().collect() });
                     }
                 }
             }
@@ -246,11 +291,42 @@ fn resolve_inputs(ont: &Ontology, data: &DataLayer, action: &ActionDef, raw: &In
     Ok(out)
 }
 
+/// The kinds an input is checked as: the one the agent named, else the `where` kinds its record matches.
+fn checked_kinds(ont: &Ontology, declared: &str, said: Option<&str>, rec: &Record, input: &str, notes: &mut Vec<String>) -> Vec<String> {
+    if let Some(k) = said {
+        if k != declared {
+            notes.push(format!("`{}` was checked as a {} (a kind of {}), as `kinds` says", input, k, declared));
+            return vec![k.to_string()];
+        }
+        return vec![];
+    }
+    let hits = where_kinds_matching(ont, declared, rec);
+    for k in &hits {
+        let why = ont.types.get(k).map(|t| crate::ontology::Ontology::where_words(&t.where_all)).unwrap_or_default();
+        notes.push(format!("`{}` was checked as a {} (a kind of {}), because {}", input, k, declared, why));
+    }
+    hits
+}
+
 fn evaluate_all(ont: &Ontology, action: &ActionDef, inputs: &[ResolvedInput], notes: &mut Vec<String>) -> Vec<RuleResult> {
     let recs: IndexMap<String, &ResolvedInput> = inputs.iter().map(|i| (i.name.clone(), i)).collect();
     let mut results = Vec::new();
+    // the action's rules, plus the guardrails of every kind an input was checked as (and of that
+    // kind's parents below the type the action takes)
+    let mut rules: Vec<&crate::schema::Constraint> = ont.constraints_for(&action.name);
+    for ri in inputs {
+        for k in &ri.checked_as {
+            for n in ont.self_and_ancestors(k).into_iter().take_while(|n| n != &ri.type_name) {
+                for c in ont.constraints.values().filter(|c| c.applies_to.eq_ignore_ascii_case(&n)) {
+                    if !rules.iter().any(|x| x.id == c.id) {
+                        rules.push(c);
+                    }
+                }
+            }
+        }
+    }
 
-    for c in ont.constraints_for(&action.name) {
+    for c in rules {
         let program = match compile(&c.rule) {
             Ok(p) => p,
             Err(e) => {
@@ -264,9 +340,15 @@ fn evaluate_all(ont: &Ontology, action: &ActionDef, inputs: &[ResolvedInput], no
             Some(Kind::Type) => {
                 let t = ont.type_(&c.applies_to).unwrap();
                 for (name, ri) in &recs {
-                    if ri.type_name == t.name {
+                    // a rule on Sale binds to an input that is a Sale, a kind of Sale, or was checked as one
+                    let is = ri.type_name == t.name || ont.is_a(&ri.type_name, &t.name) || ri.checked_as.iter().any(|k| ont.is_a(k, &t.name));
+                    if is {
                         let mut vars: IndexMap<String, Json> = ri.record.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
                         let rec_json = Json::Object(ri.record.iter().map(|(k, v)| (k.clone(), v.clone())).collect());
+                        let deepest = ri.checked_as.first().cloned().unwrap_or(ri.type_name.clone());
+                        for n in ont.self_and_ancestors(&deepest) {
+                            vars.insert(snake(&n), rec_json.clone());
+                        }
                         vars.insert(snake(&t.name), rec_json.clone());
                         vars.insert("self".into(), rec_json);
                         bindings.push((vec![name.clone()], vars));
@@ -346,12 +428,17 @@ fn verdict_of(results: &[RuleResult]) -> &'static str {
 
 /// The main entry point: can this action be taken with these inputs?
 pub fn check_action(ont: &Ontology, data: &DataLayer, action_name: &str, raw: &IndexMap<String, Json>) -> Result<CheckReport> {
+    check_action_with(ont, data, action_name, raw, &IndexMap::new())
+}
+
+/// `check_action` with `kinds`: input name → the kind of entity it is, when that is a kind of the type the action takes.
+pub fn check_action_with(ont: &Ontology, data: &DataLayer, action_name: &str, raw: &IndexMap<String, Json>, kinds: &IndexMap<String, String>) -> Result<CheckReport> {
     let action = ont.action(action_name).ok_or_else(|| {
         anyhow!("unknown action `{}`. Known actions: {}", action_name, ont.actions.keys().cloned().collect::<Vec<_>>().join(", "))
     })?;
     let mut notes = Vec::new();
     let mut read = Vec::new();
-    let inputs = resolve_inputs(ont, data, action, raw, &mut notes, &mut read)?;
+    let inputs = resolve_inputs(ont, data, action, raw, kinds, &mut notes, &mut read)?;
     let mut results = evaluate_all(ont, action, &inputs, &mut notes);
     // what a person stands behind: each result's grade, and what was relied on unreviewed
     let mut unverified: Vec<String> = Vec::new();

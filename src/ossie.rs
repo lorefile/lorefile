@@ -1045,10 +1045,11 @@ fn ontology_doc(ont: &Ontology, space: &str, notes: &mut Vec<String>) -> (Json, 
     let mut concepts = Vec::new();
     for t in ont.types.values() {
         let mut rels: Vec<Json> = Vec::new();
-        let links: Vec<&Relationship> = ont.outgoing(&t.name);
+        // a kind lists its own links and fields: the rest come through `extends`
+        let links: Vec<&Relationship> = ont.relationships.iter().filter(|r| r.from == t.name).collect();
         let link_names: HashSet<&str> = links.iter().map(|r| r.name.as_str()).collect();
         let key = t.key_property();
-        for (pn, ps) in &t.properties {
+        for (pn, ps) in t.properties.iter().filter(|(n, _)| !t.inherited.contains_key(*n)) {
             if link_names.contains(pn.as_str()) {
                 notes.push(format!("{}.{} is both a property and a link; the ontology lists the link", t.name, pn));
                 continue;
@@ -1102,6 +1103,9 @@ fn ontology_doc(ont: &Ontology, space: &str, notes: &mut Vec<String>) -> (Json, 
         let mut c = Map::new();
         c.insert("concept".into(), json!(t.name));
         c.insert("type".into(), json!("EntityType"));
+        if let Some(p) = &t.parent {
+            c.insert("extends".into(), json!([p]));
+        }
         insert_if(&mut c, "description", json!(t.description.trim()));
         if let Some(k) = key.as_ref().filter(|k| !link_names.contains(k.as_str())) {
             c.insert("identify_by".into(), json!([k]));
@@ -1631,7 +1635,21 @@ pub fn import(sm_path: &Path, ontology_path: Option<&Path>, mapping_path: Option
         }
         rules_dropped += arr(&cj["requires"]).len() + arr(&cj["derived_by"]).len();
         let Some(ename) = entity_by_fold.get(&fold(c)).cloned() else { continue };
+        // a concept's `extends`: the first entity it names is the parent; the rest stay tags
+        let parents: Vec<String> = arr(&cj["extends"]).iter().map(|x| s(x).to_string()).filter(|p| !value_types.contains_key(p) && !BUILTIN_VALUES.contains(&p.as_str())).collect();
+        let parent_entities: Vec<String> = parents.iter().filter_map(|p| entity_by_fold.get(&fold(p)).cloned()).collect();
         let e = entities.get_mut(&ename).unwrap();
+        if let Some(first) = parent_entities.first() {
+            if e.json.get("extends").is_none() {
+                e.json["extends"] = json!(first);
+            }
+            for other in parent_entities.iter().skip(1) {
+                if let Some(tags) = e.json["tags"].as_array_mut() {
+                    tags.push(json!(format!("subclass-of:{}", other)));
+                }
+                notes.push(format!("{} also extends {} in Ossie: an entity extends one other, so it is kept as the tag subclass-of:{}", ename, other, other));
+            }
+        }
         if !e.foreign {
             continue;
         }
@@ -1932,6 +1950,9 @@ pub fn import(sm_path: &Path, ontology_path: Option<&Path>, mapping_path: Option
         }
         if let Some(m) = root.get("manifest").and_then(|m| m.as_object()) {
             overlay(&mut manifest, m);
+        }
+        if entities.values().any(|e| e.json.get("extends").is_some()) {
+            manifest["format"] = json!(2);
         }
         layout.add(FileKind::Manifest, None, "ontology.yaml", manifest);
     }

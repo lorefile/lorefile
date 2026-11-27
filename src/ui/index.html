@@ -95,6 +95,8 @@ button.lnk{background:none;border:none;color:var(--accent);padding:0;min-height:
 .rv-counts{display:flex;flex-direction:column;gap:4px}
 .rv-count{display:flex;gap:10px;font-size:13.5px}.rv-count-l{flex:0 0 72px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:2px}
 .rv-changes{display:flex;flex-direction:column;gap:8px}
+
+.rv-inherited{color:var(--faint);margin-top:2px}
 .rv-change{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--line2);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;font-size:13.5px;min-width:0;overflow-wrap:anywhere}
 .rv-op-add{border-left-color:var(--ok)}.rv-op-change{border-left-color:var(--warn)}.rv-op-remove{border-left-color:var(--block);background:#fff8f8}
 .rv-head{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
@@ -155,6 +157,7 @@ button.lnk{background:none;border:none;color:var(--accent);padding:0;min-height:
 .pl-next line,.pl-next polygon{fill:none;stroke:#c4c4bd;stroke-dasharray:5 5;stroke-width:1.5}
 .pl-link line,.pl-link path{stroke:#b4b4ad;stroke-width:1.6}.pl-link.on line,.pl-link.on path{stroke:var(--accent);stroke-width:2.2}
 .pl-link.missing line,.pl-link.missing path{stroke:var(--block);stroke-dasharray:4 3}
+.pl-kindline line,.pl-kindline path{stroke:#6e6e78;stroke-width:1.6;stroke-dasharray:2 3;fill:none}.pl-kindline.on line,.pl-kindline.on path{stroke:var(--accent)}
 .ghostlink line{stroke-dasharray:6 4;stroke-width:2}.ghostlink.new line{stroke:var(--ok)}.ghostlink.removed line{stroke:var(--block)}
 .pl-svg .warnc,.warnc{fill:var(--warn);color:var(--warn)}
 .pl-between line{stroke:#bcbcb5;stroke-width:1.2;stroke-dasharray:3 4}.pl-between.on line{stroke:var(--accent);stroke-width:1.8}
@@ -576,7 +579,7 @@ const keep = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } cat
 function ensureGlyphs(){
   if ($('pl-defs')) return;
   const d = document.createElement('div');
-  d.innerHTML = `<svg id="pl-defs" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>${Object.entries(GLYPHS).map(([k, p]) => `<symbol id="g-${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</symbol>`).join('')}<pattern id="pl-dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="1.1" fill="#d9d9d2"/></pattern><marker id="pl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a9aa3"/></marker><marker id="pl-arrow-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2b5cff"/></marker></defs></svg>`;
+  d.innerHTML = `<svg id="pl-defs" width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>${Object.entries(GLYPHS).map(([k, p]) => `<symbol id="g-${k}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</symbol>`).join('')}<pattern id="pl-dots" width="18" height="18" patternUnits="userSpaceOnUse"><circle cx="1.2" cy="1.2" r="1.1" fill="#d9d9d2"/></pattern><marker id="pl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#9a9aa3"/></marker><marker id="pl-arrow-on" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#2b5cff"/></marker><marker id="pl-kind" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="10" markerHeight="10" orient="auto"><path d="M1 1L11 6L1 11z" fill="#fff" stroke="#8e8e96" stroke-width="1.4"/></marker></defs></svg>`;
   document.body.appendChild(d.firstChild);
 }
 // --- data: /api/plane, asked again every 30 s while Home or Map is visible ---
@@ -626,6 +629,10 @@ function planeLayout(){
       const frontier = [start.name]; seen.add(start.name);
       while (frontier.length) {
         frontier.sort((a, b) => rank[a] - rank[b]); const n = frontier.shift(); order.push(n);
+        // a parent's kinds sit in the cells right after it, before its links
+        const kindsOf = (x) => (PL.kind_links || []).filter(k => k.of === x).map(k => k.kind).sort();
+        const place = (x) => { for (const k of kindsOf(x)) if (inArea.has(k) && !seen.has(k)) { seen.add(k); order.push(k); place(k); } };
+        place(n);
         for (const m of (adj[n] || [])) if (inArea.has(m) && !seen.has(m)) { seen.add(m); frontier.push(m); }
       }
     }
@@ -737,7 +744,7 @@ const metOf = (n) => PL.metrics.find(m => m.name === n);
 const srcOf2 = (n) => PL.sources.find(s => s.name === n);
 const agOf = (id) => PL.agents.find(a => String(a.id) === String(id));
 function ariaFor(e){
-  const parts = [e.label, `entity in ${e.area}`, plural(e.fields, 'field')];
+  const parts = [e.label, e.extends ? `a kind of ${labelOf(e.extends)}, in ${e.area}` : `entity in ${e.area}`, plural(e.fields, 'field')];
   if (e.metrics.length) parts.push(`counted by ${plural(e.metrics.length, 'metric')}`);
   const why = (e.reasons || []).map(r => r.text).slice(0, 2).join('; ');
   return parts.join(', ') + '. ' + (e.light === 'none' ? 'Nothing to fix.' : `${cap(LIGHTS[e.light][1])}${why ? ': ' + why : ''}.`);
@@ -838,17 +845,27 @@ function drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty){
     linksSvg += `<g class="pl-link${on ? ' on' : ''}${pl.sel && !on && pl.sel.startsWith('e:') ? ' dim' : ''}"><line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/><title>${esc(`${l.from} ${l.name} ${l.to} · ${l.cardinality || ''}`)}</title>${on ? `<text x="${(a[0] + b[0]) / 2}" y="${(a[1] + b[1]) / 2 - 6}" text-anchor="middle" class="sub ${l.described ? '' : 'warnc'}">${esc(l.name)}${l.described ? '' : ' · no sentence'}</text>` : ''}</g>`;
   }
   linksSvg += ghostLinks(pos, ghosts, false);
+  // "kind of": a thin dotted line from the kind to its parent, a hollow triangle at the parent's end
+  let kindSvg = '';
+  for (const k of (PL.kind_links || [])) {
+    const a = pos(k.kind), b = pos(k.of); if (!a || !b || !shown.has(k.kind) || !shown.has(k.of)) continue;
+    const on = pl.sel === 'e:' + k.kind || pl.sel === 'e:' + k.of;
+    // drawn over the tiles, across the seam between them, so it shows even between neighbours
+    const t0 = 0.3, t1 = 0.7, x1 = a[0] + (b[0] - a[0]) * t0, y1 = a[1] + (b[1] - a[1]) * t0 - 6, x2 = a[0] + (b[0] - a[0]) * t1, y2 = a[1] + (b[1] - a[1]) * t1 - 6;
+    kindSvg += `<g class="pl-kindline${on ? ' on' : ''}"><line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" marker-end="url(#pl-kind)"/><title>${esc(k.kind + ' is a kind of ' + k.of)}</title>${on ? `<text x="${(x1 + x2) / 2}" y="${(y1 + y2) / 2 - 8}" text-anchor="middle" class="sub">kind of</text>` : ''}</g>`;
+  }
   // tiles
   const tile = (e) => {
     const p = pos(e.name); if (!p) return '';
     const key = 'e:' + e.name; keys.push(key);
-    const col = domainColor(e.area), tok = [e.metrics.length ? `Σ${e.metrics.length}` : '', e.guardrails ? `⛉${e.guardrails}` : '', e.actions ? `ϟ${e.actions}` : ''].filter(Boolean).join('  ');
+    const folded = (e.kinds || []).filter(k => !shown.has(k)).length;
+    const col = domainColor(e.area), tok = [e.metrics.length ? `Σ${e.metrics.length}` : '', e.guardrails ? `⛉${e.guardrails}` : '', e.actions ? `ϟ${e.actions}` : '', folded ? `+${plural(folded, 'kind')}` : ''].filter(Boolean).join('  ');
     const w = (PL.waiting || []).find(x => x.drawn && (x.nodes || []).some(n => n.name === e.name && n.status !== 'same' && n.status !== 'new') && (pl.waiting === 'all' || pl.waiting === x.id));
     const ov = pl.overlay && (pl.overlay.nodes || []).find(n => n.name === e.name && n.status !== 'same');
     const st = ov ? ov.status : w ? (w.nodes.find(n => n.name === e.name) || {}).status : '';
     const ring = st === 'changed' ? '<polygon points="0,-44 88,0 0,44 -88,0" class="pl-ring amber"/>' : st === 'removed' ? '<polygon points="0,-44 88,0 0,44 -88,0" class="pl-ring red"/>' : '';
     const close = pl.cam && pl.cam.k >= 3 && pl.sel === key;
-    return `<g class="pl-item tile${pl.sel === key ? ' sel' : ''}${dim(e.name)}${filt(e)}${st === 'removed' ? ' struck' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(ariaFor(e) + (st ? ` A waiting proposal would ${st === 'removed' ? 'remove' : 'change'} it.` : ''))}" transform="translate(${p[0]},${p[1]})">${ring}<g class="lift"><polygon points="-70,0 0,35 0,44 -70,9" class="side-l"/><polygon points="70,0 0,35 0,44 70,9" class="side-r"/><polygon points="0,-35 70,0 0,35 -70,0" class="top"/><polyline points="-70,0 0,-35 70,0" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round"/><use href="#g-${esc(e.icon)}" x="-15" y="-24" width="30" height="30" style="color:${col}"/>${badgeSvg(e.light, 44, -26)}${st === 'removed' ? badgeSvg('red', 44, -26) : ''}${close ? `<text y="14" text-anchor="middle" class="sub">${esc(plural(e.fields, 'field'))} · key ${esc(e.key || '—')}</text>` : ''}</g><text y="62" text-anchor="middle" class="lbl">${esc(cutTo(e.label, 22))}</text>${e.same_label ? `<text y="76" text-anchor="middle" class="sub mono">${esc(e.name)}</text>` : ''}${tok ? `<text y="${e.same_label ? 90 : 77}" text-anchor="middle" class="tok">${esc(tok)}</text>` : ''}${!e.has_data ? `<g transform="translate(0,${tok ? 94 : 80})"><rect x="-36" y="-10" width="72" height="16" rx="8" class="chipbg"/><text y="2" text-anchor="middle" class="sub">no data yet</text></g>` : ''}${close ? `<g class="pl-open" transform="translate(0,${tok ? 112 : 98})"><rect x="-62" y="-12" width="124" height="22" rx="11"/><text y="3" text-anchor="middle">Open ${esc(cutTo(e.label, 12))} ›</text></g>` : ''}</g>`;
+    return `<g class="pl-item tile${pl.sel === key ? ' sel' : ''}${dim(e.name)}${filt(e)}${st === 'removed' ? ' struck' : ''}" data-key="${esc(key)}" role="button" tabindex="-1" aria-label="${esc(ariaFor(e) + (st ? ` A waiting proposal would ${st === 'removed' ? 'remove' : 'change'} it.` : ''))}" transform="translate(${p[0]},${p[1]})">${ring}<g class="lift"><polygon points="-70,0 0,35 0,44 -70,9" class="side-l"/><polygon points="70,0 0,35 0,44 70,9" class="side-r"/><polygon points="0,-35 70,0 0,35 -70,0" class="top"/><polyline points="-70,0 0,-35 70,0" fill="none" stroke="${col}" stroke-width="3" stroke-linecap="round"/><use href="#g-${esc(e.icon)}" x="-15" y="-24" width="30" height="30" style="color:${col}"/>${badgeSvg(e.light, 44, -26)}${st === 'removed' ? badgeSvg('red', 44, -26) : ''}${close ? `<text y="14" text-anchor="middle" class="sub">${esc(plural(e.fields, 'field'))} · key ${esc(e.key || '—')}</text>` : ''}</g><text y="62" text-anchor="middle" class="lbl">${esc(cutTo(e.label, 22))}</text>${e.same_label ? `<text y="76" text-anchor="middle" class="sub mono">${esc(e.name)}</text>` : e.extends ? `<text y="76" text-anchor="middle" class="sub">kind of ${esc(cutTo(labelOf(e.extends), 16))}</text>` : ''}${tok ? `<text y="${e.same_label || e.extends ? 90 : 77}" text-anchor="middle" class="tok">${esc(tok)}</text>` : ''}${!e.has_data ? `<g transform="translate(0,${(tok ? 94 : 80) + (e.extends || e.same_label ? 14 : 0)})"><rect x="-36" y="-10" width="72" height="16" rx="8" class="chipbg"/><text y="2" text-anchor="middle" class="sub">no data yet</text></g>` : ''}${close ? `<g class="pl-open" transform="translate(0,${tok ? 112 : 98})"><rect x="-62" y="-12" width="124" height="22" rx="11"/><text y="3" text-anchor="middle">Open ${esc(cutTo(e.label, 12))} ›</text></g>` : ''}</g>`;
   };
   for (const e of S.list.slice().sort((a, b) => { const pa = pos(a.name) || [0, 0], pb = pos(b.name) || [0, 0]; return pa[1] - pb[1]; })) tiles += tile(e);
   for (const f of S.folds) {
@@ -886,7 +903,7 @@ function drawIso(L, S, ghosts, B0, shown, dim, filt, keys, empty){
   }
   const loose = PL.metrics.filter(m => !m.entities.length);
   if (loose.length) { const key = 'loose'; keys.push(key); const x = (srcs.length ? srcs[srcs.length - 1].x + 230 : (B0.x0 + B0.x1) / 2); tiers += `<g class="pl-item chip" data-key="loose" role="button" tabindex="-1" aria-label="${esc(plural(loose.length, 'metric') + ' not tied to an entity')}" transform="translate(${x},${bottom})"><text x="0" y="5" class="lbl">Σ ${esc(plural(loose.length, 'metric') + ' not tied to an entity')}</text></g>`; }
-  return back + between + linksSvg + tiers + tiles;
+  return back + between + linksSvg + tiers + tiles + kindSvg;
 }
 // --- the Map: flat, opened up, three lanes: sources → entities ← metrics ---
 const NODE_W = 230;
@@ -912,6 +929,13 @@ function drawFlat(L, S, ghosts, B0, shown, dim, filt, keys){
     arrows += `<g class="pl-link${on ? ' on' : ''}${pl.sel && pl.sel.startsWith('e:') && !on ? ' dim' : ''}${l.missing ? ' missing' : ''}"><path d="${d}" fill="none" marker-end="url(#${on ? 'pl-arrow-on' : 'pl-arrow'})"/><text x="${self ? a[0] + NODE_W + 50 : (ax + bx) / 2}" y="${self ? ay : (ay + by) / 2 - 6}" text-anchor="middle" class="sub ${l.described ? '' : 'warnc'}">${esc(l.missing ? 'missing: ' + l.to : l.name)}${l.cardinality ? ' · ' + esc(l.cardinality) : ''}${l.described ? '' : ' · no sentence'}</text></g>`;
   }
   arrows += ghostLinks(pos, ghosts, true);
+  for (const k of (PL.kind_links || [])) {
+    const a = pos(k.kind), b = pos(k.of); if (!a || !b || !shown.has(k.kind) || !shown.has(k.of) || !pl.show.entities) continue;
+    const pe = entOf(k.of), on = pl.sel === 'e:' + k.kind || pl.sel === 'e:' + k.of;
+    const ax = a[0] + NODE_W / 2, ay = a[1], bx = b[0] + NODE_W / 2, by = b[1] + (pe ? nodeH(pe) : 70) + 4;
+    const up = ay > by, y1 = up ? ay : a[1] + nodeH(entOf(k.kind) || { name: '' }), y2 = up ? by : b[1] - 4;
+    arrows += `<g class="pl-kindline${on ? ' on' : ''}"><path d="M${ax} ${y1} L${bx} ${y2}" fill="none" marker-end="url(#pl-kind)"/><title>${esc(k.kind + ' is a kind of ' + k.of)}</title><text x="${(ax + bx) / 2 + 6}" y="${(y1 + y2) / 2}" class="sub">kind of</text></g>`;
+  }
   // entity nodes, as HTML inside the drawing so field lists wrap and inputs work
   const node = (e) => {
     const p = pos(e.name); if (!p) return;
@@ -1100,11 +1124,25 @@ function reasonLines(rs, editable){
     return `<div class="gline"><span class="gl-i ${r.light === 'red' ? 'bad' : r.light === 'amber' ? 'warn' : 'ok'}" aria-hidden="true">${LIGHTS[r.light] ? LIGHTS[r.light][0] : '·'}</span><span>${esc(cap(r.text))}${r.review ? ` <button class="small" onclick="go('review',${jq(r.review)})">Review</button>` : ''}${fx}</span></div>`;
   }).join('');
 }
+// the rule of three on an entity's page: a suggestion, never a problem
+function adviceFor(name){
+  const a = (O.advice || []).filter(x => (x.entities || []).includes(name));
+  return a.length ? `<div class="rv-note" style="max-width:820px"><span aria-hidden="true">💡</span> <span><b>A suggestion, not a problem</b>${a.map(x => `<div>${esc(x.text)}</div>`).join('')}<div class="hint">A common parent is made with the make_parent op, by an agent or in the YAML.</div></span></div>` : '';
+}
 function inlineFix(f){
+  if (f.op === 'distinct') {
+    const id = 'pf-d-' + (f.a + '-' + f.b).replace(/[^\w-]/g, '_');
+    return `<div class="row" style="margin-top:4px;gap:6px"><label class="sr" for="${id}">Why are they different on purpose?</label><input id="${id}" placeholder="Why are they different on purpose?" style="flex:1 1 160px;min-width:0"><button class="small" onclick="planeDistinct(${jq(f.a)}, ${jq(f.b)}, ${jq(id)})">These are different</button></div>`;
+  }
   const id = 'pf-' + (f.metric || f.type || '').replace(/[^\w-]/g, '_') + '-' + f.field;
   const tm = f.op === 'set_metric' ? TR('metric', f.metric) : null, accepts = tm && (tm.grade === 'proposed' || !!tm.changed_since);
   const label = f.field === 'owner' ? 'Who decides what it means?' : f.op === 'set_type_description' ? `What is one ${labelOf(f.type)}?` : 'What does it measure?';
   return `<div class="row" style="margin-top:4px;gap:6px"><label class="sr" for="${id}">${esc(label)}</label><input id="${id}" placeholder="${esc(label)}" value="${esc(f.field === 'owner' ? ME() : '')}" style="flex:1 1 160px;min-width:0"><button class="small" onclick="planeFix(${jq(JSON.stringify(f))}, ${jq(id)})">Save</button>${accepts ? '<span class="hint">saving also accepts this metric as it is now</span>' : ''}</div>`;
+}
+async function planeDistinct(a, b, id){
+  if (!decideName()) return;
+  const r = await post(B + '/api/trust', { op: 'distinct', a, b, why: (($(id) || {}).value || '').trim() });
+  await afterWrite(r); if (r && r.written) { await loadPlane(true); drawPlane(true); }
 }
 async function planeFix(fj, id){
   const f = JSON.parse(fj), v = ($(id) || {}).value || ''; if (!v.trim()) { note('Type it first.', true); return; }
@@ -1124,10 +1162,11 @@ function planeAside(){
       const fromWhere = {}; (e.reasons || []).forEach(r => { const k = r.from || 'itself'; (fromWhere[k] = fromWhere[k] || []).push(r); });
       const waiting = (PL.waiting || []).filter(w => (w.nodes || []).some(n => n.name === e.name && n.status !== 'same'));
       h = `<div class="pl-card"><div class="row" style="gap:8px"><svg width="22" height="22" style="color:${domainColor(e.area)}" aria-hidden="true"><use href="#g-${esc(e.icon)}"/></svg><h2 style="font-size:17px">${esc(e.label)}</h2>${e.same_label ? `<span class="mono hint">${esc(e.name)}</span>` : ''}<span style="margin-left:auto" class="lbw ${e.light}">${e.light !== 'none' ? `<span class="lb ${e.light}">${LIGHTS[e.light][0]}</span> ` : ''}${esc(e.light === 'none' ? 'nothing to fix' : LIGHTS[e.light][1])}</span></div>
+        ${e.extends || (e.kinds || []).length ? `<div class="hint">${e.extends ? `A kind of <button type="button" class="lnk" onclick="selectItem('e:'+${jq(e.extends)},{fly:true})">${esc(labelOf(e.extends))}</button>${e.where ? ' · ' + esc(e.where) : ''} · ` : ''}Kinds: ${(e.kinds || []).length ? e.kinds.map(k => `<button type="button" class="lnk" onclick="selectItem('e:'+${jq(k)},{fly:true})">${esc(labelOf(k))}</button>`).join(', ') : 'none'}</div>` : ''}
         <div class="hint">${esc(e.area)} · entity · ${esc(e.icon_why.startsWith('name: ') ? 'icon from the word ' + e.icon_why.slice(6) : e.icon_why.startsWith('source: ') ? 'icon from its source' : 'no word in its name gave an icon')}</div>
         ${e.description ? `<div style="font-size:13.5px">${esc(e.description)}</div>` : `<div class="gline"><span class="gl-i warn">!</span><span>No description yet.${editable ? inlineFix({ op: 'set_type_description', type: e.name, field: 'description' }) : ''}</span></div>`}
         <div class="hint">${esc(plural(e.fields, 'field'))}${e.key ? ' · key ' + esc(e.key) : ' · no key'}${e.units.length ? ' · ' + esc(e.units.map(u => /^[A-Z]{3}$/.test(u) ? 'money in ' + u : u).join(', ')) : ''}</div>
-        <div class="drow"><span class="hint">Source</span><span>${e.source ? `${esc(e.source.name)}: ${esc(srcWords(e.source.kind))}${O && TR('binding', e.name) ? gradeLine('binding', e.name) : ''}` : `No data yet ${PL.space.editable ? `<button class="small" onclick="ui.typeTab='data';go('entities',${jq(e.name)})">Bind a table</button>` : ''}`}</span></div>
+        <div class="drow"><span class="hint">Source</span><span>${e.where && e.extends ? `${esc(labelOf(e.extends))}'s rows where ${esc(e.where)}${gradeLine('binding', e.name)}` : e.source ? `${esc(e.source.name)}: ${esc(srcWords(e.source.kind))}${O && TR('binding', e.name) ? gradeLine('binding', e.name) : ''}` : `No data yet ${PL.space.editable ? `<button class="small" onclick="ui.typeTab='data';go('entities',${jq(e.name)})">Bind a table</button>` : ''}`}</span></div>
         <div class="drow"><span class="hint">Metrics</span><span>${ms.length ? ms.map(m => `<div><b>${esc(m.label)}</b>: ${esc(m.sentence ? m.sentence.charAt(0).toLowerCase() + m.sentence.slice(1) : 'counted by its own recipe')}${gradeLine('metric', m.name)}</div>`).join('') : 'none counts it yet'}</span></div>
         <div class="drow"><span class="hint">Guardrails</span><span>${e.guardrails ? `${e.guardrails}: ${esc(e.guardrail_names.join(', '))}${e.guardrails > 3 ? '…' : ''}` : 'none yet'}</span></div>
         ${e.actions ? `<div class="drow"><span class="hint">Actions</span><span>${e.actions}</span></div>` : ''}
@@ -1243,7 +1282,9 @@ function renderSources(v){
 async function renderThings(v){
   const f = facts();
   let list = `<button class="primary small" style="margin:0 4px 8px" ${ro()?'disabled':''} onclick="newTypeForm()">+ New entity</button>`;
-  for (const d of O.domains) { list += `<h4>${esc(d.name)}</h4>` + d.types.map(t => { const ft = f.types.find(x => x.name === t.name) || {}; const gap = (ft.fields||0) - (ft.described||0); return `<button class="item ${route.arg===t.name?'active':''}" onclick="go('entities',${jq(t.name)})"><span>${esc(t.name)}</span>${gap?`<span class="gap">${gap}</span>`:''}</button>`; }).join(''); }
+  // kinds sit right under their parent, indented
+  const chainOf = (n) => { const out = [n]; let cur = (f.types.find(x => x.name === n) || {}).extends; while (cur && out.length < 8) { out.unshift(cur); cur = (f.types.find(x => x.name === cur) || {}).extends; } return out; };
+  for (const d of O.domains) { const sorted = d.types.slice().sort((a, b) => chainOf(a.name).join('/').localeCompare(chainOf(b.name).join('/'))); list += `<h4>${esc(d.name)}</h4>` + sorted.map(t => { const ft = f.types.find(x => x.name === t.name) || {}; const gap = (ft.fields||0) - (ft.described||0); const depth = chainOf(t.name).length - 1; return `<button class="item ${route.arg===t.name?'active':''}" style="${depth ? `padding-left:${8 + depth * 14}px` : ''}" title="${ft.extends ? esc('a kind of ' + ft.extends) : ''}" onclick="go('entities',${jq(t.name)})"><span>${depth ? '↳ ' : ''}${esc(t.name)}</span>${gap?`<span class="gap">${gap}</span>`:''}</button>`; }).join(''); }
   if (ui.newType) { v.innerHTML = `<div class="list">${list}</div>` + main(newTypeHtml()); return; }
   const name = route.arg || (f.types[0] && f.types[0].name);
   if (!name) { v.innerHTML = `<div class="list">${list}</div>` + main('<div class="empty">No entities yet. Create one on the left.</div>'); return; }
@@ -1253,11 +1294,17 @@ async function renderThings(v){
   const tabs = [['fields','Fields'],['links','Links'],['rules','Guardrails'],['data','Data'],['yaml','YAML']].map(([k, l]) => `<button class="${ui.typeTab===k?'on':''}" onclick="ui.typeTab='${k}';render()">${l}</button>`).join('');
   let body = '';
   if (ui.typeTab === 'fields') {
-    body = `<div class="desc">Every field needs plain words. That sentence is what an agent reads when it decides what the field means.</div><table><tr><th>field</th><th>kind</th><th>in plain words</th></tr>` + d.properties.map(p => `<tr><td class="mono" style="white-space:nowrap">${esc(p.name)}${p.key?' <span class="chip" style="font-size:10.5px">id</span>':''}</td><td style="color:var(--muted);font-size:12.5px;white-space:nowrap">${esc(p.type)}${p.values?' · '+esc(p.values.join(' / ')):''}${p.unit?' ('+esc(p.unit)+')':''}</td><td><input class="${p.description?'':'need'}" style="width:100%" value="${esc(p.description)}" placeholder="Not described. What does ${esc(p.name)} mean?" ${ro()?'disabled':''} onchange="patch({op:'set_property_description',type:${jq(d.name)},property:${jq(p.name)},text:this.value})"></td></tr>`).join('') + '</table>' + `<div class="row"><button class="small" ${ro()?'disabled':''} onclick="ui.typeTab='yaml';openEditor(${jq(d.file)},${jq(d.name)},'type')">+ Add a field (edit YAML)</button></div>`;
+    const ownProps = d.properties.filter(p => !p.from), fromProps = d.properties.filter(p => p.from);
+    const fromRows = fromProps.length ? `<h4 style="padding:0;margin-top:14px">From ${esc(d.extends)} <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">· the parent's fields, read-only here</span></h4><table class="from-parent">` + fromProps.map(p => `<tr><td class="mono" style="white-space:nowrap">${esc(p.name)}${p.key?' <span class="chip" style="font-size:10.5px">id</span>':''}</td><td style="font-size:12.5px;white-space:nowrap">${esc(p.type)}${p.unit?' ('+esc(p.unit)+')':''}</td><td>${esc(p.description || 'Not described')}</td><td><button type="button" class="lnk" style="font-size:12.5px;white-space:nowrap" onclick="go('entities',${jq(p.from)})">Change on ${esc(p.from)} ›</button></td></tr>`).join('') + '</table>' : '';
+    body = `<div class="desc">Every field needs plain words. That sentence is what an agent reads when it decides what the field means.</div><table><tr><th>field</th><th>kind</th><th>in plain words</th></tr>` + ownProps.map(p => `<tr><td class="mono" style="white-space:nowrap">${esc(p.name)}${p.key?' <span class="chip" style="font-size:10.5px">id</span>':''}</td><td style="color:var(--muted);font-size:12.5px;white-space:nowrap">${esc(p.type)}${p.values?' · '+esc(p.values.join(' / ')):''}${p.unit?' ('+esc(p.unit)+')':''}</td><td><input class="${p.description?'':'need'}" style="width:100%" value="${esc(p.description)}" placeholder="Not described. What does ${esc(p.name)} mean?" ${ro()?'disabled':''} onchange="patch({op:'set_property_description',type:${jq(d.name)},property:${jq(p.name)},text:this.value})"></td></tr>`).join('') + '</table>' + `<div class="row"><button class="small" ${ro()?'disabled':''} onclick="ui.typeTab='yaml';openEditor(${jq(d.file)},${jq(d.name)},'type')">+ Add a field (edit YAML)</button></div>` + fromRows;
   } else if (ui.typeTab === 'links') {
-    const out = d.relationships.map(r => linkRow(d.name, r.name, r.to, r.cardinality, r.description)), inc = d.incoming.map(r => linkRow(r.from, r.name, d.name, r.cardinality, r.description, true));
-    body = (out.concat(inc).join('') || '<div class="empty">No links yet.</div>') + `<div class="row"><button class="small" ${ro()?'disabled':''} onclick="ui.lf.from=${jq(d.name)};go('links')">+ Add a link from ${esc(d.name)}</button></div>`;
+    const out = d.relationships.filter(r => !r.from).map(r => linkRow(d.name, r.name, r.to, r.cardinality, r.description)), inc = d.incoming.filter(r => !r.ends_at).map(r => linkRow(r.from, r.name, d.name, r.cardinality, r.description, true));
+    const fromL = d.relationships.filter(r => r.from).map(r => linkRow(r.from, r.name, r.to, r.cardinality, r.description)).concat(d.incoming.filter(r => r.ends_at).map(r => linkRow(r.from, r.name, r.ends_at, r.cardinality, r.description, true)));
+    body = (out.concat(inc).join('') || (fromL.length ? '' : '<div class="empty">No links yet.</div>')) + (fromL.length ? `<h4 style="padding:0">From ${esc(d.extends)}</h4>` + fromL.join('') : '') + `<div class="row"><button class="small" ${ro()?'disabled':''} onclick="ui.lf.from=${jq(d.name)};go('links')">+ Add a link from ${esc(d.name)}</button></div>`;
   } else if (ui.typeTab === 'rules') {
+    const own = d.constraints.filter(c => !c.from), inh = d.constraints.filter(c => c.from);
+    const card = (c) => `<div class="card"><div class="row">${sev(c.severity)}<b>${esc(c.name)}</b><span class="mono" style="color:var(--faint)">${esc(c.id)}</span><a style="margin-left:auto;font-size:12.5px" onclick="go('rules',${jq(c.id)})">open</a></div><div style="font-size:12.5px;color:var(--muted)">${esc(c.rationale || '')}</div></div>`;
+    if (inh.length) { body = (own.map(card).join('') || '') + `<h4 style="padding:0">From ${esc(d.extends)}</h4>` + inh.map(card).join('') + `<div class="row"><button class="small" ${ro()?'disabled':''} onclick="ui.rf.applies=${jq(d.name)};go('rules')">+ Add a guardrail for ${esc(d.name)}</button></div>`; } else
     body = (d.constraints.map(c => `<div class="card"><div class="row">${sev(c.severity)}<b>${esc(c.name)}</b><span class="mono" style="color:var(--faint)">${esc(c.id)}</span><a style="margin-left:auto;font-size:12.5px" onclick="go('rules',${jq(c.id)})">open</a></div><div style="font-size:12.5px;color:var(--muted)">${esc(c.rationale || '')}</div></div>`).join('') || '<div class="empty">No guardrails yet.</div>') + `<div class="row"><button class="small" ${ro()?'disabled':''} onclick="ui.rf.applies=${jq(d.name)};go('rules')">+ Add a guardrail for ${esc(d.name)}</button></div>`;
   } else if (ui.typeTab === 'data') {
     body = await dataTab(d);
@@ -1265,10 +1312,14 @@ async function renderThings(v){
     const y = await fetch(B + '/api/yaml?file=' + encodeURIComponent(d.file)).then(r => r.text());
     body = `<div class="desc">This is the file an agent reads. Everything on the other tabs is a friendlier view of it.</div><div class="row"><span class="mono" style="color:var(--muted)">${esc(d.file)}</span>${yamlBtn(d.file, d.name, 'type')}</div><pre>${esc(y)}</pre>`;
   }
-  const inner = roBanner() + `<div class="row"><h1>${esc(d.name)}<small>${esc(d.domain || '')}</small></h1><span class="mono" style="margin-left:auto;color:var(--faint)">${esc(d.file)}</span></div>
+  const kindLine = d.extends ? `<div class="row" style="gap:6px"><span class="hint">A kind of</span><button type="button" class="lnk" onclick="go('entities',${jq(d.extends)})">${esc(d.extends)}</button><span class="hint">· ${esc(d.rows || '')}</span></div>` : '';
+  const kindsLine = (d.kinds || []).length || !ro() ? `<div class="row" style="gap:6px">${(d.kinds || []).length ? `<span class="hint">Kinds of ${esc(d.name)}:</span>${d.kinds.map(k => `<button type="button" class="lnk" onclick="go('entities',${jq(k.name)})">${esc(k.name)}</button><span class="hint">(${esc(k.how)})</span>`).join(' ')}` : ''}${!ro() ? `<button class="small" onclick="newTypeForm(${jq(d.name)})">Make a kind of ${esc(d.name)}…</button>` : ''}</div>` : '';
+  const inner = roBanner() + `<div class="row"><h1>${esc(d.name)}<small>${esc(d.domain || '')}${d.extends ? ' · a kind of ' + esc(d.extends) : ''}</small></h1><span class="mono" style="margin-left:auto;color:var(--faint)">${esc(d.file)}</span></div>${kindLine}
     <textarea rows="2" class="${d.description?'':'need'}" style="max-width:820px" placeholder="What is a ${esc(d.name)}, in plain words?" ${ro()?'disabled':''} onchange="patch({op:'set_type_description',type:${jq(d.name)},text:this.value})">${esc(d.description)}</textarea>
     ${(O.glossary || []).filter(g => g.means === d.name).length ? `<div class="row" style="gap:6px"><span class="hint">People also say</span>${(O.glossary || []).filter(g => g.means === d.name).map(g => `<span class="chip" style="margin:0">“${esc(g.term)}”</span>${gradeChip('term', g.term)}${gradeButtons('term', g.term)}`).join('')}</div>` : ''}
     ${d.iri ? `<div class="hint" title="The standard identity other tools (OWL, SKOS, SHACL, Apache Ossie) know this entity by. Set it with iri: in the YAML.">IRI <span class="mono">${esc(d.iri)}</span></div>` : ''}
+    ${kindsLine}
+    ${adviceFor(d.name)}
     <div class="tabs">${tabs}</div>${body}`;
   v.innerHTML = `<div class="list">${list}</div>` + main(inner);
 }
@@ -1277,6 +1328,7 @@ function linkRow(from, name, to, card, desc, incoming){
 }
 async function dataTab(d){
   const w = await api(B + '/api/where?name=' + encodeURIComponent(d.name));
+  if (w.rows_of) return nameBar() + `<div class="card"><div class="row"><b>Rows: ${esc(w.rows_of)}'s rows where ${esc(Object.entries(w.where || {}).map(([f, vs]) => f + ' is ' + [].concat(vs).join(' or ')).join(' and '))}</b><span style="margin-left:auto"></span>${gradeChip('binding', d.name)}</div>${gradeLine('binding', d.name)}<div style="font-size:13px">${esc(w.hint || '')}</div>${w.row_count !== undefined ? `<div class="hint">${plural(w.row_count, 'row')} match today.</div>` : ''}<div class="hint">A kind that picks its parent's rows has no source of its own: change ${esc(w.rows_of)}'s, or edit \`where:\` in the YAML.</div></div>`;
   let h = w.connection ? nameBar() : '';
   if (w.connection) {
     const fromUser = w.kind === 'from_user';
@@ -1290,13 +1342,13 @@ async function dataTab(d){
   h += `<h4 style="padding:0">${w.connection ? 'Change the binding' : 'Bind a table'}</h4><div class="form"><label>Connection</label><select id="bind-conn" ${ro()?'disabled':''}>${(O.sources||[]).map(s => `<option value="${esc(s.connection)}" ${w.connection===s.connection?'selected':''}>${esc(s.connection)} (${esc(s.kind)})</option>`).join('')}</select><label>Table</label><input id="bind-table" class="mono" value="${esc(w.table||'')}" placeholder="e.g. ${esc(snake(d.name))}s" ${ro()?'disabled':''}><label>Identified by</label><select id="bind-key" ${ro()?'disabled':''}>${d.properties.map(p => `<option value="${esc(p.name)}" ${(d.key===p.name)?'selected':''}>${esc(p.name)}</option>`).join('')}</select><span></span><div><button class="primary small" ${ro()?'disabled':''} onclick="patch({op:'set_source',type:${jq(d.name)},connection:$('bind-conn').value,table:$('bind-table').value,key:$('bind-key').value})">Save binding</button></div></div>`;
   return h;
 }
-function newTypeForm(){ ui.newType = { name: '', domain: (O.domains[0] || {}).name || '', desc: '' }; render(); }
+function newTypeForm(extendsName){ const p = extendsName && (O.types || []).find(t => t.name === extendsName); ui.newType = { name: '', domain: (p && p.domain) || (O.domains[0] || {}).name || '', desc: '', extends: extendsName || '' }; if (route.screen !== 'entities') go('entities'); render(); }
 function newTypeHtml(){
   const n = ui.newType;
-  return `<h1>A new entity</h1><div class="form"><label>Call it</label><input id="nt-name" value="${esc(n.name)}" placeholder="e.g. GiftCard" oninput="ui.newType.name=this.value"><label>Which area</label><div>${O.domains.map(d => `<span class="chip pick ${n.domain===d.name?'on':''}" onclick="ui.newType.domain=${jq(d.name)};render()">${esc(d.name)}</span>`).join('')}</div><label>In plain words</label><textarea id="nt-desc" rows="3" placeholder="What is it, who owns it, what matters about it" oninput="ui.newType.desc=this.value">${esc(n.desc)}</textarea><span></span><div class="row"><button class="primary" onclick="saveNewType()">Create it</button><button onclick="ui.newType=null;render()">Cancel</button><span style="font-size:12.5px;color:var(--muted)">Fields, links and guardrails come next, on its own page.</span></div></div>
+  return `<h1>${n.extends ? `A new kind of ${esc(n.extends)}` : 'A new entity'}</h1>${n.extends ? `<div class="desc">It gets every field, link and guardrail of ${esc(n.extends)}; add only what is its own. Its rows: give it a source of its own, or say which of ${esc(n.extends)}'s rows are its (\`where:\` in the YAML).</div>` : ''}<div class="form"><label>Call it</label><input id="nt-name" value="${esc(n.name)}" placeholder="e.g. GiftCard" oninput="ui.newType.name=this.value"><label>Which area</label><div>${O.domains.map(d => `<span class="chip pick ${n.domain===d.name?'on':''}" onclick="ui.newType.domain=${jq(d.name)};render()">${esc(d.name)}</span>`).join('')}</div><label>In plain words</label><textarea id="nt-desc" rows="3" placeholder="What is it, who owns it, what matters about it" oninput="ui.newType.desc=this.value">${esc(n.desc)}</textarea><span></span><div class="row"><button class="primary" onclick="saveNewType()">Create it</button><button onclick="ui.newType=null;render()">Cancel</button><span style="font-size:12.5px;color:var(--muted)">Fields, links and guardrails come next, on its own page.</span></div></div>
   <div class="desc" style="margin-top:14px">Prefer the raw file? <a onclick="ui.newType=null;startNew('type')">Create from the YAML template</a>.</div>`;
 }
-async function saveNewType(){ const n = ui.newType; if (!n.name.trim()) { toast({ error: 'Give it a name first.' }); return; } const r = await patch({ op: 'add_type', name: n.name.trim(), domain: n.domain, description: n.desc }); if (r && r.written) { ui.newType = null; ui.typeTab = 'fields'; go('entities', r.name || n.name.trim()); } }
+async function saveNewType(){ const n = ui.newType; if (!n.name.trim()) { toast({ error: 'Give it a name first.' }); return; } const r = await patch(Object.assign({ op: 'add_type', name: n.name.trim(), domain: n.domain, description: n.desc }, n.extends ? { extends: n.extends } : {})); if (r && r.written) { ui.newType = null; ui.typeTab = 'fields'; go('entities', r.name || n.name.trim()); } }
 
 // --- links ---
 function renderLinks(v){
@@ -1314,7 +1366,7 @@ const runsText = (r) => !r ? 'nowhere declared yet' : r.kind === 'mcp' ? `calls 
 const ioText = (m) => Object.entries(m || {}).map(([k, t]) => `${k}: ${t}`).join(', ') || 'nothing';
 const srcOf = (m) => m.source ? m.source.connection : ((m.variants || []).map(x => x.source.connection).join(' and ') || 'sql');
 // the kinds in the page's words, with the plain hint a screen shows the first time it names one
-const HINTS = { entity: ['Entity', 'a kind of thing in your business'], field: ['Field', 'one fact about an entity, like a column'], link: ['Link', 'how two entities connect'], metric: ['Metric', 'a number every agent computes the same way'], function: ['Function', 'an operation an agent can run with its own tools'], guardrail: ['Guardrail', 'a rule an action must not break'], action: ['Action', 'something agents may do'], source: ['Source', 'where an entity’s rows come from'], word: ['Also called', 'another word people use for an entity'] };
+const HINTS = { entity: ['Entity', 'a kind of thing in your business'], field: ['Field', 'one fact about an entity, like a column'], link: ['Link', 'how two entities connect'], metric: ['Metric', 'a number every agent computes the same way'], function: ['Function', 'an operation an agent can run with its own tools'], guardrail: ['Guardrail', 'a rule an action must not break'], action: ['Action', 'something agents may do'], source: ['Source', 'where an entity’s rows come from'], word: ['Also called', 'another word people use for an entity'], kind: ['A kind of', 'an entity that is a narrower version of another, with all its fields'] };
 const hintLine = (kinds) => { const ks = [...new Set(kinds)].filter(k => HINTS[k]); return ks.length ? `<div class="hint kinds-hint">${ks.map(k => `${HINTS[k][0]}: ${esc(HINTS[k][1])}`).join(' · ')}</div>` : ''; };
 const SOURCE_WORDS = { from_user: 'files people give agents', mcp: 'tools on an MCP server', bigquery: 'a BigQuery dataset', snowflake: 'a Snowflake database', postgres: 'a Postgres database', duckdb: 'a DuckDB database', csv: 'CSV files', parquet: 'Parquet files', s3: 'files in S3', http: 'an HTTP API' };
 const sourceWords = (conn) => { const s = (O.sources || []).find(x => x.connection === conn); return s ? (SOURCE_WORDS[s.kind] || s.kind) : 'not under sources/'; };
@@ -1743,8 +1795,9 @@ function changeHtml(c){
   let body = '';
   if (c.kind === 'entity' && c.op === 'add') {
     const all = ui.rv.all[c.name], fields = c.fields || [], shown = all ? fields : fields.slice(0, 3);
-    body = `${c.description ? `<div>${esc(c.description)}</div>` : ''}<div class="hint">${esc(c.grain || 'no column identifies one row yet')}${c.binding ? ' · ' + esc(c.binding) : ''}</div><table class="rv-fields"><tbody>${shown.map(f => `<tr><td class="mono">${esc(f.name)}${f.key ? ' <span class="chip">key</span>' : ''}</td><td>${esc(f.type)}</td><td>${f.description ? esc(f.description) : '<span class="hint">Not described.</span>'}</td></tr>`).join('')}</tbody></table>${fields.length > 3 ? `<button type="button" class="lnk" style="font-size:12.5px" onclick="ui.rv.all[${jq(c.name)}]=!ui.rv.all[${jq(c.name)}];renderReviewAgain()">${all ? 'Show fewer' : `+ ${fields.length - 3} more fields · show all`}</button>` : ''}`;
-    return `<div class="rv-change ${cls}">${head(esc(c.label) + (c.label !== c.name ? ` <span class="mono hint">${esc(c.name)}</span>` : ''))}${body}</div>`;
+    const inh = c.inherited ? `<div class="hint rv-inherited">+ ${plural(c.inherited.count, 'field')} from ${esc(c.inherited.from)} (${esc(c.inherited.names.slice(0, 3).join(', '))}${c.inherited.count > 3 ? ', …' : ''})</div>` : '';
+    body = `${c.description ? `<div>${esc(c.description)}</div>` : ''}${c.rows ? `<div class="hint">Rows: ${esc(c.rows)}</div>` : `<div class="hint">${esc(c.grain || 'no column identifies one row yet')}${c.binding ? ' · ' + esc(c.binding) : ''}</div>`}<table class="rv-fields"><tbody>${shown.map(f => `<tr><td class="mono">${esc(f.name)}${f.key ? ' <span class="chip">key</span>' : ''}</td><td>${esc(f.type)}</td><td>${f.description ? esc(f.description) : '<span class="hint">Not described.</span>'}</td></tr>`).join('')}</tbody></table>${fields.length > 3 ? `<button type="button" class="lnk" style="font-size:12.5px" onclick="ui.rv.all[${jq(c.name)}]=!ui.rv.all[${jq(c.name)}];renderReviewAgain()">${all ? 'Show fewer' : `+ ${fields.length - 3} more fields · show all`}</button>` : ''}${inh}`;
+    return `<div class="rv-change ${cls}">${head(esc(c.label) + (c.label !== c.name ? ` <span class="mono hint">${esc(c.name)}</span>` : ''), c.kind_of ? `<span class="hint">· a kind of ${esc(c.kind_of)}</span>` : '')}${body}</div>`;
   }
   if (c.kind === 'entity' && c.op === 'change') {
     const f = (c.fields || []).map(x => `<div class="rv-field rv-${x.op}"><span class="rv-sym" aria-hidden="true">${SYM[x.op] || '~'}</span><span class="mono">${esc(x.name)}</span> <span>${esc(x.type || '')}</span> ${x.op === 'rename' ? `<span class="hint">${esc(x.sentence)}</span>` : x.op === 'change' ? diffs(x.diffs) : `<span class="hint">${esc(x.description || '')}</span>`}${x.op === 'remove' ? ` <span class="hint">(removed)</span>${uses(x.uses)}` : ''}</div>`).join('');
@@ -1765,6 +1818,8 @@ function changeHtml(c){
 function questionHtml(q, i, editable){
   if (!q.ask) return `<div class="rv-q"><span aria-hidden="true">⚠</span> ${esc(q.text)}</div>`;
   const f = q.fix || {}, val = (ui.rv.fixes[i] || {});
+  // said twice: usually Not now (the agent should reuse what exists), else different on purpose, with why
+  if (f.op === 'distinct') return `<div class="rv-q"><div><span aria-hidden="true">⚠</span> ${esc(q.text)}</div><label class="chk" style="margin-top:4px"><input type="checkbox" ${val.on ? 'checked' : ''} ${editable ? '' : 'disabled'} onchange="setFix(${i},'on',this.checked);renderReviewAgain()"> Accept anyway: they are different on purpose</label>${val.on ? `<input id="fx-${i}" placeholder="Why? e.g. promo_revenue will include tax from January" value="${esc(val.why || '')}" oninput="setFix(${i},'why',this.value)" style="max-width:520px">` : ''}<div class="hint">Usually Not now is the right answer: ask the agent to use what exists.</div></div>`;
   if (f.op === 'add_metric') {
     const nums = (f.numbers || []).map(n => `<option value="sum:${esc(n.name)}" ${val.pick === 'sum:' + n.name ? 'selected' : ''}>add up ${esc(n.name)} (${esc(n.type)})</option>`).join('');
     const key = f.key ? `<option value="count_distinct:${esc(f.key)}" ${val.pick === 'count_distinct:' + f.key ? 'selected' : ''}>count the different ${esc(f.key)}</option>` : '';
@@ -1804,6 +1859,7 @@ function reviewHtml(r){
   const questions = qs.length ? `<div class="rv-qs">${qs.map((q, i) => questionHtml(q, i, editable)).join('')}</div>` : '';
   const errors = (r.errors || []).length ? `<div class="rv-note bad"><span aria-hidden="true">✗</span> <span><b>This can't be accepted as it is</b>${r.errors.map(e => `<div>${esc(e.text)}</div>`).join('')}</span></div>` : '';
   const others = r.other_warnings ? `<div class="hint">The space has ${plural(r.other_warnings, 'other warning')} this proposal did not cause (see Problems).</div>` : '';
+  const advice = (r.advice || []).length ? `<div class="rv-note"><span aria-hidden="true">💡</span> <span><b>A suggestion, not a problem</b>${r.advice.map(a => `<div>${esc(a.text)}</div>`).join('')}<div class="hint">A common parent is made with the make_parent op, by an agent or in the YAML.</div></span></div>` : '';
   const undo = (r.notes || []).find(n => n.kind === 'undo');
   const removes = (r.changes || []).filter(x => x.op === 'remove');
   const anonDecision = (r.status === 'accepted' && (!d.accepted_by || d.accepted_by === 'a person')) || (r.status === 'set_aside' && (!d.decided_by || d.decided_by === 'a person'));
@@ -1818,7 +1874,7 @@ function reviewHtml(r){
     actions = `<div class="rv-actions"><button type="button" class="lnk" onclick="go('agents')">Back to Agents</button><span style="flex:1"></span><button type="button" class="lnk" onclick="ui.rv.files=!ui.rv.files;renderReviewAgain()">${ui.rv.files ? 'Hide' : 'Show'} the files</button>${r.map ? `<button type="button" class="lnk" onclick="go('review',${jq(r.id + '/map')})">Show on the map</button>` : ''}</div>`;
   }
   const files = ui.rv.files ? (r.files || []).map(f => `<div style="font-size:12.5px;margin-top:6px"><b class="mono">${esc(f.file)}</b> <span class="hint">${esc((f.summaries || []).join('; '))}${f.comments_lost ? ` · loses ${plural(f.comments_lost, 'comment')}` : ''}</span></div><div class="diff">${diffHtml(f.before, f.after)}</div>`).join('') : '';
-  return `<div class="rv"><div class="hint"><button type="button" class="lnk" onclick="go('agents')">Agents</button> › Review</div><h1 class="rv-title">${esc(r.headline)}</h1><div class="hint">${meta}</div>${quote}${state}${r.status !== 'pending' ? nameBox : ''}${notes}<div class="rv-counts">${countRow('Adds', counts.adds)}${countRow('Changes', counts.changes)}${countRow('Removes', counts.removes)}${kindsHint}</div><div class="rv-changes">${changes}</div>${errors}${questions}${asks.length ? '' : ''}${others}${undo && r.status === 'pending' ? `<div class="hint">${esc(undo.text)}</div>` : ''}${r.status === 'pending' ? nameBox : ''}${files}${actions}</div>`;
+  return `<div class="rv"><div class="hint"><button type="button" class="lnk" onclick="go('agents')">Agents</button> › Review</div><h1 class="rv-title">${esc(r.headline)}</h1><div class="hint">${meta}</div>${quote}${state}${r.status !== 'pending' ? nameBox : ''}${notes}<div class="rv-counts">${countRow('Adds', counts.adds)}${countRow('Changes', counts.changes)}${countRow('Removes', counts.removes)}${kindsHint}</div><div class="rv-changes">${changes}</div>${errors}${questions}${asks.length ? '' : ''}${others}${advice}${undo && r.status === 'pending' ? `<div class="hint">${esc(undo.text)}</div>` : ''}${r.status === 'pending' ? nameBox : ''}${files}${actions}</div>`;
 }
 function copyText(t){ try { navigator.clipboard.writeText(t); note('Copied'); } catch (e) { note('Copy did not work here; select the text instead', true); } }
 async function acceptP(id){
@@ -1830,6 +1886,7 @@ async function acceptP(id){
   (r.questions || []).forEach((q, i) => {
     const v = ui.rv.fixes[i]; if (!q.ask || !v) return; const f = q.fix || {};
     if (f.op === 'add_metric') { if (!v.pick) return; const [how, column] = v.pick.split(':'); fixes.push({ op: 'add_metric', entity: f.entity, how, column, leave_out: v.leave_out || '' }); return; }
+    if (f.op === 'distinct') { if (v.on) fixes.push({ op: 'distinct', a: f.a, b: f.b, why: (v.why || '').trim() }); return; }
     const t = (v.text || '').trim(); if (!t) return;
     if (f.op === 'set_metric') fixes.push({ op: 'set_metric', metric: f.metric, [f.field]: t });
     else if (f.op === 'set_type_description') fixes.push({ op: 'set_type_description', type: f.type, description: t });

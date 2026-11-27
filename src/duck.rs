@@ -296,6 +296,35 @@ impl<'c> Builder<'c> {
     }
 
     fn type_view(&mut self, ont: &Ontology, t: &TypeDef) -> Result<()> {
+        // a kind that picks its parent's rows: a view over the parent's view, structured `where`
+        // only (identifiers and literals quoted), built before the fence like every view
+        if t.is_where_kind() {
+            let Some(base) = t.rows_of.as_ref() else { return Ok(()) };
+            let Some(parent_view) = self.views.get(base).map(|v| (v.view.clone(), v.source.clone())) else {
+                if let Some(k) = self.unreadable.get(base).cloned() {
+                    self.unreadable.insert(t.name.clone(), k);
+                }
+                return Ok(());
+            };
+            let conds: Vec<String> = t
+                .where_all
+                .iter()
+                .map(|(f, vs)| {
+                    let vals: Vec<String> = vs.iter().map(|v| match v {
+                        serde_yaml::Value::String(x) => lit(x),
+                        serde_yaml::Value::Bool(b) => b.to_string(),
+                        serde_yaml::Value::Number(n) => n.to_string(),
+                        other => lit(serde_yaml::to_string(other).unwrap_or_default().trim()),
+                    }).collect();
+                    if vals.len() == 1 { format!("{} = {}", ident(f), vals[0]) } else { format!("{} IN ({})", ident(f), vals.join(", ")) }
+                })
+                .collect();
+            let view = self.free_view_name(&t.name)?;
+            self.exec(&format!("CREATE VIEW {} AS SELECT * FROM {} WHERE {}", ident(&view), ident(&parent_view.0), conds.join(" AND ")))?;
+            let columns = self.columns_of(&view)?;
+            self.views.insert(t.name.clone(), ViewInfo { view, source: parent_view.1, columns });
+            return Ok(());
+        }
         if let Some(b) = &t.source {
             let src = ont.sources.get(&b.connection).ok_or_else(|| anyhow!("unknown connection `{}`", b.connection))?;
             if !is_duck_kind(&src.kind) {
@@ -374,8 +403,8 @@ impl<'c> Builder<'c> {
     fn ontology_tables(&self, ont: &Ontology) -> Result<()> {
         let j = self.json_type();
         self.exec(&format!(
-            "CREATE TABLE nodes (name VARCHAR, kind VARCHAR, domain VARCHAR, description VARCHAR, key_property VARCHAR, owner VARCHAR, tags VARCHAR[], connection VARCHAR, source_kind VARCHAR, source_table VARCHAR, readable_here BOOLEAN, inline_rows INTEGER, view_name VARCHAR, file VARCHAR, properties {j});
-             CREATE TABLE properties (type_name VARCHAR, name VARCHAR, kind VARCHAR, is_key BOOLEAN, required BOOLEAN, description VARCHAR, unit VARCHAR, allowed_values {j}, column_name VARCHAR);
+            "CREATE TABLE nodes (name VARCHAR, kind VARCHAR, domain VARCHAR, description VARCHAR, key_property VARCHAR, owner VARCHAR, tags VARCHAR[], connection VARCHAR, source_kind VARCHAR, source_table VARCHAR, readable_here BOOLEAN, inline_rows INTEGER, view_name VARCHAR, file VARCHAR, properties {j}, extends VARCHAR);
+             CREATE TABLE properties (type_name VARCHAR, name VARCHAR, kind VARCHAR, is_key BOOLEAN, required BOOLEAN, description VARCHAR, unit VARCHAR, allowed_values {j}, column_name VARCHAR, inherited_from VARCHAR);
              CREATE TABLE edges (relationship VARCHAR, qualified VARCHAR, from_type VARCHAR, to_type VARCHAR, cardinality VARCHAR, description VARCHAR, connection VARCHAR, source_kind VARCHAR, source_table VARCHAR, from_key VARCHAR, to_key VARCHAR, view_name VARCHAR, file VARCHAR, properties {j});
              CREATE TABLE constraints (id VARCHAR, name VARCHAR, applies_to VARCHAR, applies_to_kind VARCHAR, rule VARCHAR, severity VARCHAR, rationale VARCHAR, description VARCHAR, owner VARCHAR, tags VARCHAR[], sql VARCHAR, file VARCHAR);
              CREATE TABLE actions (name VARCHAR, description VARCHAR, inputs {j}, effects {j}, checks VARCHAR[], requires_approval_from VARCHAR, side_effects VARCHAR, tags VARCHAR[], file VARCHAR);
@@ -405,7 +434,7 @@ impl<'c> Builder<'c> {
                 })
                 .collect();
             nodes.push(format!(
-                "({}, 'type', {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
+                "({}, 'type', {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
                 lit(&t.name),
                 lit_opt(&ont.domain_of(&t.name).unwrap_or_default()),
                 lit(t.description.trim()),
@@ -420,12 +449,13 @@ impl<'c> Builder<'c> {
                 view.map(|v| lit(&v.view)).unwrap_or_else(|| "NULL".into()),
                 lit(&t.file),
                 self.json_lit(&Json::Array(plist)),
+                t.parent.as_deref().map(lit).unwrap_or_else(|| "NULL".into()),
             ));
             for (n, p) in &t.properties {
                 let p = p.normalize();
                 let col = t.source.as_ref().and_then(|s| s.columns.get(n)).cloned().unwrap_or_else(|| n.clone());
                 props.push(format!(
-                    "({}, {}, {}, {}, {}, {}, {}, {}, {})",
+                    "({}, {}, {}, {}, {}, {}, {}, {}, {}, {})",
                     lit(&t.name),
                     lit(n),
                     lit(&p.kind),
@@ -435,6 +465,7 @@ impl<'c> Builder<'c> {
                     p.unit.as_deref().map(lit).unwrap_or_else(|| "NULL".into()),
                     if p.values.is_empty() { "NULL".into() } else { self.json_lit(&serde_json::to_value(&p.values).unwrap_or(Json::Null)) },
                     lit(&col),
+                    t.inherited.get(n).map(|x| lit(x)).unwrap_or_else(|| "NULL".into()),
                 ));
             }
         }
@@ -557,7 +588,10 @@ impl Db {
         let has_json = conn.query_row("SELECT to_json(1)::VARCHAR", [], |_| Ok(())).is_ok();
         let root = std::fs::canonicalize(&ont.root).unwrap_or_else(|_| ont.root.clone());
         let mut b = Builder { conn: &conn, has_json, attached: HashSet::new(), views: IndexMap::new(), skipped: IndexMap::new(), unreadable: IndexMap::new(), root, local_dirs: HashSet::new() };
-        for t in ont.types.values() {
+        // parents before kinds: a `where` kind's view reads its parent's
+        let mut order: Vec<&TypeDef> = ont.types.values().collect();
+        order.sort_by_key(|t| ont.ancestors(&t.name).len());
+        for t in order {
             if let Err(e) = b.type_view(ont, t) {
                 b.skipped.insert(t.name.clone(), format!("{:#}", e));
             }

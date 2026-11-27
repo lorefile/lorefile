@@ -236,6 +236,13 @@ pub fn things(ont: &Ontology, k: Kind) -> IndexMap<String, Json> {
             for t in ont.types.values() {
                 if let Some(s) = &t.source {
                     out.insert(t.name.clone(), json!({ "entity": t.name, "key": t.key_property(), "source": s, READS: reads(vec![s.connection.as_str()]) }));
+                } else if t.is_where_kind() {
+                    // a kind that picks its parent's rows: graded on its own, and re-pointing the
+                    // parent's source changes what was graded, so it reads "changed since" too
+                    let base = t.rows_of.as_ref().and_then(|b| ont.types.get(b));
+                    let src = base.and_then(|b| b.source.clone());
+                    let conns: Vec<&str> = src.as_ref().map(|s| vec![s.connection.as_str()]).unwrap_or_default();
+                    out.insert(t.name.clone(), json!({ "entity": t.name, "key": t.key_property(), "extends": t.parent, "where": t.where_all, "rows_of": t.rows_of, "source": src, READS: reads(conns) }));
                 }
             }
         }
@@ -659,12 +666,63 @@ pub fn render(book: &TrustBook) -> String {
             s.push_str(&format!("    {}: {{ {} }}\n", yaml_key(name), parts.join(", ")));
         }
     }
+    if !book.distinct.is_empty() {
+        any = true;
+        s.push_str("  distinct:\n");
+        for d in &book.distinct {
+            let q = |x: &str| serde_json::to_string(x).unwrap_or_default();
+            s.push_str(&format!("    - {{ a: {}, b: {}, by: {}, at: {}, of_a: {}, of_b: {}, why: {} }}\n", q(&d.a), q(&d.b), q(&d.by), q(&d.at), q(&d.of_a), q(&d.of_b), q(&d.why)));
+        }
+    }
     if !any {
         s.push_str("  {}\n");
         // `trust:` followed by an indented `{}` is not valid; write the empty mapping inline
         s = s.replace("trust:\n  {}\n", "trust: {}\n");
     }
     s
+}
+
+/// The fingerprint of one side of a "different on purpose" pair: `metric:<name>` (as graded),
+/// `entity:<Name>` (its name, own fields, source and `where`), `term:<word>=<Entity>`.
+/// `None` when that side no longer exists.
+pub fn pair_fingerprint(ont: &Ontology, key: &str) -> Option<String> {
+    let (kind, name) = key.split_once(':')?;
+    match kind {
+        "metric" => things(ont, Kind::Metric).get(name).map(fingerprint),
+        "entity" => {
+            let t = ont.types.get(name)?;
+            let own: Vec<Json> = t.own_properties().map(|(n, p)| { let p = p.normalize(); json!({ "name": n, "type": p.kind, "unit": p.unit, "key": p.key, "values": p.values }) }).collect();
+            Some(fingerprint(&json!({ "name": t.name, "own": own, "source": t.source, "where": t.where_all })))
+        }
+        "term" => {
+            let (w, means) = name.split_once('=')?;
+            ont.glossary.iter().any(|g| g.term == w && g.means == means).then(|| fingerprint(&json!({ "term": w, "means": means })))
+        }
+        _ => None,
+    }
+}
+
+/// One side of a pair in words: `metric:x` → "metric x", `entity:X` → "entity X",
+/// `term:deal=X` → "\"deal\" for X".
+pub fn side_words(k: &str) -> String {
+    match k.split_once(':') {
+        Some(("term", n)) => match n.split_once('=') {
+            Some((w, e)) => format!("\"{}\" for {}", w, e),
+            None => format!("\"{}\"", n),
+        },
+        Some((kind, n)) => format!("{} {}", kind, n),
+        None => k.to_string(),
+    }
+}
+
+/// The line that says a pair is different on purpose, either way round.
+pub fn distinct_of<'a>(book: &'a TrustBook, a: &str, b: &str) -> Option<&'a crate::schema::Distinct> {
+    book.distinct.iter().find(|d| (d.a == a && d.b == b) || (d.a == b && d.b == a))
+}
+
+/// Drop the "different on purpose" lines whose side no longer exists (like a W114 grade).
+pub fn prune_distinct(book: &mut TrustBook, ont: &Ontology) {
+    book.distinct.retain(|d| pair_fingerprint(ont, &d.a).is_some() && pair_fingerprint(ont, &d.b).is_some());
 }
 
 /// Parse a trust file's text. Empty text is an empty book.

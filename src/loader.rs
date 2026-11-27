@@ -26,6 +26,11 @@ pub struct Raw {
     pub files: Vec<String>,
     /// Problems found while loading (bad YAML, unrecognised files).
     pub problems: Vec<String>,
+    /// `format:` in ontology.yaml, read before anything else is parsed.
+    pub format: Option<u32>,
+    /// The space needs a newer Lorefile: its format is above `schema::FORMAT`. The
+    /// unknown-field problems such a space gives are folded into this one sentence.
+    pub newer_format: Option<u32>,
 }
 
 /// Changes laid over the folder without touching the disk: relative path →
@@ -87,6 +92,10 @@ pub fn load_with(root: &Path, overrides: &Overrides) -> Result<Raw> {
     for (rel, text) in added {
         ingest(&mut raw, rel, text);
     }
+    if let Some(f) = raw.format.filter(|f| *f > FORMAT) {
+        raw.newer_format = Some(f);
+        raw.problems.retain(|p| !p.contains("unknown field") && !p.contains("unknown variant"));
+    }
     Ok(raw)
 }
 
@@ -103,6 +112,9 @@ fn ingest(raw: &mut Raw, rel: &str, text: &str) {
             return;
         }
     };
+    if rel == "ontology.yaml" {
+        raw.format = value.get("format").and_then(|f| f.as_u64()).map(|f| f as u32);
+    }
     if let Err(e) = classify(raw, rel, value) {
         // keep the cause: "parsing constraints: unknown field `severty`, expected one of …"
         raw.problems.push(format!("{}: {:#}", rel, e));

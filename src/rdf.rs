@@ -483,11 +483,15 @@ pub fn export(ont: &Ontology) -> Graph {
 
     // who uses each field and link IRI (shared ones get one declaration)
     let mut field_users: IndexMap<String, Vec<(String, String)>> = IndexMap::new();
+    // a kind's inherited fields are its parent's: declared (and given a domain) there only
     for t in ont.types.values() {
-        for pn in t.properties.keys() {
+        for pn in t.properties.keys().filter(|n| !t.inherited.contains_key(*n)) {
             field_users.entry(ont.iri_field(&t.name, pn)).or_default().push((t.name.clone(), pn.clone()));
         }
     }
+    // a parent's shape is named, so its kinds' shapes can point at it with sh:node
+    let shape_iri = |name: &str| format!("{}Shape", ont.iri_type(name));
+    let has_kinds = |name: &str| ont.types.values().any(|x| x.parent.as_deref() == Some(name));
     let mut link_users: IndexMap<String, Vec<usize>> = IndexMap::new();
     for (i, r) in ont.relationships.iter().enumerate() {
         link_users.entry(ont.iri_link(r)).or_default().push(i);
@@ -544,12 +548,19 @@ pub fn export(ont: &Ontology) -> Graph {
             if !t.instances.is_empty() {
                 b.add(v(LF, "instances"), json_lit(&to_json(&t.instances)));
             }
+            if let Some(p) = &t.parent {
+                b.add(v(RDFS, "subClassOf"), iri_o(&ont.iri_type(p)));
+                b.add(v(LF, "extends"), lit(p));
+            }
+            if let Some(w) = &t.where_ {
+                b.add(v(LF, "where"), json_lit(&to_json(w)));
+            }
             b.add(v(LF, "file"), lit(&t.file));
             b.add(v(LF, "order"), int(ti as i64));
             blocks.push(b);
 
-            // fields
-            for (fi, (pn, ps)) in t.properties.iter().enumerate() {
+            // fields: its own (a kind's inherited ones arrive through sh:node)
+            for (fi, (pn, ps)) in t.properties.iter().filter(|(n, _)| !t.inherited.contains_key(*n)).enumerate() {
                 let p = ps.normalize();
                 let fiter = ont.iri_field(&t.name, pn);
                 if declared.insert(fiter.clone()) {
@@ -636,11 +647,31 @@ pub fn export(ont: &Ontology) -> Graph {
             shape_props.push(Obj::Node(ps_props));
         }
 
-        if !shape_props.is_empty() {
-            let mut b = Block::new(None);
+        // a kind: its parent's constraints apply through sh:node, and `where` as a fixed value
+        let kind_parent = t.and_then(|t| t.parent.clone());
+        if let Some(t) = t {
+            if let Some(w) = &t.where_ {
+                for (f, vals) in w {
+                    let path = ont.iri_field(&t.name, f);
+                    let lits: Vec<Obj> = vals.all().iter().filter_map(yaml_lit).collect();
+                    let mut node: Vec<(String, Obj)> = vec![(v(SH, "path"), iri_o(&path)), (v(LF, "whereOf"), boolean(true))];
+                    if lits.len() == 1 {
+                        node.push((v(SH, "hasValue"), lits[0].clone()));
+                    } else if !lits.is_empty() {
+                        node.push((v(SH, "in"), Obj::List(lits)));
+                    }
+                    shape_props.push(Obj::Node(node));
+                }
+            }
+        }
+        if !shape_props.is_empty() || kind_parent.is_some() || has_kinds(from) {
+            let mut b = Block::new(if has_kinds(from) { Some(shape_iri(from)) } else { None });
             b.add(rdf_type.clone(), iri_o(&v(SH, "NodeShape")));
             b.add(rdf_type.clone(), iri_o(&v(LF, "EntityShape")));
             b.add(v(SH, "targetClass"), iri_o(&class));
+            if let Some(p) = &kind_parent {
+                b.add(v(SH, "node"), iri_o(&shape_iri(p)));
+            }
             for p in shape_props {
                 b.add(v(SH, "property"), p);
             }
@@ -1638,6 +1669,9 @@ pub struct ImportOptions {
     pub depth: usize,
     /// Restore the grades a Lorefile export carries (`lorefile:Grading`) where they still match.
     pub keep_grades: bool,
+    /// Keep `rdfs:subClassOf` as `subclass-of:` tags, as before kinds, instead of `extends`
+    /// with the parents brought along.
+    pub no_parents: bool,
 }
 
 /// The files an import produced, and what it guessed, dropped or kept.
@@ -1894,6 +1928,20 @@ pub fn import(path: &Path, target: &Target, opts: &ImportOptions) -> Result<Impo
             }
             frontier = next;
         }
+        // parents come along (up to six, never owl:Thing), so fields on a parent reach its kinds
+        if !opts.no_parents {
+            let mut todo: Vec<(String, usize)> = seen.iter().map(|c| (c.clone(), 0)).collect();
+            while let Some((c, depth)) = todo.pop() {
+                if depth >= 6 {
+                    continue;
+                }
+                for p in g.iris(&Id::N(c.clone()), &v(RDFS, "subClassOf")) {
+                    if candidates.contains(&p) && p != v(OWL, "Thing") && seen.insert(p.clone()) {
+                        todo.push((p, depth + 1));
+                    }
+                }
+            }
+        }
         let picked: Vec<String> = candidates.iter().filter(|c| seen.contains(*c)).cloned().collect();
         notes.guessed.push(format!(
             "--only kept {} of {} classes{}",
@@ -1962,13 +2010,35 @@ pub fn import(path: &Path, target: &Target, opts: &ImportOptions) -> Result<Impo
             if let Some(inst) = g.json(&id, &v(LF, "instances")) {
                 j["instances"] = inst;
             }
+            if let Some(e) = g.text(&id, &v(LF, "extends")) {
+                j["extends"] = json!(e);
+            }
+            if let Some(w) = g.json(&id, &v(LF, "where")) {
+                j["where"] = w;
+            }
         } else {
-            let parents: Vec<String> = g.iris(&id, &v(RDFS, "subClassOf")).into_iter().filter(|p| !reserved(p) && p != &v(OWL, "Thing")).collect();
+            let mut parents: Vec<String> = g.iris(&id, &v(RDFS, "subClassOf")).into_iter().filter(|p| !reserved(p) && p != &v(OWL, "Thing")).collect();
+            parents.sort();
             let mut tags = Vec::new();
+            // the first imported parent (by IRI) becomes `extends`; the rest stay tags. Equivalent
+            // classes (each a subclass of the other) get no `extends`, which would go in a circle.
+            let circular = |p: &str| g.iris(&Id::N(p.to_string()), &v(RDFS, "subClassOf")).iter().any(|x| x == c);
+            let chosen = if opts.no_parents { None } else { parents.iter().find(|p| selected.contains(*p) && !circular(p)).cloned() };
             for p in &parents {
                 let pn = class_name.get(p).cloned().unwrap_or_else(|| local_name(p));
+                if Some(p) == chosen.as_ref() {
+                    j["extends"] = json!(pn);
+                    notes.guessed.push(format!("{} is a kind of {} (rdfs:subClassOf): saved as extends: {}", name, pn, pn));
+                    continue;
+                }
                 tags.push(format!("subclass-of:{}", pn));
-                notes.guessed.push(format!("{} is a kind of {} (rdfs:subClassOf): kept as the tag subclass-of:{}, since Lorefile has no sub-kinds yet", name, pn, pn));
+                if circular(p) {
+                    notes.guessed.push(format!("{} and {} are each a subclass of the other (equivalent classes): no extends for either, kept as the tag subclass-of:{}", name, pn, pn));
+                } else if chosen.is_some() {
+                    notes.guessed.push(format!("{} is also a kind of {}: an entity extends one other, so it is kept as the tag subclass-of:{}", name, pn, pn));
+                } else {
+                    notes.guessed.push(format!("{} is a kind of {} (rdfs:subClassOf): kept as the tag subclass-of:{}{}", name, pn, pn, if opts.no_parents { " (--no-parents)" } else { ", since that class is not imported" }));
+                }
             }
             if g.all(&id, &v(RDFS, "subClassOf")).iter().any(|t| matches!(t, Term::BlankNode(_))) {
                 notes.dropped.push(format!("{}: OWL restrictions on the class (used only for reasoning)", name));
@@ -2577,6 +2647,10 @@ pub fn import(path: &Path, target: &Target, opts: &ImportOptions) -> Result<Impo
             m["namespace"] = json!(n);
         }
         m["prefixes"] = json!(manifest_prefixes);
+        // kinds are format 2: an older Lorefile refuses the space plainly instead of misreading it
+        if entities.values().any(|e| e.json.get("extends").is_some()) {
+            m["format"] = json!(2);
+        }
         layout.add(FileKind::Manifest, None, "ontology.yaml", m);
     } else if !used_extra.is_empty() {
         notes.todo.push(format!("add these prefixes to ontology.yaml to shorten the IRIs: {}", used_extra.iter().map(|p| format!("{}: {}", p, extra_prefixes[p])).collect::<Vec<_>>().join(", ")));

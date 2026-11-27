@@ -131,7 +131,7 @@ From Parts B to E of `specs/2026-11-26-open-source-release.md`, in the order the
 3. **DNS-rebinding protection for `--no-auth`** (small). A `Host` allowlist (127.0.0.1, localhost, the bound name) so a web page cannot rebind a name to a laptop's port and read an unauthenticated server.
 4. ~~**npm and crates.io trusted publishing**~~ Built 2026-11-27: `release.yml` publishes to npm (npm 11, `--provenance`) and crates.io (`rust-lang/crates-io-auth-action`) with OIDC trusted publishing, so `NPM_TOKEN` and `CARGO_REGISTRY_TOKEN` are gone; a tag in a fork skips both. Each site trusts `lorefile/lorefile` and `release.yml` once, in the package's or crate's settings. npm drops a new trusted publisher that has not published within 2 days, so add it on the day of the release. Later, if wanted: a GitHub environment (`release`) on both jobs and in both settings, and once a tag has published this way, npm's "Require two-factor authentication and disallow tokens" and crates.io's Trusted Publishing Only mode.
 5. **Homebrew tap** (small). `brew install lorefile/tap/lorefile` from the release archives; also musl / Alpine binaries, and macOS signing and notarisation if a download path ever needs it (curl and npm do not).
-6. **Sub-kinds: `extends`** (medium). An entity that is a kind of another, inheriting its fields. Imported `rdfs:subClassOf` hierarchies and Ossie's `extends` are tags today (`subclass-of:Intangible`); with sub-kinds they would come in as what they are, and schema.org's `name` and `description` on `Thing` would reach `Person` and `Product`.
+6. ~~**Sub-kinds: `extends`**~~ Built 2026-11-27 for 0.2.0 (`specs/2026-11-27-sub-kinds.md`): `extends` and `where`, `format: 2`, warnings for things said twice (W115–W117) with `distinct:` in `trust.yaml`, the rule-of-three advice and `make_parent`. Imported `rdfs:subClassOf` hierarchies and Ossie's `extends` now come in as kinds, and schema.org's `name` on `Thing` reaches `Person`. What is left is under "Left for later by kinds of entities" below.
 7. **Other tools' extensions and Ossie dialects on import** (small). Ossie `nonportable_extensions` from other vendors are dropped, as are dialect-only SQL forms when a portable one exists; an `ossie:` passthrough key would keep them.
 8. **`--push-edits`** (small; item 9 above).
 9. **More from the RDF bridge** (each small to medium):
@@ -154,7 +154,7 @@ Built: export of the semantic model, ontology and mapping (all three pass Ossie'
 - **Packs** bind entities to MCP tools, not tables, so their semantic model has no datasets and Ossie's validator rejects it (the ontology document is fine). Waits for Ossie to say how a non-table source is written.
 - **Metrics with variants or MCP-tool sources** have no Ossie form and travel in the extension only. A metric's `measure` becomes SQL by a small translation (`count distinct x` → `COUNT(DISTINCT x)`, `filter` → `FILTER (WHERE …)`); the `, by …` grouping hint is left out of the expression, since Ossie groups at query time.
 - **Joins** are inferred: a link becomes an Ossie relationship when the one side's key also names a property on the many side. Lorefile links name no columns; a `join:` key on links would make this exact.
-- **On import:** compound identifiers (Flights' `Runway`) give no key; `unique_keys`, field-level `ai_context` and `ai_context.examples` are dropped; relationships with three or more roles and the ontology's `requires`/`derived_by` expressions are not turned into links or guardrails; `extends` (sub-kinds) is not read; unary link mappings with a `WHERE` are not read. Each is listed by `--report`.
+- **On import:** compound identifiers (Flights' `Runway`) give no key; `unique_keys`, field-level `ai_context` and `ai_context.examples` are dropped; relationships with three or more roles and the ontology's `requires`/`derived_by` expressions are not turned into links or guardrails; `extends` is read as a kind (one parent; any others become tags); unary link mappings with a `WHERE` are not read. Each is listed by `--report`.
 - ~~**IRIs**~~ Built with Part E: concepts carry each entity's resolved IRI (its own `iri:`, or the namespace plus the name), and an imported concept's or relationship's absolute IRI becomes the entity's, field's or link's `iri:`.
 
 ## Hosted version, later
@@ -256,3 +256,18 @@ Status: design only.
 - **Lights for agents over MCP**: `summary` could carry "needs a look".
 - **A logic tier** for functions, actions and guardrails; an **"all spaces" plane**; **metric values** for readable sources (Decision 21 says no).
 - **The bottom sheet on a phone is not draggable**: it has Close, and opens at 60% height.
+
+### Left for later by kinds of entities (2026-11-27, `specs/2026-11-27-sub-kinds.md`)
+
+- **A key saying a kind's rows are also among the parent's** (`rows: also_in_parent | separate`) for a kind with its own source, so agents could add or refuse to add with certainty instead of asking.
+- **A merge op** for W116 ("make these one entity"), keeping grades where fingerprints allow.
+- **Links between spaces**, so `extends` could name an entity in a shared space (a company-wide `Customer`).
+- **Several parents or mixins**, if a real space needs them.
+- **`instances(Sale)` marking each row's kind** (`_kind: PromoSale`) for `where` kinds.
+- **A kind in a shipped example**, once Vinay has used it.
+- **"Make a kind of" and "Make a parent" as one click on the page.** Today the Entities page's "Make a kind of X…" opens the new-entity form with `extends` filled in, and `set_kind_of` and `make_parent` are ops for agents and the API.
+- **The rule-of-three advice in `lorefile validate`'s output**, and "These are different" beside warnings on the Entities page and the Logic card once those list warnings.
+- **"The same as Sale: Sale revenue"** offered first in `learn_file`'s "which number?" question when the parent has a metric.
+- **A typed `type: string` over a parent's number field** reads as leaving the type out (string is the default), so it keeps the parent's type instead of giving E021. Loosening `required` can't be noticed for the same reason.
+- **Imports into an existing space** don't write `format: 2` into its `ontology.yaml`; W118 says so, and the next save that touches a kind writes it.
+- **Take it back leaves one small thing behind.** With history on, a `distinct:` said on Accept is its own commit, so Take it back keeps it. With history off, the `format: 2` line an Accept wrote stays. Both are harmless; History's Undo removes the first.

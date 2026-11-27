@@ -393,14 +393,16 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
         .values()
         .map(|t| {
             let fields = t.properties.len();
-            let described = t.properties.values().filter(|p| !p.normalize().description.trim().is_empty()).count();
+            // a field a kind gets from its parent is the parent's to describe
+            let described = fields - t.own_properties().filter(|(_, p)| p.normalize().description.trim().is_empty()).count();
             json!({
                 "name": t.name, "domain": ont.domain_of(&t.name), "description": t.description, "file": t.file, "key": t.key_property(),
-                "fields": fields, "described": described, "has_source": t.source.is_some() || !t.instances.is_empty(),
+                "fields": fields, "described": described, "has_source": t.source.is_some() || !t.instances.is_empty() || t.rows_of.as_ref().and_then(|b| ont.types.get(b)).map(|b| b.source.is_some() || !b.instances.is_empty()).unwrap_or(false),
                 "source_kind": t.source.as_ref().and_then(|s| ont.sources.get(&s.connection)).map(|s| s.kind.clone()),
                 "source_connection": t.source.as_ref().map(|s| s.connection.clone()),
                 "source_table": t.source.as_ref().map(|s| s.table.clone()),
                 "owner": t.owner, "tags": t.tags, "iri": ont.iri_type(&t.name),
+                "extends": t.parent, "kinds": ont.kinds_of(&t.name), "where": t.is_where_kind().then(|| crate::ontology::Ontology::where_words(&t.where_all)),
             })
         })
         .collect();
@@ -426,6 +428,7 @@ fn overview(st: &State, space: &Space, root: &str, single: bool, edit: EditConfi
         "namespace": ont.iris.namespace,
         "rdf": cfg!(feature = "rdf"),
         "diagnostics": st.report.diags,
+        "advice": crate::validate::advise(ont),
         "ok": st.report.ok(),
         "dir": st.dir.display().to_string(),
         "root": root,
@@ -538,7 +541,9 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
             "accept" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Accept { kind, name }),
             "check" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Check { kind, name, against: str_field(body, "against").to_string(), note: str_field(body, "note").to_string() }),
             "sign" => edit::find_graded(&st.ont, kind, str_field(body, "name")).map(|(kind, name)| edit::GradeOp::Sign { items: vec![(kind, name)] }),
-            other => Err(format!("op is accept, check, sign or vouch_all, not `{}`", other)),
+            "distinct" if crate::trust::who_said(&by) == "a person" => Err("type your name first: saying two things differ on purpose needs one".into()),
+            "distinct" => Ok(edit::GradeOp::Distinct { a: str_field(body, "a").to_string(), b: str_field(body, "b").to_string(), why: str_field(body, "why").to_string() }),
+            other => Err(format!("op is accept, check, sign, distinct or vouch_all, not `{}`", other)),
         };
         match op {
             Ok(op) => {
@@ -549,8 +554,9 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
                         edit::GradeOp::Check { kind, name, against, .. } => format!("checked {} against {}", kind.name_words(name), against),
                         edit::GradeOp::VouchAll => format!("vouched for {} definitions", out.name),
                         edit::GradeOp::Sign { .. } => format!("{} put their name on {}", edit::sentence(&crate::trust::who_said(&by)), out.stamped.join(" and ")),
+                        edit::GradeOp::Distinct { a, b, why } => format!("{} said {} and {} are different on purpose{}", edit::sentence(&crate::trust::who_said(&by)), crate::trust::side_words(a), crate::trust::side_words(b), if why.trim().is_empty() { String::new() } else { format!(": \"{}\"", why.trim()) }),
                     };
-                    if matches!(op, edit::GradeOp::Sign { .. }) {
+                    if matches!(op, edit::GradeOp::Sign { .. } | edit::GradeOp::Distinct { .. }) {
                         extra["summary"] = json!(what);
                     }
                     proposals::log(&st.dir, &by, &what, crate::trust::FILE);
@@ -568,6 +574,16 @@ fn mutate(st: &mut State, builtin: bool, edit: EditConfig, method: &Method, path
         match edit::plan_create(&st.dir, kind, name, content, file) {
             Ok((rel, text)) => edit::apply(&st.dir, edit, &st.report, &rel, Change::Write(text), &Note::via(&by), Some((kind, name))),
             Err(e) => Outcome { file: file.unwrap_or("").to_string(), refused: Some(e), ..Default::default() },
+        }
+    } else if path == "/api/patch" && str_field(body, "op") == "make_parent" {
+        // several files: the new parent and each child, one change
+        match patch::plan_many(&st.ont, std::slice::from_ref(body)) {
+            Ok(plan) => {
+                let summary = format!("made {} the parent of {}", str_field(body, "name"), body.get("children").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")).unwrap_or_default());
+                extra["summary"] = json!(summary);
+                edit::apply_many(&st.dir, edit, &st.report, &plan.files, &Note { via: &by, summary: &summary, ..Default::default() }, Some(("type", str_field(body, "name"))))
+            }
+            Err(e) => Outcome { file: String::new(), refused: Some(e), ..Default::default() },
         }
     } else if path == "/api/patch" {
         match patch::plan(&st.ont, body) {
@@ -759,6 +775,8 @@ fn accept(st: &mut State, edit: EditConfig, p: &proposals::Proposal, body: &Json
     }
     // 4. the fixes the screen offered, planned on top
     let mut fix_words: Vec<String> = Vec::new();
+    // "different on purpose" goes to trust.yaml after the save, not into a file
+    let mut distinct: Vec<(String, String, String)> = Vec::new();
     let files = match body.get("fixes").and_then(|f| f.as_array()).filter(|f| !f.is_empty()) {
         None => files,
         Some(fixes) => {
@@ -770,6 +788,13 @@ fn accept(st: &mut State, edit: EditConfig, p: &proposals::Proposal, body: &Json
             let mut ops = Vec::new();
             for f in fixes {
                 match review::fix_op(f, &qs, &after) {
+                    Ok((op, words)) if op["op"] == "distinct" => {
+                        if crate::trust::who_said(by) == "a person" {
+                            return json_response_private(400, &json!({ "error": "Type your name first: saying two things differ on purpose needs one." }));
+                        }
+                        distinct.push((str_field(&op, "a").to_string(), str_field(&op, "b").to_string(), str_field(&op, "why").to_string()));
+                        fix_words.push(words);
+                    }
                     Ok((op, words)) => {
                         ops.push(op);
                         fix_words.push(words);
@@ -777,9 +802,13 @@ fn accept(st: &mut State, edit: EditConfig, p: &proposals::Proposal, body: &Json
                     Err(e) => return json_response_private(400, &json!({ "error": format!("That fix can't ride along with Accept: {}.", e) })),
                 }
             }
-            match patch::plan_many_over(&st.ont, &files, &ops) {
-                Ok(plan) => plan.files,
-                Err(e) => return json_response_private(400, &json!({ "error": format!("That fix does not apply: {}.", e) })),
+            if ops.is_empty() {
+                files
+            } else {
+                match patch::plan_many_over(&st.ont, &files, &ops) {
+                    Ok(plan) => plan.files,
+                    Err(e) => return json_response_private(400, &json!({ "error": format!("That fix does not apply: {}.", e) })),
+                }
             }
         }
     };
@@ -803,6 +832,13 @@ fn accept(st: &mut State, edit: EditConfig, p: &proposals::Proposal, body: &Json
     let mut j = out.to_json();
     j["proposal_id"] = json!(p.id);
     if out.written {
+        // the pairs the person said are different on purpose, in trust.yaml, before the snapshot
+        for (a, b, why) in &distinct {
+            let g = edit::grade(&st.dir, edit, &st.report, &edit::GradeOp::Distinct { a: a.clone(), b: b.clone(), why: why.clone() }, by);
+            if !g.written {
+                j["distinct_error"] = json!(g.refused.unwrap_or_else(|| "not saved".into()));
+            }
+        }
         // 6. accepted, with what Take it back needs when there is no history to undo from
         let snapshot = if out.commit.is_none() {
             Some(proposals::Snapshot {

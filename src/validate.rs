@@ -24,6 +24,10 @@ pub struct Diag {
     /// the card and the list attach it to. A field's subject is its entity, a link's its `from`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subject: Option<Subject>,
+    /// For "said twice" (W115–W117): the two sides, as `trust.yaml`'s `distinct:` names them
+    /// (`metric:x`, `entity:X`, `term:word=Entity`), so a person can say they differ on purpose.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pair: Option<[String; 2]>,
 }
 
 /// An item of the space: kind is entity, link, metric, function, guardrail, action, source or term.
@@ -40,16 +44,16 @@ pub struct Report {
 
 impl Report {
     fn err(&mut self, code: &'static str, file: &str, msg: impl Into<String>) {
-        self.diags.push(Diag { level: Level::Error, code, message: msg.into(), file: file.to_string(), subject: None });
+        self.diags.push(Diag { level: Level::Error, code, message: msg.into(), file: file.to_string(), subject: None, pair: None });
     }
     fn warn(&mut self, code: &'static str, file: &str, msg: impl Into<String>) {
-        self.diags.push(Diag { level: Level::Warning, code, message: msg.into(), file: file.to_string(), subject: None });
+        self.diags.push(Diag { level: Level::Warning, code, message: msg.into(), file: file.to_string(), subject: None, pair: None });
     }
     fn err_on(&mut self, code: &'static str, file: &str, on: (&'static str, &str), msg: impl Into<String>) {
-        self.diags.push(Diag { level: Level::Error, code, message: msg.into(), file: file.to_string(), subject: Some(Subject { kind: on.0, name: on.1.to_string() }) });
+        self.diags.push(Diag { level: Level::Error, code, message: msg.into(), file: file.to_string(), subject: Some(Subject { kind: on.0, name: on.1.to_string() }), pair: None });
     }
     fn warn_on(&mut self, code: &'static str, file: &str, on: (&'static str, &str), msg: impl Into<String>) {
-        self.diags.push(Diag { level: Level::Warning, code, message: msg.into(), file: file.to_string(), subject: Some(Subject { kind: on.0, name: on.1.to_string() }) });
+        self.diags.push(Diag { level: Level::Warning, code, message: msg.into(), file: file.to_string(), subject: Some(Subject { kind: on.0, name: on.1.to_string() }), pair: None });
     }
     pub fn errors(&self) -> Vec<&Diag> {
         self.diags.iter().filter(|d| d.level == Level::Error).collect()
@@ -80,8 +84,17 @@ fn local_file(ont: &Ontology, src: &crate::schema::SourceDef, table: &str) -> Op
 pub fn validate(ont: &Ontology) -> Report {
     let mut r = Report::default();
 
+    if let Some(f) = ont.newer_format {
+        r.err("E019", "ontology.yaml", format!("This space needs a newer Lorefile (format {}); this is Lorefile {}, which reads format {}. Upgrade with `npx lorefile@latest` or `cargo install lorefile`.", f, env!("CARGO_PKG_VERSION"), crate::schema::FORMAT));
+    }
     for p in &ont.load_problems {
         r.err("E001", "", p.clone());
+    }
+    for k in &ont.kind_problems {
+        r.err_on(k.code, &k.file, ("entity", &k.entity), k.message.clone());
+    }
+    if ont.uses_format_2() && ont.format < 2 && ont.newer_format.is_none() {
+        r.warn("W118", "ontology.yaml", "this space uses extends, where or distinct: but ontology.yaml doesn't say format: 2; Lorefile 0.1.0 will not load it, and the next save that touches a kind writes it");
     }
     for (kind, name, where_) in &ont.duplicates {
         r.err("E002", "", format!("duplicate {:?} `{}` {}", kind, name, where_));
@@ -104,7 +117,9 @@ pub fn validate(ont: &Ontology) -> Report {
         if t.description.trim().is_empty() {
             r.warn_on("W101", &t.file, ("entity", &t.name), format!("type `{}` has no description (agents rely on it)", t.name));
         }
-        for (pn, p) in &t.properties {
+        // a field a kind gets from its parent is the parent's to fix
+        let from_parent = |f: &str| t.parent.as_ref().and_then(|p| ont.types.get(p)).map(|p| p.properties.contains_key(f)).unwrap_or(false);
+        for (pn, p) in t.properties.iter().filter(|(n, _)| !from_parent(n)) {
             let p = p.normalize();
             if p.kind == "enum" && p.values.is_empty() {
                 r.warn_on("W105", &t.file, ("entity", &t.name), format!("`{}.{}` is an enum with no `values`", t.name, pn));
@@ -180,7 +195,10 @@ pub fn validate(ont: &Ontology) -> Report {
                     Some(Kind::Type) => {
                         let t = ont.type_(&c.applies_to).unwrap();
                         let mut v: Vec<String> = t.properties.keys().cloned().collect();
-                        v.push(snake(&t.name));
+                        // a rule on a kind may name its parents too (`sale.` as well as `promo_sale.`)
+                        for n in ont.self_and_ancestors(&t.name) {
+                            v.push(snake(&n));
+                        }
                         v.push("self".into());
                         v
                     }
@@ -244,8 +262,18 @@ pub fn validate(ont: &Ontology) -> Report {
                         }
                     }
                     if let (Some(rel), Some(ft), Some(tt)) = (rels.first(), a.inputs.get(&edge.from), a.inputs.get(&edge.to)) {
-                        if &rel.from != ft || &rel.to != tt {
-                            r.warn_on("W107", &a.file, ("action", &a.name), format!("action `{}`: `{}` goes {} → {}, but inputs `{}`/`{}` are {} → {}", a.name, edge.relationship, rel.from, rel.to, edge.from, edge.to, ft, tt));
+                        // an input that is the link's end, or a kind of it, fits (producer extends)
+                        let fits = |input: &str, end: &str| ont.is_a(input, end);
+                        if !fits(ft, &rel.from) || !fits(tt, &rel.to) {
+                            let broader = |input: &str, end: &str| ont.is_a(end, input) && input != end;
+                            let msg = if broader(ft, &rel.from) {
+                                format!("action `{}`: `{}` is a {}, but `{}` starts at {}; pass a {}, or start the link at {}", a.name, edge.from, ft, edge.relationship, rel.from, rel.from, ft)
+                            } else if broader(tt, &rel.to) {
+                                format!("action `{}`: `{}` is a {}, but `{}` ends at {}; pass a {}, or end the link at {}", a.name, edge.to, tt, edge.relationship, rel.to, rel.to, tt)
+                            } else {
+                                format!("action `{}`: `{}` goes {} → {}, but inputs `{}`/`{}` are {} → {}", a.name, edge.relationship, rel.from, rel.to, edge.from, edge.to, ft, tt)
+                            };
+                            r.warn_on("W107", &a.file, ("action", &a.name), msg);
                         }
                     }
                 }
@@ -368,7 +396,10 @@ pub fn validate(ont: &Ontology) -> Report {
         for (k, name) in &ont.graded.all {
             let st = ont.graded.get(*k, name);
             if let (true, Some(rec)) = (st.changed, &st.record) {
-                r.warn_on("W113", f, subject_of(*k, name), format!("{} changed since it was {} ({}, {}); a person has to accept it again", k.name_words(name), rec.grade.word(), crate::trust::who_said(&rec.by), rec.at));
+                // a kind that picks its parent's rows was graded together with that parent's source
+                let via = (*k == crate::trust::Kind::Binding).then(|| ont.types.get(name.as_str())).flatten().filter(|t| t.is_where_kind()).and_then(|t| t.rows_of.clone());
+                let why = via.map(|b| format!(", perhaps because {}'s source changed (its rows are {}'s)", b, b)).unwrap_or_default();
+                r.warn_on("W113", f, subject_of(*k, name), format!("{} changed since it was {} ({}, {}){}; a person has to accept it again", k.name_words(name), rec.grade.word(), crate::trust::who_said(&rec.by), rec.at, why));
             }
         }
         for (k, name, rec) in &ont.graded.orphans {
@@ -395,6 +426,8 @@ pub fn validate(ont: &Ontology) -> Report {
         }
     }
 
+    said_twice(ont, &mut r);
+
     // what only names a types/*.yaml file is about its entity, when the file defines exactly one
     // (a `types:` list file holds several, and then it is about none of them in particular)
     for d in r.diags.iter_mut().filter(|d| d.subject.is_none() && d.file.starts_with("types/")) {
@@ -404,6 +437,224 @@ pub fn validate(ont: &Ontology) -> Report {
         }
     }
     r
+}
+
+// ---------------------------------------------------------------------------
+// Things said twice (W115–W117), quiet where a person said they differ on purpose
+// ---------------------------------------------------------------------------
+
+/// A filter's AND-ed terms, each said one way: case, spaces and quotes ignored, `==` as `=`,
+/// `NOT x` and `x != true` as `x=false`. Sorted, so their order does not matter.
+fn filter_terms(f: &str) -> Vec<String> {
+    let lower = f.to_lowercase().replace(['\'', '"', '(', ')'], "");
+    let parts: Vec<String> = regex::Regex::new(r"\s+and\s+").map(|r| r.split(&lower).map(|x| x.to_string()).collect()).unwrap_or_default();
+    let mut out: Vec<String> = parts
+        .into_iter()
+        .map(|t| {
+            let t = t.trim().to_string();
+            let t = if let Some(x) = t.strip_prefix("not ") { format!("{}=false", x.trim()) } else { t };
+            let t = t.replace("==", "=").replace(" is ", "=").replace("!=true", "=false").replace("!= true", "=false");
+            t.chars().filter(|c| !c.is_whitespace()).collect::<String>()
+        })
+        .filter(|t| !t.is_empty())
+        .collect();
+    out.sort();
+    out
+}
+
+/// One recipe said one way: the rows (connection and table, or tool and params), the measure and the filter.
+fn recipe_key(s: &crate::schema::MetricSource) -> String {
+    let rows = if s.tool.is_empty() { format!("{}.{}", s.connection, s.table) } else { format!("{} tool {} {}", s.connection, s.tool, serde_json::to_string(&s.params).unwrap_or_default()) };
+    format!("{}|{}|{}", rows, s.measure.to_lowercase().chars().filter(|c| !c.is_whitespace()).collect::<String>(), filter_terms(&s.filter).join("&"))
+}
+
+/// What a person said about a pair: quiet while both sides are as they were; a sentence when either changed.
+fn said_distinct(ont: &Ontology, a: &str, b: &str) -> Option<Result<(), String>> {
+    let d = crate::trust::distinct_of(ont.trust.as_ref()?, a, b)?;
+    let (fa, fb) = (crate::trust::pair_fingerprint(ont, &d.a), crate::trust::pair_fingerprint(ont, &d.b));
+    if fa.as_deref() == Some(d.of_a.as_str()) && fb.as_deref() == Some(d.of_b.as_str()) {
+        Some(Ok(()))
+    } else {
+        Some(Err(format!(" (changed since {} said these were different, {})", crate::trust::who_said(&d.by), crate::trust::short_date(&d.at))))
+    }
+}
+
+fn twice(r: &mut Report, ont: &Ontology, code: &'static str, file: &str, on: (&'static str, &str), pair: [String; 2], msg: String) {
+    let msg = match said_distinct(ont, &pair[0], &pair[1]) {
+        Some(Ok(())) => return,
+        Some(Err(since)) => format!("{}{}", msg, since),
+        None => msg,
+    };
+    r.warn_on(code, file, on, msg);
+    if let Some(d) = r.diags.last_mut() {
+        d.pair = Some(pair);
+    }
+}
+
+fn said_twice(ont: &Ontology, r: &mut Report) {
+    // W115: two metrics with the same recipe
+    let ms: Vec<&crate::schema::MetricDef> = ont.metrics.values().collect();
+    let key_of = |m: &crate::schema::MetricDef| -> Option<String> {
+        let mut keys: Vec<String> = m.source.iter().chain(m.variants.iter().map(|v| &v.source)).map(recipe_key).collect();
+        if keys.is_empty() {
+            return None;
+        }
+        keys.sort();
+        Some(keys.join(" ; "))
+    };
+    for (i, a) in ms.iter().enumerate() {
+        let Some(ka) = key_of(a) else { continue };
+        for b in ms.iter().skip(i + 1) {
+            if key_of(b).as_deref() == Some(ka.as_str()) {
+                let how = a.source.as_ref().map(|s| if s.measure.to_lowercase().starts_with("count") { "count" } else if s.measure.to_lowercase().starts_with("avg") { "average" } else { "sum" }).unwrap_or("recipe");
+                twice(r, ont, "W115", &b.file, ("metric", &b.name), [format!("metric:{}", b.name), format!("metric:{}", a.name)],
+                    format!("{} looks the same as {}: same rows, same filter, same {}. Agents would have two names for one number.", label(&b.name), label(&a.name), how));
+            }
+        }
+    }
+    // W116: two entities that read the same rows, share most fields, or pick overlapping rows
+    let ts: Vec<&crate::schema::TypeDef> = ont.types.values().collect();
+    let related = |x: &str, y: &str| ont.is_a(x, y) || ont.is_a(y, x);
+    for (i, a) in ts.iter().enumerate() {
+        for b in ts.iter().skip(i + 1) {
+            if related(&a.name, &b.name) {
+                continue;
+            }
+            let pair = [format!("entity:{}", b.name), format!("entity:{}", a.name)];
+            // (a) the same rows
+            if let (Some(sa), Some(sb)) = (&a.source, &b.source) {
+                let same = sa.connection == sb.connection && ((!sa.table.is_empty() && sa.table == sb.table) || (sa.table.is_empty() && !sa.tool.is_empty() && sa.tool == sb.tool && sa.params == sb.params));
+                if same {
+                    twice(r, ont, "W116", &b.file, ("entity", &b.name), pair, format!("{} and {} read the same rows ({}.{}): probably one entity.", b.name, a.name, sa.connection, if sa.table.is_empty() { &sa.tool } else { &sa.table }));
+                    continue;
+                }
+            }
+            // (c) sibling kinds whose `where`s can match the same row
+            if a.is_where_kind() && b.is_where_kind() && a.rows_of == b.rows_of {
+                let overlap = a.where_all.iter().all(|(f, va)| b.where_all.get(f).map(|vb| va.iter().any(|x| vb.contains(x))).unwrap_or(true));
+                if overlap {
+                    let base = a.rows_of.clone().unwrap_or_default();
+                    let w = if a.where_all == b.where_all { crate::ontology::Ontology::where_words(&a.where_all) } else { format!("{} or {}", crate::ontology::Ontology::where_words(&a.where_all), crate::ontology::Ontology::where_words(&b.where_all)) };
+                    twice(r, ont, "W116", &b.file, ("entity", &b.name), pair, format!("{} and {} both pick {}'s rows where {}: a row can be both.", b.name, a.name, base, w));
+                    continue;
+                }
+            }
+            // (b) most of their own fields
+            let own = |t: &crate::schema::TypeDef| -> Vec<String> { t.own_properties().map(|(n, _)| crate::learn::normalize_header(n)).collect() };
+            let (fa, fb) = (own(a), own(b));
+            if fa.len() >= 4 && fb.len() >= 4 {
+                let shared = fa.iter().filter(|f| fb.contains(f)).count();
+                let larger = fa.len().max(fb.len());
+                if shared * 5 >= larger * 4 {
+                    twice(r, ont, "W116", &b.file, ("entity", &b.name), pair, format!("{} and {} share {} of {} fields: probably one entity.", b.name, a.name, shared, larger));
+                }
+            }
+        }
+    }
+    // W117: one word meaning two things, or a word that is another entity's own name
+    for (i, g) in ont.glossary.iter().enumerate() {
+        for h in ont.glossary.iter().skip(i + 1) {
+            if g.term.eq_ignore_ascii_case(&h.term) && g.means != h.means {
+                twice(r, ont, "W117", "glossary.yaml", ("term", &h.term), [format!("term:{}={}", h.term, h.means), format!("term:{}={}", g.term, g.means)],
+                    format!("\"{}\" means both {} and {}: agents will pick one at random.", h.term, g.means, h.means));
+            }
+        }
+        if let Some(t) = ont.types.values().find(|t| t.name.eq_ignore_ascii_case(&g.term) && t.name != g.means) {
+            twice(r, ont, "W117", "glossary.yaml", ("term", &g.term), [format!("term:{}={}", g.term, g.means), format!("entity:{}", t.name)],
+                format!("\"{}\" is an entity, and also a word for {}.", t.name, g.means));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// The rule of three, as advice: never a diagnostic, never a light
+// ---------------------------------------------------------------------------
+
+/// Three or more entities that share a core of fields could be kinds of one parent.
+#[derive(Debug, Clone, Serialize)]
+pub struct Advice {
+    pub entities: Vec<String>,
+    pub fields: Vec<String>,
+    pub text: String,
+}
+
+/// The shared core of fields (same name, same type) of entities, in the first one's order.
+pub fn shared_core(ont: &Ontology, names: &[String]) -> Vec<String> {
+    let Some(first) = names.first().and_then(|n| ont.types.get(n)) else { return vec![] };
+    first
+        .own_properties()
+        .filter(|(f, p)| {
+            let k = p.normalize().kind;
+            names.iter().skip(1).all(|n| ont.types.get(n).and_then(|t| t.properties.get(*f)).map(|q| !t_inherits(ont, n, f) && q.normalize().kind == k).unwrap_or(false))
+        })
+        .map(|(f, _)| f.clone())
+        .collect()
+}
+
+fn t_inherits(ont: &Ontology, entity: &str, field: &str) -> bool {
+    ont.types.get(entity).map(|t| t.inherited.contains_key(field)).unwrap_or(false)
+}
+
+/// Groups of three or more entities (not already kinds of one parent) sharing at least four
+/// fields with the same names and types, the core being at least half of each one's own fields.
+pub fn advise(ont: &Ontology) -> Vec<Advice> {
+    let ents: Vec<&crate::schema::TypeDef> = ont.types.values().filter(|t| t.own_properties().count() >= 4).collect();
+    if ents.len() < 3 || ents.len() > 400 {
+        return vec![];
+    }
+    let mut out: Vec<Advice> = Vec::new();
+    let mut seen: Vec<Vec<String>> = Vec::new();
+    for a in &ents {
+        let fa: Vec<(String, String)> = a.own_properties().map(|(f, p)| (f.clone(), p.normalize().kind)).collect();
+        let mut group: Vec<String> = vec![a.name.clone()];
+        for b in &ents {
+            if b.name == a.name || (a.parent.is_some() && a.parent == b.parent) {
+                continue;
+            }
+            let fb: Vec<(String, String)> = b.own_properties().map(|(f, p)| (f.clone(), p.normalize().kind)).collect();
+            let shared = fa.iter().filter(|x| fb.contains(x)).count();
+            if shared >= 4 && shared * 2 >= fa.len() && shared * 2 >= fb.len() {
+                group.push(b.name.clone());
+            }
+        }
+        if group.len() < 3 {
+            continue;
+        }
+        // shrink until the core holds for every member
+        loop {
+            let core = shared_core(ont, &group);
+            let ok = core.len() >= 4 && group.iter().all(|n| ont.types.get(n).map(|t| core.len() * 2 >= t.own_properties().count()).unwrap_or(false));
+            if ok || group.len() < 3 {
+                break;
+            }
+            group.pop();
+        }
+        if group.len() < 3 {
+            continue;
+        }
+        let mut key = group.clone();
+        key.sort();
+        if seen.contains(&key) {
+            continue;
+        }
+        seen.push(key);
+        let core = shared_core(ont, &group);
+        let names = match group.len() {
+            n if n > 1 => format!("{} and {}", group[..n - 1].join(", "), group[n - 1]),
+            _ => group[0].clone(),
+        };
+        out.push(Advice {
+            text: format!("{} share {} fields ({}). They could be kinds of one parent.", names, core.len(), core.join(", ")),
+            entities: group,
+            fields: core,
+        });
+    }
+    out
+}
+
+/// "promo_sale_revenue" → "Promo sale revenue" for a sentence.
+fn label(name: &str) -> String {
+    crate::review::words::label(name)
 }
 
 /// What a trust.yaml line is about: a binding's subject is its entity.

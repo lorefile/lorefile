@@ -10,7 +10,7 @@
 use crate::edit;
 use crate::loader::Overrides;
 use crate::ontology::{snake, Ontology};
-use serde_json::Value as Json;
+use serde_json::{json, Value as Json};
 use serde_yaml::{Mapping, Value as Yaml};
 use std::collections::HashMap;
 
@@ -78,6 +78,17 @@ pub fn plan_many_over(ont: &Ontology, start: &[(String, String)], ops: &[Json]) 
         let ov: Overrides = pending.iter().map(|(k, v)| (k.clone(), Some(v.clone()))).collect();
         Some(edit::check_many(&ont.root, &ov).map_err(|e| format!("{:#}", e))?.0)
     };
+    // `make_parent` is several files: the new parent, and each child made a kind of it
+    let mut expanded: Vec<Json> = Vec::new();
+    for op in ops {
+        if field(op, "op") == "make_parent" {
+            let ws = Workspace { ont: current.as_ref().unwrap_or(ont), pending: &pending };
+            expanded.extend(expand_make_parent(&ws, op)?);
+        } else {
+            expanded.push(op.clone());
+        }
+    }
+    let ops: &[Json] = &expanded;
     for (i, op) in ops.iter().enumerate() {
         let p = {
             let ws = Workspace { ont: current.as_ref().unwrap_or(ont), pending: &pending };
@@ -234,6 +245,106 @@ fn plain_name(s: &str, what: &str) -> Result<(), String> {
 
 fn field<'a>(body: &'a Json, k: &str) -> &'a str {
     body.get(k).and_then(|v| v.as_str()).unwrap_or("").trim()
+}
+
+/// `where` as the op sent it, `{"kind": "promo"}` or `{"channel": ["email", "sms"]}`, as YAML.
+fn where_yaml(body: &Json) -> Result<Option<Yaml>, String> {
+    match body.get("where") {
+        None | Some(Json::Null) => Ok(None),
+        Some(Json::Object(o)) if o.is_empty() => Ok(None),
+        Some(Json::Object(o)) => {
+            let mut w = Mapping::new();
+            for (f, v) in o {
+                prop_name_ok(f)?;
+                let y: Yaml = serde_yaml::to_value(v).map_err(|e| e.to_string())?;
+                match &y {
+                    Yaml::String(_) | Yaml::Number(_) | Yaml::Bool(_) => {}
+                    Yaml::Sequence(vs) if !vs.is_empty() && vs.iter().all(|x| matches!(x, Yaml::String(_) | Yaml::Number(_) | Yaml::Bool(_))) => {}
+                    _ => return Err(format!("`where.{}` is one value or a list of values, e.g. {{\"kind\": \"promo\"}}", f)),
+                }
+                w.insert(key(f), y);
+            }
+            Ok(Some(Yaml::Mapping(w)))
+        }
+        Some(_) => Err("`where` maps a parent's field to a value, e.g. {\"kind\": \"promo\"}: no SQL".into()),
+    }
+}
+
+/// `make_parent {name, description, children, fields}` as the ops it stands for: `add_type` for the
+/// parent with the shared fields (the most common words among the children, ties to the first),
+/// then `set_kind_of` for each child. Refused in words on a type or unit clash, a taken name, or
+/// a child that already extends something else.
+fn expand_make_parent(ws: &Workspace, op: &Json) -> Result<Vec<Json>, String> {
+    let ont = ws.ont;
+    let name = field(op, "name").to_string();
+    plain_name(&name, "an entity name")?;
+    if ont.type_(&name).is_some() {
+        return Err(format!("make_parent: the name {} is taken", name));
+    }
+    let children: Vec<String> = op.get("children").and_then(|c| c.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
+    if children.len() < 2 {
+        return Err("make_parent needs `children`: the entities that become kinds of the new parent".into());
+    }
+    let mut kids: Vec<crate::schema::TypeDef> = Vec::new();
+    for c in &children {
+        let t = ont.type_(c).ok_or_else(|| format!("make_parent: there is no entity called {}", c))?;
+        if let Some(p) = &t.parent {
+            return Err(format!("make_parent: {} is already a kind of {}", t.name, p));
+        }
+        kids.push(t.clone());
+    }
+    let names: Vec<String> = kids.iter().map(|k| k.name.clone()).collect();
+    let fields: Vec<String> = match op.get("fields").and_then(|f| f.as_array()) {
+        Some(list) if !list.is_empty() => list.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect(),
+        _ => crate::validate::shared_core(ont, &names),
+    };
+    if fields.is_empty() {
+        return Err(format!("make_parent: {} share no field of the same name and type", names.join(", ")));
+    }
+    let mut props = serde_json::Map::new();
+    for f in &fields {
+        let specs: Vec<crate::schema::Property> = kids.iter().map(|k| k.properties.get(f).map(|p| p.normalize()).ok_or_else(|| format!("make_parent: {} has no field `{}`", k.name, f))).collect::<Result<_, _>>()?;
+        if specs.iter().any(|p| p.kind != specs[0].kind) {
+            return Err(format!("make_parent: `{}` is {} in {} but {} in {}; a shared field needs one type", f, specs[0].kind, kids[0].name, specs.iter().find(|p| p.kind != specs[0].kind).map(|p| p.kind.clone()).unwrap_or_default(), kids[specs.iter().position(|p| p.kind != specs[0].kind).unwrap_or(0)].name));
+        }
+        if specs.iter().any(|p| p.unit != specs[0].unit) {
+            return Err(format!("make_parent: `{}` has different units in {}; a shared field needs one unit", f, names.join(", ")));
+        }
+        // the most common words, ties going to the first child
+        let mut counts: Vec<(String, usize)> = Vec::new();
+        for p in &specs {
+            let d = p.description.trim().to_string();
+            if d.is_empty() {
+                continue;
+            }
+            match counts.iter_mut().find(|(x, _)| *x == d) {
+                Some(e) => e.1 += 1,
+                None => counts.push((d, 1)),
+            }
+        }
+        let best = counts.iter().fold(None::<&(String, usize)>, |acc, x| match acc { Some(a) if a.1 >= x.1 => Some(a), _ => Some(x) }).map(|x| x.0.clone()).unwrap_or_default();
+        let mut spec = serde_json::Map::new();
+        spec.insert("type".into(), json!(specs[0].kind));
+        if let Some(u) = &specs[0].unit {
+            spec.insert("unit".into(), json!(u));
+        }
+        if !best.is_empty() {
+            spec.insert("description".into(), json!(best));
+        }
+        props.insert(f.clone(), Json::Object(spec));
+    }
+    let keys: Vec<Option<String>> = kids.iter().map(|k| k.key_property()).collect();
+    let mut add = json!({ "op": "add_type", "name": name, "description": field(op, "description"), "properties": props });
+    if let Some(Some(k)) = keys.first() {
+        if keys.iter().all(|x| x.as_deref() == Some(k.as_str())) && fields.contains(k) {
+            add["key"] = json!(k);
+        }
+    }
+    let mut out = vec![add];
+    for c in &names {
+        out.push(json!({ "op": "set_kind_of", "type": c, "extends": name }));
+    }
+    Ok(out)
 }
 
 fn key(s: &str) -> Yaml {
@@ -724,6 +835,17 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             }
             let mut m = Mapping::new();
             m.insert(key("type"), Yaml::String(name.clone()));
+            // a kind of another entity: its fields, links and guardrails come with it
+            let extends = field(body, "extends").to_string();
+            if !extends.is_empty() {
+                let p = ont.type_(&extends).ok_or_else(|| format!("{} can't be a kind of {}: there is no entity called {}", name, extends, extends))?;
+                m.insert(key("extends"), Yaml::String(p.name.clone()));
+                if let Some(w) = where_yaml(body)? {
+                    m.insert(key("where"), w);
+                }
+            } else if body.get("where").map(|w| !w.is_null()).unwrap_or(false) {
+                return Err("`where` picks a parent's rows, so it needs `extends`".into());
+            }
             let domain = field(body, "domain");
             if !domain.is_empty() {
                 m.insert(key("domain"), Yaml::String(domain.to_string()));
@@ -753,6 +875,9 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
                         set_key(entry);
                     }
                 }
+                Some(Json::Object(_)) | None if !extends.is_empty() => {
+                    // a kind gets its parent's fields and key: nothing of its own to add
+                }
                 Some(Json::Object(_)) | None => {
                     // no fields given: one identifier, the key, as before
                     let mut idp = Mapping::new();
@@ -767,7 +892,69 @@ pub fn plan_in(ws: &Workspace, body: &Json) -> Result<Patch, String> {
             m.insert(key("properties"), Yaml::Mapping(props));
             let content = serde_yaml::to_string(&Yaml::Mapping(m)).map_err(|e| e.to_string())?;
             let (rel, text) = edit::plan_create(&ont.root, "type", &name, &content, None)?;
-            Ok(Patch { file: rel, text, kind: "type".into(), name: name.clone(), summary: format!("created {}", name) })
+            Ok(Patch { file: rel, text, kind: "type".into(), name: name.clone(), summary: if extends.is_empty() { format!("created {}", name) } else { format!("created {}, a kind of {}", name, extends) } })
+        }
+        "set_kind_of" => {
+            // an existing entity becomes a kind of another: the fields it now gets unchanged go,
+            // differing words stay as narrowings, and a real conflict refuses in words
+            let t = field(body, "type").to_string();
+            let p = field(body, "extends").to_string();
+            let ty = ont.type_(&t).ok_or_else(|| format!("no type named `{}`", t))?.clone();
+            let pt = ont.type_(&p).ok_or_else(|| format!("{} can't be a kind of {}: there is no entity called {}", t, p, p))?.clone();
+            if ty.name == pt.name || ont.is_a(&pt.name, &ty.name) {
+                return Err(format!("{} can't be a kind of {}: {} is already {} or a kind of it", ty.name, pt.name, pt.name, ty.name));
+            }
+            if let Some(cur) = &ty.parent {
+                if cur != &pt.name {
+                    return Err(format!("{} is already a kind of {}; an entity extends one other entity", ty.name, cur));
+                }
+            }
+            let pkey = pt.key_property();
+            let mut dropped: Vec<String> = Vec::new();
+            let mut kept: Vec<String> = Vec::new();
+            for (f, spec) in ty.own_properties() {
+                let Some(pf) = pt.properties.get(f).map(|x| x.normalize()) else { continue };
+                let mine = spec.normalize();
+                if mine.kind != pf.kind {
+                    return Err(format!("{}.{} is {} but {}'s is {}; a kind can't change a field's type", ty.name, f, mine.kind, pt.name, pf.kind));
+                }
+                if mine.unit.is_some() && pf.unit.is_some() && mine.unit != pf.unit {
+                    return Err(format!("{}.{} is in {} but {}'s is in {}; a kind can't change a field's unit", ty.name, f, mine.unit.clone().unwrap_or_default(), pt.name, pf.unit.clone().unwrap_or_default()));
+                }
+                if mine.key && pkey.as_deref() != Some(f.as_str()) {
+                    if let Some(k) = &pkey {
+                        return Err(format!("{} is identified by {}; {} can't be identified by {}", pt.name, k, ty.name, f));
+                    }
+                }
+                let same_words = mine.description.trim().is_empty() || mine.description.trim() == pf.description.trim();
+                if same_words && mine.unit == pf.unit && mine.required == pf.required && mine.values == pf.values {
+                    dropped.push(f.clone());
+                } else {
+                    kept.push(f.clone());
+                }
+            }
+            let w = where_yaml(body)?;
+            let pname = pt.name.clone();
+            let (file, out) = edit_type_file(ws, &ty.name, |m| {
+                insert_after(m, "type", "extends", Yaml::String(pname.clone()));
+                if let Some(w) = w {
+                    insert_after(m, "extends", "where", w);
+                }
+                if let Some(props) = m.get_mut(key("properties")).and_then(|x| x.as_mapping_mut()) {
+                    for f in &dropped {
+                        props.remove(key(f));
+                    }
+                }
+                Ok(())
+            })?;
+            let mut summary = format!("made {} a kind of {}", ty.name, pt.name);
+            if !dropped.is_empty() {
+                summary.push_str(&format!(" ({} now from {})", dropped.join(", "), pt.name));
+            }
+            if !kept.is_empty() {
+                summary.push_str(&format!("; keeps its own words for {}", kept.join(", ")));
+            }
+            Ok(Patch { file, text: out, kind: "type".into(), name: ty.name.clone(), summary })
         }
         "add_property" => {
             let t = field(body, "type").to_string();

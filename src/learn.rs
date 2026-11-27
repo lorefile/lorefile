@@ -123,6 +123,9 @@ pub struct Answers {
     /// For a changed file: a known field → the file's new header for it.
     #[serde(default)]
     pub renamed: IndexMap<String, String>,
+    /// The file is a kind of this entity: the draft extends it and holds only the columns it lacks.
+    #[serde(default)]
+    pub kind_of: Option<String>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -1128,6 +1131,13 @@ pub fn match_reply(ont: &Ontology, input: &FileInput, m: &Match, waiting: Option
             if !c.also.is_empty() {
                 j["also_matches"] = json!(c.also);
             }
+            // every column of an entity plus more: a kind of it, but only once the entity has a kind
+            // already (the rule of three: a person has started a family)
+            if c.missing.is_empty() && !c.added.is_empty() && !ont.kinds_of(&t.name).is_empty() {
+                let extra: Vec<String> = c.added.iter().map(|&i| input.columns[i].name.clone()).collect();
+                j["kind_of"] = json!(t.name);
+                j["kind_say"] = json!(format!("This looks like a kind of {}: {}'s {} columns plus {}. Ask: is this a kind of {}, or should {} get these columns? For a kind, pass answers.kind_of: \"{}\" to learn_file.", t.name, t.name, t.properties.len(), extra.join(" and "), t.name, t.name, t.name));
+            }
             let mut say = Vec::new();
             for (m, cols) in &c.at_risk {
                 let recipe = read.iter().find(|r| r["metric"] == json!(m)).map(recipe_words).unwrap_or_default();
@@ -1164,6 +1174,9 @@ pub fn match_reply(ont: &Ontology, input: &FileInput, m: &Match, waiting: Option
                 say.push(format!("It also shares as many columns with {}: ask the user which one this file is.", c.also.join(", ")));
             }
             j["say"] = json!(say.join(" ").replace("  ", " "));
+            if let Some(k) = j.as_object_mut().and_then(|o| o.remove("kind_say")) {
+                j["say"] = k;
+            }
             if !d.notes.is_empty() {
                 j["notes"] = json!(d.notes);
             }
@@ -1224,12 +1237,120 @@ pub fn match_reply(ont: &Ontology, input: &FileInput, m: &Match, waiting: Option
             if !notes.is_empty() {
                 j["notes"] = json!(notes);
             }
+            if let Some(a) = third_of_a_family(ont, input) {
+                j["advice"] = json!(a);
+            }
             if !d.left_out.is_empty() {
                 j["left_out"] = json!(d.left_out);
             }
             j
         }
     })
+}
+
+/// A new file that would be the third sharing a core of columns with two entities: say a common
+/// parent could hold them, to mention, never to act on.
+fn third_of_a_family(ont: &Ontology, input: &FileInput) -> Option<String> {
+    let file: HashSet<String> = file_headers(input).into_iter().collect();
+    if file.len() < 4 {
+        return None;
+    }
+    let own = |t: &TypeDef| -> HashSet<String> { t.own_properties().map(|(n, _)| normalize_header(n)).collect() };
+    let near: Vec<(&TypeDef, HashSet<String>)> = ont
+        .types
+        .values()
+        .map(|t| (t, own(t)))
+        .filter(|(_, o)| { let shared = o.intersection(&file).count(); shared >= 4 && shared * 2 >= o.len() && shared * 2 >= file.len() })
+        .collect();
+    for (i, (a, fa)) in near.iter().enumerate() {
+        for (b, fb) in near.iter().skip(i + 1) {
+            let mut core: Vec<String> = file.iter().filter(|c| fa.contains(*c) && fb.contains(*c)).cloned().collect();
+            if core.len() >= 4 {
+                core.sort();
+                return Some(format!("With {} and {} this shares {} columns ({}): a common parent could hold them. Mention it, don't act on it.", a.name, b.name, core.len(), core.join(", ")));
+            }
+        }
+    }
+    None
+}
+
+/// `answers.kind_of`: the file as a kind of an entity, with its own rows (the file) and only the
+/// columns the parent lacks as fields. The parent's key must be in the file; a column whose type
+/// clashes with the parent's field is refused, named.
+#[allow(clippy::too_many_arguments)]
+fn plan_kind(ont: &Ontology, input: &FileInput, d: &mut Draft, parent: &str, a: &Answers, sensitive: &[String], notes: &mut Vec<String>, left_out: &mut Vec<String>) -> Result<Plan, String> {
+    let pt = ont.type_(parent).ok_or_else(|| format!("answers.kind_of: there is no entity called {}", parent))?.clone();
+    let file = input.file_name.clone();
+    let header_of = |f: &str| pt.source.as_ref().and_then(|s| s.columns.get(f)).cloned().unwrap_or_else(|| f.to_string());
+    let pkey = pt.key_property().ok_or_else(|| format!("{} has no key, so a kind's rows can't be matched to {}s; learn {} as its own entity", pt.name, pt.name, file))?;
+    let in_file = |h: &str| d.fields.iter().find(|f| normalize_header(&f.header) == normalize_header(h) || normalize_header(&f.name) == normalize_header(h));
+    if in_file(&header_of(&pkey)).is_none() {
+        return Err(format!("{} has no {}, so its rows can't be {}s; learn it as its own entity", if file.is_empty() { "this file".to_string() } else { file.clone() }, pkey, pt.name));
+    }
+    let entity = d.entity.clone().ok_or("pass `entity`: no name could be made from the file name")?;
+    if ont.type_(&entity).is_some() {
+        return Err(format!("{} exists already; pass another `entity`", entity));
+    }
+    let mut ops: Vec<Json> = Vec::new();
+    let connection = match from_user_source(ont) {
+        Some(s) => s,
+        None => {
+            ops.push(json!({ "op": "add_source", "connection": SOURCE, "kind": KIND, "description": SOURCE_DESCRIPTION }));
+            SOURCE.to_string()
+        }
+    };
+    let mut props = Map::new();
+    let mut columns = Map::new();
+    let mut known: Vec<Known> = Vec::new();
+    for f in &d.fields {
+        let parent_field = pt.properties.iter().find(|(n, _)| normalize_header(n) == normalize_header(&f.name) || normalize_header(&header_of(n)) == normalize_header(&f.header));
+        match parent_field {
+            Some((n, spec)) => {
+                let pk = canonical_kind(&spec.normalize().kind).unwrap_or("string");
+                let fk = canonical_kind(&f.kind).unwrap_or("string");
+                if pk != fk && !(pk == "number" && fk == "integer") && fk != "string" {
+                    return Err(format!("{}'s column {} looks like {}, but {}.{} is {}: a kind can't change a field's type; learn it as its own entity or fix the column", if file.is_empty() { "this file" } else { file.as_str() }, f.header, fk, pt.name, n, pk));
+                }
+                if f.header != *n {
+                    columns.insert(n.clone(), json!(f.header));
+                }
+                known.push(Known { name: n.clone(), kind: spec.normalize().kind, header: f.header.clone() });
+            }
+            None => {
+                let mut p = Map::new();
+                p.insert("type".into(), json!(f.kind));
+                if let Some(u) = &f.unit {
+                    p.insert("unit".into(), json!(u));
+                }
+                if let Some(desc) = &f.description {
+                    p.insert("description".into(), json!(desc));
+                }
+                props.insert(f.name.clone(), Json::Object(p));
+                if f.header != f.name {
+                    columns.insert(f.name.clone(), json!(f.header));
+                }
+                known.push(Known { name: f.name.clone(), kind: f.kind.clone(), header: f.header.clone() });
+            }
+        }
+    }
+    let own = props.len();
+    ops.push(json!({ "op": "add_type", "name": entity, "extends": pt.name, "description": d.description.clone().unwrap_or_default(), "properties": props }));
+    let mut bind = json!({ "op": "set_source", "type": entity, "connection": connection, "table": d.table, "key": pkey });
+    if !columns.is_empty() {
+        bind["columns"] = Json::Object(columns);
+    }
+    ops.push(bind);
+    let mut said = Said { sensitive, notes: std::mem::take(notes), left_out: std::mem::take(left_out) };
+    let metric = metric_op(ont, &Bound { entity: &entity, connection: &connection, table: &d.table }, &known, a, &mut said)?;
+    *notes = said.notes;
+    *left_out = said.left_out;
+    let words = metric.as_ref().map(|(_, w)| w.clone());
+    if let Some((op, _)) = metric {
+        ops.push(op);
+    }
+    ops.extend(term_ops(ont, &entity, a, notes));
+    let line = line_for(input, &entity, &format!("(a kind of {}, {} own field{})", pt.name, own, if own == 1 { "" } else { "s" }), words.as_deref());
+    Ok(Plan::Ops(Planned { ops, line, learned: Learned { entity: entity.clone(), headers: file_headers(input), file_name: input.file_name.clone() }, entity, notes: std::mem::take(notes), left_out: std::mem::take(left_out), fields: own, described: 0, recipe_kept: false }))
 }
 
 // ---------------------------------------------------------------------------
@@ -1447,6 +1568,9 @@ pub fn plan(ont: &Ontology, input: &FileInput, m: &Match) -> Result<Plan, String
     let mut notes = std::mem::take(&mut d.notes);
     let mut left_out = std::mem::take(&mut d.left_out);
     let mut ops: Vec<Json> = Vec::new();
+    if let Some(parent) = a.kind_of.as_deref().filter(|p| !p.trim().is_empty()) {
+        return plan_kind(ont, input, &mut d, parent.trim(), a, &sensitive, &mut notes, &mut left_out);
+    }
 
     match m {
         Match::Same { entity, .. } => {
