@@ -66,8 +66,10 @@ fn http(port: u16, method: &str, path: &str, body: &str) -> (u16, String) {
     s.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
     let req = format!("{} {} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\nContent-Type: application/json\r\nX-Lorefile: write\r\nContent-Length: {}\r\n\r\n{}", method, path, port, body.len(), body);
     s.write_all(req.as_bytes()).unwrap();
-    let mut raw = String::new();
-    let _ = s.read_to_string(&mut raw);
+    // bytes first: a chunk boundary can split a UTF-8 character, and read_to_string would then drop the whole reply
+    let mut bytes = Vec::new();
+    let _ = s.read_to_end(&mut bytes);
+    let raw = String::from_utf8_lossy(&bytes).into_owned();
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let status = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
     if !head.to_ascii_lowercase().contains("transfer-encoding: chunked") {
@@ -267,14 +269,17 @@ fn at_most_five_waiting_proposals_are_drawn() {
         }
     }
     let _ = child.wait_with_output();
-    // one more whose files no longer load: its file is a broken type
-    sp.write(".lorefile/proposals/p-20261127-235959-9.json", &json!({ "id": "p-20261127-235959-9", "file": "types/bad.yaml", "content": "type: [nope", "via": "agent via MCP", "created_at": "2026-11-27T23:59:59Z", "status": "pending", "ok": false }).to_string());
+    // one more whose files no longer load: its file is a broken type. Stamped an hour ahead of
+    // now, so it is the newest on any date (the seven above carry the time they were made).
+    let later = chrono::Utc::now() + chrono::Duration::hours(1);
+    let late_id = format!("p-{}-9", later.format("%Y%m%d-%H%M%S"));
+    sp.write(&format!(".lorefile/proposals/{}.json", late_id), &json!({ "id": late_id, "file": "types/bad.yaml", "content": "type: [nope", "via": "agent via MCP", "created_at": later.format("%Y-%m-%dT%H:%M:%SZ").to_string(), "status": "pending", "ok": false }).to_string());
     let _srv = serve(&sp.0, port, &["--no-examples"]);
     let p = plane(port, "/api/plane");
     let w = p["waiting"].as_array().unwrap();
     assert_eq!(w.len(), 5, "{}", p["waiting"]);
     assert_eq!(p["waiting_more"], 3);
-    assert_eq!(w[0]["id"], "p-20261127-235959-9", "newest first");
+    assert_eq!(w[0]["id"], late_id.as_str(), "newest first");
     assert_eq!(w[0]["drawn"], false, "a proposal that no longer loads can't be drawn: {}", w[0]);
     let drawn = w.iter().find(|x| x["drawn"] == true).unwrap();
     assert!(drawn["nodes"].as_array().unwrap().iter().any(|n| n["status"] == "new"), "{}", drawn);

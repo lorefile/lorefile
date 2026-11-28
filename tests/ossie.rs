@@ -316,8 +316,10 @@ fn http(port: u16, path: &str, headers: &[(&str, &str)]) -> (u16, String, String
     }
     req.push_str("\r\n");
     s.write_all(req.as_bytes()).unwrap();
-    let mut raw = String::new();
-    let _ = s.read_to_string(&mut raw);
+    // bytes first: a chunk boundary can split a UTF-8 character, and read_to_string would then drop the whole reply
+    let mut bytes = Vec::new();
+    let _ = s.read_to_end(&mut bytes);
+    let raw = String::from_utf8_lossy(&bytes).into_owned();
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let status = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
     (status, head.to_lowercase(), body.to_string())
