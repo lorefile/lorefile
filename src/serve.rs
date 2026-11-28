@@ -1607,7 +1607,16 @@ fn handle(mut req: Request, reg: &Mutex<Registry>, ctx: &Ctx) {
         (Method::Get, "/api/search") => {
             let q = params.get("q").cloned().unwrap_or_default();
             let limit = params.get("limit").and_then(|l| l.parse().ok()).unwrap_or(20);
-            json_response(200, &json!(ont.search(&q, limit)))
+            if params.get("fields").map(|v| v == "1").unwrap_or(false) {
+                // the page's jump list also lists fields ("Order.payment_status"); MCP's search never does
+                let mut all: Vec<Json> = ont.search(&q, limit).into_iter().map(|h| json!(h)).collect();
+                all.extend(ont.field_hits(&q, limit));
+                all.sort_by(|a, b| b["score"].as_u64().cmp(&a["score"].as_u64()).then(a["name"].as_str().cmp(&b["name"].as_str())));
+                all.truncate(limit.max(1));
+                json_response(200, &json!(all))
+            } else {
+                json_response(200, &json!(ont.search(&q, limit)))
+            }
         }
         (Method::Get, "/api/neighbors") => {
             let name = params.get("name").cloned().unwrap_or_default();

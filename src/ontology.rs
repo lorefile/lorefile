@@ -1218,6 +1218,51 @@ impl Ontology {
         hits
     }
 
+    /// Field hits for the web page's jump list only (`GET /api/search?fields=1`, design system decision 7):
+    /// "Order.payment_status" with the field's sentence, or its values when they matched. Kept out of `search`,
+    /// so the MCP tool's answer stays exactly as it was.
+    pub fn field_hits(&self, query: &str, limit: usize) -> Vec<Json> {
+        let q = query.trim().to_lowercase();
+        if q.is_empty() {
+            return vec![];
+        }
+        let mut out: Vec<(u32, String, Json)> = Vec::new();
+        for t in self.types.values() {
+            for (pn, spec) in &t.properties {
+                let p = spec.normalize();
+                let name = pn.to_lowercase();
+                let values: Vec<String> = p.values.iter().map(yaml_words).collect();
+                let in_values = values.iter().any(|v| v.to_lowercase().contains(&q));
+                let score = if name == q {
+                    130
+                } else if name.contains(&q) {
+                    90
+                } else if name.replace('_', " ").contains(&q) {
+                    85
+                } else if in_values {
+                    30
+                } else if p.description.to_lowercase().contains(&q) {
+                    25
+                } else {
+                    0
+                };
+                if score == 0 {
+                    continue;
+                }
+                let snippet = if in_values && !p.description.to_lowercase().contains(&q) { values.join(" / ") } else { p.description.clone() };
+                let full = format!("{}.{}", t.name, pn);
+                out.push((
+                    score,
+                    full.clone(),
+                    json!({ "kind": "field", "name": full, "entity": t.name, "property": pn, "snippet": truncate(&snippet, 140), "score": score, "file": t.file }),
+                ));
+            }
+        }
+        out.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+        out.truncate(limit.max(1));
+        out.into_iter().map(|(_, _, j)| j).collect()
+    }
+
     // ---------- describe ----------
 
     pub fn constraint_brief(&self, c: &Constraint) -> Json {

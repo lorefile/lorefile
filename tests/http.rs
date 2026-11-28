@@ -69,8 +69,11 @@ fn http_raw(port: u16, method: &str, path: &str, headers: &[(&str, &str)], body:
     req.push_str("\r\n");
     req.push_str(body);
     s.write_all(req.as_bytes()).unwrap();
-    let mut raw = String::new();
-    let _ = s.read_to_string(&mut raw);
+    // bytes, not a String: a chunked reply can split a multi-byte character across chunk lines, and
+    // read_to_string would then throw the whole reply away (the page is sent in 8 KB chunks)
+    let mut bytes = Vec::new();
+    let _ = s.read_to_end(&mut bytes);
+    let raw = String::from_utf8_lossy(&bytes).into_owned();
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let status: u16 = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
     (status, head.to_string(), body.to_string())
@@ -94,6 +97,29 @@ fn reads_are_not_cors_open_and_sql_is_post_only() {
         let (status, _, body) = http(srv.port, "POST", "/api/query", &[JSON], r#"{"sql":"select * from read_text('/etc/passwd')"}"#);
         assert_eq!(status, 400, "the fence holds over HTTP too: {}", body);
     }
+}
+
+#[test]
+fn the_page_search_can_list_fields_and_the_plain_search_does_not() {
+    // design system decision 7: `fields=1` is for the page's jump list; MCP's search tool keeps its answer
+    let srv = start(7320);
+    let (status, _, body) = http(srv.port, "GET", "/api/search?q=safety_critical&limit=30&fields=1", &[], "");
+    assert_eq!(status, 200, "{}", body);
+    let hits = j(&body);
+    let field = hits.as_array().unwrap().iter().find(|h| h["kind"] == "field").unwrap_or_else(|| panic!("a field hit: {}", body));
+    assert_eq!(field["name"], "Part.safety_critical");
+    assert_eq!(field["entity"], "Part");
+    assert_eq!(field["property"], "safety_critical");
+    assert!(field["snippet"].as_str().unwrap().contains("failure could cause injury"), "{}", field);
+    // an enum value finds its field, and the values are the snippet
+    let (_, _, body) = http(srv.port, "GET", "/api/search?q=fastener&fields=1", &[], "");
+    let hits = j(&body);
+    let cat = hits.as_array().unwrap().iter().find(|h| h["name"] == "Part.category").unwrap_or_else(|| panic!("{}", body));
+    assert!(cat["snippet"].as_str().unwrap().contains("brake / steering"), "{}", cat);
+    // without fields=1, nothing changes: no field kind at all
+    let (_, _, body) = http(srv.port, "GET", "/api/search?q=safety_critical&limit=30", &[], "");
+    assert!(j(&body).as_array().unwrap().iter().all(|h| h["kind"] != "field"), "{}", body);
+    assert!(j(&body).as_array().unwrap().iter().any(|h| h["kind"] == "type" && h["name"] == "Part"), "{}", body);
 }
 
 #[test]
