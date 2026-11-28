@@ -65,8 +65,10 @@ fn http(port: u16, method: &str, path: &str, body: &str) -> Json {
     s.set_read_timeout(Some(Duration::from_secs(60))).unwrap();
     let req = format!("{} {} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\nContent-Type: application/json\r\nX-Lorefile: write\r\nContent-Length: {}\r\n\r\n{}", method, path, port, body.len(), body);
     s.write_all(req.as_bytes()).unwrap();
-    let mut raw = String::new();
-    let _ = s.read_to_string(&mut raw);
+    // bytes first: a chunk boundary can split a UTF-8 character, and read_to_string would then drop the whole reply
+    let mut bytes = Vec::new();
+    let _ = s.read_to_end(&mut bytes);
+    let raw = String::from_utf8_lossy(&bytes).into_owned();
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let body = if head.to_ascii_lowercase().contains("transfer-encoding: chunked") {
         let (mut out, mut rest) = (String::new(), body);

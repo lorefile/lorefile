@@ -76,8 +76,10 @@ fn http(port: u16, method: &str, path: &str, body: &str) -> (u16, Json) {
         method, path, port, body.len(), body
     );
     s.write_all(req.as_bytes()).unwrap();
-    let mut raw = String::new();
-    let _ = s.read_to_string(&mut raw);
+    // bytes first: a chunk boundary can split a UTF-8 character, and read_to_string would then drop the whole reply
+    let mut bytes = Vec::new();
+    let _ = s.read_to_end(&mut bytes);
+    let raw = String::from_utf8_lossy(&bytes).into_owned();
     let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((&raw, ""));
     let status: u16 = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or(0);
     (status, serde_json::from_str(body).unwrap_or(Json::Null))
@@ -429,9 +431,10 @@ fn a_review_link_survives_the_sign_in() {
     let raw = |req: String| {
         let mut s = TcpStream::connect(("127.0.0.1", port)).unwrap();
         s.write_all(req.as_bytes()).unwrap();
-        let mut out = String::new();
-        let _ = s.read_to_string(&mut out);
-        out
+        // bytes first: a chunk boundary can split a UTF-8 character, and read_to_string would then drop the whole reply
+        let mut bytes = Vec::new();
+        let _ = s.read_to_end(&mut bytes);
+        String::from_utf8_lossy(&bytes).into_owned()
     };
     let page = raw(format!("GET /s/branda/?review=p-20261127-080758-6 HTTP/1.1\r\nHost: 127.0.0.1:{}\r\nConnection: close\r\n\r\n", port));
     assert!(page.contains("name=\"next\" value=\"/s/branda/?review=p-20261127-080758-6\""), "the form carries the review link: {}", page);
